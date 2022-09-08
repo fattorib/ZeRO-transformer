@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import flax.linen as nn
 from functools import partial
 from typing import Any, Callable
+import jax.nn.initializers as initializers
 
 
 class MLPBlock(nn.Module):
@@ -16,29 +17,22 @@ class MLPBlock(nn.Module):
     dropout: float = 0.0
     N: int = None
 
-    def setup(self):
-        # Scale residual weights by 1/sqrt(N) where N is number of layers
-        self.residual_init: Callable = jax.nn.initializers.normal(stddev=0.02 / jnp.sqrt(self.N))
-        self.dense_init: Callable = jax.nn.initializers.normal(stddev=0.02)
-        self.bias_init: Callable = jax.nn.initializers.zeros
-
     # TODO: How does mixed precision work?
-
     @nn.compact
     def __call__(self, x: jnp.array, train: bool) -> jnp.array:
         dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
         x = nn.Dense(
             features=self.dimension_multiplier * self.embedding_dim,
             name="fc_in",
-            kernel_init=self.dense_init,
-            bias_init=self.bias_init,
+            kernel_init=initializers.normal(stddev=0.02),
+            bias_init=initializers.zeros
         )(x)
         x = nn.gelu(x)
         out = nn.Dense(
             features=self.embedding_dim,
             name="fc_residual",
-            kernel_init=self.residual_init,
-            bias_init=self.bias_init,
+            kernel_init=initializers.normal(stddev=0.02 / jnp.sqrt(self.N)),
+            bias_init=initializers.zeros
         )(x)
         return dropout()(out)
 
@@ -52,73 +46,58 @@ class CausalAttention(nn.Module):
     dropout: float = 0.0
     N: int = None
 
-    def setup(self):
-        # Scale residual weights by 1/sqrt(N) where N is number of layers
-        self.residual_init: Callable = jax.nn.initializers.normal(stddev=0.02 / jnp.sqrt(N))
-        self.dense_init: Callable = jax.nn.initializers.normal(stddev=0.02)
-        self.bias_init: Callable = jax.nn.initializers.zeros
-
     dtype = None
 
     @nn.compact
     def __call__(self, x: jnp.array, train: bool) -> jnp.array:
         dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
 
-        B, T, C = x.size(0), x.size(1), x.size(2)
+        B, T, C = x.shape[:3]
 
-        key = (
-            nn.Dense(
+        # Shape is (B, nh, T, h_dim)
+        key = nn.Dense(
                 name="key_proj",
                 features=self.embedding_dim,
-                kernel_init=self.dense_init,
-                bias=self.bias_init,
-            )(x)
-            .reshape(B, T, self.num_head, self.embedding_dim // self.num_head)
-            .transpose(1, 2)
-        )  # Shape is (B, nh, T, h_dim)
-
-        value = (
-            nn.Dense(
+                kernel_init=initializers.normal(stddev=0.02),
+                bias_init=initializers.zeros
+            )(x).reshape(B, T, self.num_head, self.embedding_dim // self.num_head).transpose(0,2, 1,3)
+          
+        # Shape is (B, nh, T, h_dim)
+        value = nn.Dense(
                 name="value_proj",
                 features=self.embedding_dim,
-                kernel_init=self.dense_init,
-                bias=self.bias_init,
-            )(x)
-            .reshape(B, T, self.num_head, self.embedding_dim // self.num_head)
-            .transpose(1, 2)
-        )  # Shape is (B, nh, T, h_dim)
+                kernel_init=initializers.normal(stddev=0.02),
+                bias_init=initializers.zeros
+            )(x).reshape(B, T, self.num_head, self.embedding_dim // self.num_head).transpose(0,2, 1,3)
 
-        query = (
-            nn.Dense(
+        # Shape is (B, nh, T, h_dim)
+        query = nn.Dense(
                 name="query_proj",
                 features=self.embedding_dim,
-                kernel_init=self.dense_init,
-                bias=self.bias_init,
-            )(x)
-            .reshape(B, T, self.num_head, self.embedding_dim // self.num_head)
-            .transpose(1, 2)
-        )  # Shape is (B, nh, T, h_dim)
+                kernel_init=initializers.normal(stddev=0.02),
+                bias_init=initializers.zeros
+            )(x).reshape(B, T, self.num_head, self.embedding_dim // self.num_head).transpose(0,2, 1,3)
 
         # get raw attention scores
-        attn_full = (query @ key.transpose(-2, -1)) / jnp.sqrt(
-            key.size(-1)
+        attn_full = (query @ key.transpose(0,1, 3, 2)) / jnp.sqrt(
+            key.shape[-1]
         )  # Shape is (B, nh, T, T)
 
-        mask = jnp.tril(jnp.ones(T, T, dtype=jnp.int8)).view(1, 1, T, T)
-        masked_attn = jnp.where(mask, attn_full, big_neg=jnp.finfo(self.dtype).min)
+        mask = jnp.tril(jnp.ones((T, T), dtype=jnp.int8)).reshape(1, 1, T, T)
+        masked_attn = jnp.where(mask, attn_full, jnp.finfo(self.dtype).min)
 
         attn_scores = nn.softmax(masked_attn, axis=-1)
-        attn_out = (attn_scores @ value).tranpose(1, 2)  # Shape is (B, T, nh, h_dim)
+        attn_out = (attn_scores @ value).transpose(0,2, 1, 3)  # Shape is (B, T, nh, h_dim)
 
         attn_out = attn_out.reshape(B, T, C)
         out = nn.Dense(
             name="residual_out",
             features=self.embedding_dim,
-            kernel_init=self.residual_init,
-            bias=self.bias_init,
+            kernel_init=jax.nn.initializers.normal(stddev=0.02 / jnp.sqrt(self.N)),
+            bias_init=initializers.zeros
         )(attn_out)
 
-        return dropout(out)
+        return dropout()(out)
 
 
 # class TransformerBlock(nn.Module):
