@@ -111,80 +111,81 @@ class TransformerBlock(nn.Module):
     dtype: Any = None
     fused_residuals: bool = False
 
-    def setup(self):
-        self.attn = CausalAttention(
+
+    @nn.compact
+    def __call__(self, x: jnp.array, train: bool = False) -> jnp.array:
+
+        if self.fused_residuals:
+            norm = nn.LayerNorm()
+            return CausalAttention(
             self.embedding_dim,
             self.num_head,
             self.block_size,
             self.residual_dropout,
             self.N,
-        )
-        self.mlp = MLPBlock(self.embedding_dim, dropout=self.residual_dropout, N=self.N)
-        self.ln1 = nn.LayerNorm()
-
-        if not self.fused_residuals:
-            self.ln2 = nn.LayerNorm()
-
-    def __call__(self, x: jnp.array, train: bool = False) -> jnp.array:
-
-        if self.fused_residuals:
-            return self.attn(self.ln1(x), train) + self.mlp(self.ln1(x), train)
+        )(norm(x), train) + MLPBlock(self.embedding_dim, dropout=self.residual_dropout, N=self.N)(norm(x), train)
         else:
-            x = x + self.attn(self.ln1(x), train)
-            x = x + self.mlp(self.ln2(x), train)
+            x = x + CausalAttention(
+            self.embedding_dim,
+            self.num_head,
+            self.block_size,
+            self.residual_dropout,
+            self.N,
+        )(nn.LayerNorm()(x), train)
+            x = x + MLPBlock(self.embedding_dim, dropout=self.residual_dropout, N=self.N)(nn.LayerNorm()(x), train)
             return x
 
 
-# class Transformer(nn.Module):
-#     """
-#     Full transformer
-#     """
+class Transformer(nn.Module):
+    """
+    Full transformer
+    """
 
-#     embedding_dim: int
-#     vocab_size: int
-#     num_head: int
-#     block_size: int
-#     residual_dropout: float = 0.0
-#     N: int = None
-#     dtype: Any = None
-#     fused_residuals: bool = False
+    embedding_dim: int
+    vocab_size: int
+    num_head: int
+    block_size: int
+    residual_dropout: float = 0.0
+    N: int = None
+    dtype: Any = None
+    fused_residuals: bool = False
 
-#     dense_init: Callable = jax.nn.initializers.normal(stddev=0.02)
-#     bias_init: Callable = jax.nn.initializers.zeros
+    @nn.compact
+    def __call__(self, x: jnp.array, train: bool = False) -> jnp.array:
 
-#     @nn.compact
-#     def __call__(self, x: jnp.array, train: bool = False) -> jnp.array:
+        B, T = x.shape[0:2]
 
-#         B, T = x.size(0), x.size(1)
+        embed = nn.Embed(
+            name="wte",
+            num_embeddings=self.vocab_size,
+            features=self.embedding_dim,
+            embedding_init=initializers.normal(stddev=0.02)
+        )
 
-#         wte = nn.Embed(
-#             name="wte",
-#             num_embeddings=self.vocab_size,
-#             features=self.embedding_dim,
-#             embedding_init=self.dense_init,
-#         )(x)
-#         wpe = nn.Embed(
-#             name="wpe",
-#             num_embeddings=self.block_size,
-#             features=self.embedding_dim,
-#             embedding_init=self.dense_init,
-#         )(jnp.ones(B, T))
+        wte = embed(x)
 
-#         x = wte + wpe
+        wpe = nn.Embed(
+            name="wpe",
+            num_embeddings=self.block_size,
+            features=self.embedding_dim,
+            embedding_init=initializers.normal(stddev=0.02)
+        )(jnp.ones((B, T), dtype = jnp.uint8))
 
-#         for _ in range(self.N):
+        x = wte + wpe
 
-#             x = TransformerBlock(
-#                 self.embedding_dim,
-#                 self.num_head,
-#                 self.block_size,
-#                 self.residual_dropout,
-#                 self.N,
-#                 self.fused_residuals,
-#             )(x, train)
+        for _ in range(self.N):
 
-#         x = nn.LayerNorm(x)
+            x = TransformerBlock(
+                self.embedding_dim,
+                self.num_head,
+                self.block_size,
+                self.residual_dropout,
+                self.N,
+                self.fused_residuals,
+            )(x, train)
 
-#         logits = wte.attend(x)
+        x = nn.LayerNorm()(x)
 
-#         return logits
+        logits = embed.attend(x)
+
+        return logits
