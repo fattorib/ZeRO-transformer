@@ -145,7 +145,7 @@ class Transformer(nn.Module):
     vocab_size: int
     num_head: int
     block_size: int
-    residual_dropout: float = 0.0
+    dropout: float = 0.0
     N: int = None
     dtype: Any = None
     fused_residuals: bool = False
@@ -179,7 +179,7 @@ class Transformer(nn.Module):
                 self.embedding_dim,
                 self.num_head,
                 self.block_size,
-                self.residual_dropout,
+                self.dropout,
                 self.N,
                 self.fused_residuals,
             )(x, train)
