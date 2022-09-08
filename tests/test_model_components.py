@@ -1,5 +1,4 @@
 import unittest
-from chex import assert_equal
 import flax.linen as nn
 import jax.numpy as jnp
 import jax.random as random
@@ -40,7 +39,7 @@ class TestMLP(unittest.TestCase):
             train=True,
             rngs={"dropout": self.rng},
         )
-        assert_equal(out.shape, batch_cts.shape)
+        self.assertEqual(out.shape, batch_cts.shape)
 
         out = mlp.apply(
             {"params": params["params"]},
@@ -48,7 +47,7 @@ class TestMLP(unittest.TestCase):
             train=False,
             rngs={"dropout": self.rng},
         )
-        assert_equal(out.shape, batch_cts.shape)
+        self.assertEqual(out.shape, batch_cts.shape)
 
 
 class TestAttn(unittest.TestCase):
@@ -80,7 +79,7 @@ class TestAttn(unittest.TestCase):
             train=True,
             rngs={"dropout": self.rng},
         )
-        assert_equal(out.shape, batch_cts.shape)
+        self.assertEqual(out.shape, batch_cts.shape)
 
         out = attn.apply(
             {"params": params["params"]},
@@ -88,7 +87,7 @@ class TestAttn(unittest.TestCase):
             train=False,
             rngs={"dropout": self.rng},
         )
-        assert_equal(out.shape, batch_cts.shape)
+        self.assertEqual(out.shape, batch_cts.shape)
 
 
 class TestTransformerBlock(unittest.TestCase):
@@ -133,7 +132,7 @@ class TestTransformerBlock(unittest.TestCase):
             train=True,
             rngs={"dropout": self.rng},
         )
-        assert_equal(out.shape, batch_cts.shape)
+        self.assertEqual(out.shape, batch_cts.shape)
 
     def test_block_create_standard(self):
 
@@ -169,7 +168,7 @@ class TestTransformerBlock(unittest.TestCase):
             train=True,
             rngs={"dropout": self.rng},
         )
-        assert_equal(out.shape, batch_cts.shape)
+        self.assertEqual(out.shape, batch_cts.shape)
 
 
 class TestGPT(unittest.TestCase):
@@ -221,7 +220,7 @@ class TestGPT(unittest.TestCase):
             train=True,
             rngs={"dropout": self.rng},
         )
-        assert_equal((1, self.block_size, self.vocab_size), out.shape)
+        self.assertEqual((1, self.block_size, self.vocab_size), out.shape)
 
     def test_gpt_create_standard(self):
 
@@ -263,4 +262,4 @@ class TestGPT(unittest.TestCase):
             train=True,
             rngs={"dropout": self.rng},
         )
-        assert_equal((1, self.block_size, self.vocab_size), out.shape)
+        self.assertEqual((1, self.block_size, self.vocab_size), out.shape)

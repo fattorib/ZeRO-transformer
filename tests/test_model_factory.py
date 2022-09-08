@@ -1,0 +1,27 @@
+import unittest
+import jax.random as random
+from src.models.GPT import model_getter
+from omegaconf import OmegaConf
+
+
+class TestLoadModels(unittest.TestCase):
+    def setUp(self) -> None:
+        self.init_rng, self.rng = random.split(random.PRNGKey(0))
+        self.block_size = 512
+        self.config = OmegaConf.load("conf/model_config.yaml")
+
+    def tearDown(self) -> None:
+        pass
+
+    def test_call_valid(self) -> None:
+
+        model_size = "small"
+        model = model_getter(model_size)
+
+        self.assertEqual(model.N, self.config[model_size].N)
+
+    def test_call_invalid(self) -> None:
+
+        model_size = "Humongous"
+
+        self.assertRaises(AssertionError, model_getter, model_size)

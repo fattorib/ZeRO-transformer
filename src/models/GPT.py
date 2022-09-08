@@ -228,4 +228,4 @@ def model_getter(model_size, config_path="conf/model_config.yaml") -> nn.Module:
     configs = OmegaConf.load(config_path)
     assert model_size in list(configs.keys()), "Invalid model name provided"
 
-    return Transformer(**configs.model_size)
+    return Transformer(**configs[model_size])
