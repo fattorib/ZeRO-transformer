@@ -100,39 +100,39 @@ class CausalAttention(nn.Module):
         return dropout()(out)
 
 
-# class TransformerBlock(nn.Module):
-#     """One full transformer block"""
+class TransformerBlock(nn.Module):
+    """One full transformer block"""
 
-#     embedding_dim: int
-#     num_head: int
-#     block_size: int
-#     residual_dropout: float = 0.0
-#     N: int = None
-#     dtype: Any = None
-#     fused_residuals: bool = False
+    embedding_dim: int
+    num_head: int
+    block_size: int
+    residual_dropout: float = 0.0
+    N: int = None
+    dtype: Any = None
+    fused_residuals: bool = False
 
-#     def setup(self):
-#         self.attn = CausalAttention(
-#             self.embedding_dim,
-#             self.num_head,
-#             self.block_size,
-#             self.residual_dropout,
-#             self.N,
-#         )
-#         self.mlp = MLPBlock(self.embedding_dim, dropout=self.residual_dropout, N=self.N)
-#         self.ln1 = nn.LayerNorm()
+    def setup(self):
+        self.attn = CausalAttention(
+            self.embedding_dim,
+            self.num_head,
+            self.block_size,
+            self.residual_dropout,
+            self.N,
+        )
+        self.mlp = MLPBlock(self.embedding_dim, dropout=self.residual_dropout, N=self.N)
+        self.ln1 = nn.LayerNorm()
 
-#         if not self.fused_residuals:
-#             self.ln2 = nn.LayerNorm()
+        if not self.fused_residuals:
+            self.ln2 = nn.LayerNorm()
 
-#     def __call__(self, x: jnp.array, train: bool = False) -> jnp.array:
+    def __call__(self, x: jnp.array, train: bool = False) -> jnp.array:
 
-#         if self.fused_residuals:
-#             return self.attn(self.ln1(x), train) + self.mlp(self.ln1(x), train)
-#         else:
-#             x = x + self.attn(self.ln1(x), train)
-#             x = x + self.mlp(self.ln2(x), train)
-#             return x
+        if self.fused_residuals:
+            return self.attn(self.ln1(x), train) + self.mlp(self.ln1(x), train)
+        else:
+            x = x + self.attn(self.ln1(x), train)
+            x = x + self.mlp(self.ln2(x), train)
+            return x
 
 
 # class Transformer(nn.Module):

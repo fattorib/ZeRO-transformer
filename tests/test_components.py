@@ -2,8 +2,8 @@ import unittest
 from chex import assert_equal 
 import flax.linen as nn 
 import jax.numpy as jnp 
-import jax.random as random 
-from src.models.GPT import CausalAttention, MLPBlock
+import jax.random as random
+from src.models.GPT import CausalAttention, MLPBlock, TransformerBlock
 
 class TestMLP(unittest.TestCase):
 
@@ -55,3 +55,44 @@ class TestAttn(unittest.TestCase):
         out = attn.apply({'params':params['params']},batch_cts, train = False, rngs = {"dropout": self.rng})
         assert_equal(out.shape, batch_cts.shape)
 
+
+class TestTransformerBlock(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.init_rng, self.rng = random.split(random.PRNGKey(0)) 
+
+    def tearDown(self) -> None:
+        pass
+
+    def test_block_create_fused(self):
+
+        block = TransformerBlock(embedding_dim=128, num_head = 8, block_size = 64, residual_dropout=0.1, N = 6, dtype = None, fused_residuals=True)
+        batch_cts = random.normal(self.rng, shape = (1, 512, 128))
+        params = block.init(self.init_rng, batch_cts, False)
+
+        
+    def test_block_fwd_fused(self):
+
+        block = TransformerBlock(embedding_dim=128, num_head = 8, block_size = 64, residual_dropout=0.1, N = 6, dtype = None, fused_residuals=True)
+        batch_cts = random.normal(self.rng, shape = (1, 512, 128))
+        params = block.init(self.init_rng, batch_cts, False)
+        
+        out = block.apply({'params':params['params']},batch_cts, train = True, rngs = {"dropout": self.rng})
+        assert_equal(out.shape, batch_cts.shape)
+
+    def test_block_create_standard(self):
+
+        block = TransformerBlock(embedding_dim=128, num_head = 8, block_size = 64, residual_dropout=0.1, N = 6, dtype = None, fused_residuals=False)
+        batch_cts = random.normal(self.rng, shape = (1, 512, 128))
+        params = block.init(self.init_rng, batch_cts, False)
+
+    def test_block_fwd_standard(self):
+
+        block = TransformerBlock(embedding_dim=128, num_head = 8, block_size = 64, residual_dropout=0.1, N = 6, dtype = None, fused_residuals=False)
+        batch_cts = random.normal(self.rng, shape = (1, 512, 128))
+        params = block.init(self.init_rng, batch_cts, False)
+
+        out = block.apply({'params':params['params']},batch_cts, train = True, rngs = {"dropout": self.rng})
+        assert_equal(out.shape, batch_cts.shape)
+
+    
