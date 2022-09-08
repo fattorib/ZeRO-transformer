@@ -1,0 +1,26 @@
+small:
+  embedding_dim: 768
+  vocab_size: 50257
+  num_head: 12
+  block_size: 512
+  residual_dropout: 0.0
+  N: 6
+  fused_residuals: True
+
+base:
+  embedding_dim: 768
+  vocab_size: 50257
+  num_head: 12
+  block_size: 512
+  residual_dropout: 0.0
+  N: 12
+  fused_residuals: True
+
+medium:
+  embedding_dim: 1024
+  vocab_size: 50257
+  num_head: 16
+  block_size: 512
+  residual_dropout: 0.0
+  N: 24
+  fused_residuals: True
