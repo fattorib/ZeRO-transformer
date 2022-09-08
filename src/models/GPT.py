@@ -222,7 +222,9 @@ def model_getter(model_size, config_path="conf/model_config.yaml") -> nn.Module:
     and returns models
 
     Args:
-        model_size (str): model name. This is checked against all top-level model names in the YAML file (defaults to 'conf/model_config.yaml')
+        model_size (str): model name
+            This is checked against all top-level model names in the 
+            YAML file (defaults to 'conf/model_config.yaml')
     """
 
     configs = OmegaConf.load(config_path)
