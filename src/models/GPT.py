@@ -165,7 +165,7 @@ class TransformerBlock(nn.Module):
 
 class Transformer(nn.Module):
     """
-    Full transformer
+    Full transformer module
     """
 
     embedding_dim: int
