@@ -3,10 +3,11 @@ from jax import random
 from typing import Any
 import jax.numpy as jnp
 
-# Flax imports
+# Jax/Flax imports
 import jax
 import optax
 import flax
+from flax.training import checkpoints
 
 from src.models.GPT import model_getter
 from src.training.training_utils import create_train_state
@@ -16,6 +17,7 @@ from functools import partial
 import argparse
 import logging
 from omegaconf import OmegaConf
+import wandb
 
 from tqdm import tqdm
 
@@ -40,6 +42,14 @@ def shard_batch(xs):
     return xs.reshape((local_device_count, -1) + xs.shape[1:])
 
 
+def save_checkpoint(state, workdir):
+    if jax.process_index() == 0:
+        # get train state from the first replica
+        state = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], state))
+        step = int(state.step)
+        checkpoints.save_checkpoint(workdir, state, step, keep=3)
+
+
 def main():
     args = parse()
     cfg = OmegaConf.load(args.cfg)
@@ -47,6 +57,9 @@ def main():
     # getting system information
     num_devices = jax.device_count()
     platform = jax.local_devices()[0].platform
+
+    logging.info(f"Host setup with {num_devices} devices.")
+    logging.info(f"Using platform: {platform}")
 
     model = model_getter(cfg.model.size, config_path=args.model_cfg)
 
@@ -73,6 +86,24 @@ def main():
     state = flax.jax_utils.replicate(state)
 
     local_batch_size = cfg.training.batch_size // jax.device_count()
+
+    if jax.process_index() == 0:
+        id = wandb.util.generate_id()
+        wandb.init(id=id, resume="allow", project="LJX")
+        wandb.config.steps = cfg.training.total_steps
+        wandb.config.batch_size = cfg.training.batch_size
+
+        # Hyperparam Setup
+        wandb.config.weight_decay = cfg.training.weight_decay
+        wandb.config.warmup = cfg.training.warmup_steps
+        wandb.config.accum_steps = cfg.training.gradient_accumulation_steps
+        wandb.config.seq_len = model.block_size
+        wandb.config.model = cfg.model.size
+
+        # Model setup
+        wandb.config.corpus = cfg.data.corpus
+
+    # for
 
 
 @partial(jax.pmap, axis_name="batch")
@@ -123,3 +154,7 @@ def eval_step(state: Any, batch: jnp.array):
     metrics = {"LM Loss": loss, "LM PPL": jnp.exp(loss)}
 
     return metrics
+
+
+if __name__ == "__main__":
+    main()
