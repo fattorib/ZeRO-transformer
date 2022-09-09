@@ -178,7 +178,9 @@ class Transformer(nn.Module):
     fused_residuals: bool = False
 
     @nn.compact
-    def __call__(self, x: jnp.array, labels: jnp.array = None, train: bool = False) -> jnp.array:
+    def __call__(
+        self, x: jnp.array, labels: jnp.array = None, train: bool = False
+    ) -> jnp.array:
 
         B, T = x.shape[0:2]
 
@@ -221,11 +223,12 @@ class Transformer(nn.Module):
             labels_shifted = labels[..., 1:].reshape(-1)
             logits_shifted = logits[..., :-1, :].reshape(-1, logits.shape[-1])
 
-            oh_labels_shifted = jax.nn.one_hot(labels_shifted, num_classes = self.vocab_size)
+            oh_labels_shifted = jax.nn.one_hot(
+                labels_shifted, num_classes=self.vocab_size
+            )
             loss = cross_entropy_loss(oh_labels_shifted, logits_shifted)
 
             return logits, loss
-
 
 
 def model_getter(model_size, config_path="conf/model_config.yaml") -> nn.Module:
@@ -234,7 +237,7 @@ def model_getter(model_size, config_path="conf/model_config.yaml") -> nn.Module:
 
     Args:
         model_size (str): model name
-            This is checked against all top-level model names in the 
+            This is checked against all top-level model names in the
             YAML file (defaults to 'conf/model_config.yaml')
     """
 

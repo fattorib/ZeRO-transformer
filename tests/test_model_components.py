@@ -1,5 +1,5 @@
 import unittest
-import jax 
+import jax
 import flax.linen as nn
 import jax.numpy as jnp
 import jax.random as random
@@ -266,39 +266,38 @@ class TestGPT(unittest.TestCase):
         )
         self.assertEqual((1, self.block_size, self.vocab_size), out.shape)
 
-
     def test_gpt_loss_standard(self):
 
-            block = Transformer(
-                embedding_dim=128,
-                vocab_size=self.vocab_size,
-                num_head=8,
-                block_size=512,
-                dropout=0.1,
-                N=6,
-                dtype=None,
-                fused_residuals=False,
-            )
-            batch_tok = random.randint(
-                self.rng, shape=(1, 512), maxval=256, minval=0
-            )
-            params = block.init(self.init_rng, batch_tok, None, False)
+        block = Transformer(
+            embedding_dim=128,
+            vocab_size=self.vocab_size,
+            num_head=8,
+            block_size=512,
+            dropout=0.1,
+            N=6,
+            dtype=None,
+            fused_residuals=False,
+        )
+        batch_tok = random.randint(
+            self.rng, shape=(1, 512), maxval=256, minval=0
+        )
+        params = block.init(self.init_rng, batch_tok, None, False)
 
-            logits,loss = block.apply(
-                {"params": params["params"]},
-                x = batch_tok,
-                labels = batch_tok,
-                train=True,
-                rngs={"dropout": self.rng},
-            )
+        logits, loss = block.apply(
+            {"params": params["params"]},
+            x=batch_tok,
+            labels=batch_tok,
+            train=True,
+            rngs={"dropout": self.rng},
+        )
 
-            labels_shifted = batch_tok[..., 1:].reshape(-1)
-            logits_shifted = logits[...,:-1, :].reshape(-1, logits.shape[-1])
+        labels_shifted = batch_tok[..., 1:].reshape(-1)
+        logits_shifted = logits[..., :-1, :].reshape(-1, logits.shape[-1])
 
-            oh_labels_shifted = jax.nn.one_hot(labels_shifted, num_classes = self.vocab_size)
+        oh_labels_shifted = jax.nn.one_hot(
+            labels_shifted, num_classes=self.vocab_size
+        )
 
-            loss_external = cross_entropy_loss(oh_labels_shifted, logits_shifted)
-            
-            self.assertEqual(loss,loss_external)
+        loss_external = cross_entropy_loss(oh_labels_shifted, logits_shifted)
 
-
+        self.assertEqual(loss, loss_external)
