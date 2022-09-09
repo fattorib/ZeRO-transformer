@@ -1,4 +1,5 @@
 import unittest
+import jax 
 import flax.linen as nn
 import jax.numpy as jnp
 import jax.random as random
@@ -8,6 +9,7 @@ from src.models.GPT import (
     TransformerBlock,
     Transformer,
 )
+from src.utils.losses import cross_entropy_loss
 
 
 class TestMLP(unittest.TestCase):
@@ -104,7 +106,7 @@ class TestTransformerBlock(unittest.TestCase):
             embedding_dim=128,
             num_head=8,
             block_size=512,
-            residual_dropout=0.1,
+            dropout=0.1,
             N=6,
             dtype=None,
             fused_residuals=True,
@@ -118,7 +120,7 @@ class TestTransformerBlock(unittest.TestCase):
             embedding_dim=128,
             num_head=8,
             block_size=512,
-            residual_dropout=0.1,
+            dropout=0.1,
             N=6,
             dtype=None,
             fused_residuals=True,
@@ -140,7 +142,7 @@ class TestTransformerBlock(unittest.TestCase):
             embedding_dim=128,
             num_head=8,
             block_size=512,
-            residual_dropout=0.1,
+            dropout=0.1,
             N=6,
             dtype=None,
             fused_residuals=False,
@@ -154,7 +156,7 @@ class TestTransformerBlock(unittest.TestCase):
             embedding_dim=128,
             num_head=8,
             block_size=512,
-            residual_dropout=0.1,
+            dropout=0.1,
             N=6,
             dtype=None,
             fused_residuals=False,
@@ -187,7 +189,7 @@ class TestGPT(unittest.TestCase):
             vocab_size=256,
             num_head=8,
             block_size=512,
-            residual_dropout=0.1,
+            dropout=0.1,
             N=6,
             dtype=None,
             fused_residuals=True,
@@ -195,7 +197,7 @@ class TestGPT(unittest.TestCase):
         batch_tok = random.randint(
             self.rng, shape=(1, 512), maxval=256, minval=0
         )
-        params = block.init(self.init_rng, batch_tok, False)
+        params = block.init(self.init_rng, batch_tok, None, False)
 
     def test_gpt_fwd_fused(self):
 
@@ -204,7 +206,7 @@ class TestGPT(unittest.TestCase):
             vocab_size=self.vocab_size,
             num_head=8,
             block_size=512,
-            residual_dropout=0.1,
+            dropout=0.1,
             N=6,
             dtype=None,
             fused_residuals=True,
@@ -212,7 +214,7 @@ class TestGPT(unittest.TestCase):
         batch_tok = random.randint(
             self.rng, shape=(1, 512), maxval=256, minval=0
         )
-        params = block.init(self.init_rng, batch_tok, False)
+        params = block.init(self.init_rng, batch_tok, None, False)
 
         out = block.apply(
             {"params": params["params"]},
@@ -229,7 +231,7 @@ class TestGPT(unittest.TestCase):
             vocab_size=256,
             num_head=8,
             block_size=512,
-            residual_dropout=0.1,
+            dropout=0.1,
             N=6,
             dtype=None,
             fused_residuals=False,
@@ -237,7 +239,7 @@ class TestGPT(unittest.TestCase):
         batch_tok = random.randint(
             self.rng, shape=(1, 512), maxval=256, minval=0
         )
-        params = block.init(self.init_rng, batch_tok, False)
+        params = block.init(self.init_rng, batch_tok, None, False)
 
     def test_gpt_fwd_standard(self):
 
@@ -246,7 +248,7 @@ class TestGPT(unittest.TestCase):
             vocab_size=self.vocab_size,
             num_head=8,
             block_size=512,
-            residual_dropout=0.1,
+            dropout=0.1,
             N=6,
             dtype=None,
             fused_residuals=False,
@@ -254,7 +256,7 @@ class TestGPT(unittest.TestCase):
         batch_tok = random.randint(
             self.rng, shape=(1, 512), maxval=256, minval=0
         )
-        params = block.init(self.init_rng, batch_tok, False)
+        params = block.init(self.init_rng, batch_tok, None, False)
 
         out = block.apply(
             {"params": params["params"]},
@@ -263,3 +265,40 @@ class TestGPT(unittest.TestCase):
             rngs={"dropout": self.rng},
         )
         self.assertEqual((1, self.block_size, self.vocab_size), out.shape)
+
+
+    def test_gpt_loss_standard(self):
+
+            block = Transformer(
+                embedding_dim=128,
+                vocab_size=self.vocab_size,
+                num_head=8,
+                block_size=512,
+                dropout=0.1,
+                N=6,
+                dtype=None,
+                fused_residuals=False,
+            )
+            batch_tok = random.randint(
+                self.rng, shape=(1, 512), maxval=256, minval=0
+            )
+            params = block.init(self.init_rng, batch_tok, None, False)
+
+            logits,loss = block.apply(
+                {"params": params["params"]},
+                x = batch_tok,
+                labels = batch_tok,
+                train=True,
+                rngs={"dropout": self.rng},
+            )
+
+            labels_shifted = batch_tok[..., 1:].reshape(-1)
+            logits_shifted = logits[...,:-1, :].reshape(-1, logits.shape[-1])
+
+            oh_labels_shifted = jax.nn.one_hot(labels_shifted, num_classes = self.vocab_size)
+
+            loss_external = cross_entropy_loss(oh_labels_shifted, logits_shifted)
+            
+            self.assertEqual(loss,loss_external)
+
+

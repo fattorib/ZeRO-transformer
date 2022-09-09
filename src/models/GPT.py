@@ -8,6 +8,7 @@ from functools import partial
 from typing import Any
 import jax.nn.initializers as initializers
 from omegaconf import OmegaConf
+from src.utils.losses import cross_entropy_loss
 
 
 class MLPBlock(nn.Module):
@@ -177,7 +178,7 @@ class Transformer(nn.Module):
     fused_residuals: bool = False
 
     @nn.compact
-    def __call__(self, x: jnp.array, train: bool = False) -> jnp.array:
+    def __call__(self, x: jnp.array, labels: jnp.array = None, train: bool = False) -> jnp.array:
 
         B, T = x.shape[0:2]
 
@@ -214,7 +215,17 @@ class Transformer(nn.Module):
 
         logits = embed.attend(x)
 
-        return logits
+        if labels is None:
+            return logits
+        else:
+            labels_shifted = labels[..., 1:].reshape(-1)
+            logits_shifted = logits[..., :-1, :].reshape(-1, logits.shape[-1])
+
+            oh_labels_shifted = jax.nn.one_hot(labels_shifted, num_classes = self.vocab_size)
+            loss = cross_entropy_loss(oh_labels_shifted, logits_shifted)
+
+            return logits, loss
+
 
 
 def model_getter(model_size, config_path="conf/model_config.yaml") -> nn.Module:
