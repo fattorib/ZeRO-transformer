@@ -65,14 +65,6 @@ def main():
     rng = jax.random.PRNGKey(0)
     rng, init_rng = jax.random.split(rng)
 
-    state = create_train_state(
-        init_rng,
-        learning_rate_fn,
-        weight_decay=cfg.training.weight_decay,
-        model=model,
-        grad_accum_steps=cfg.training.gradient_accumulation_steps,
-    )
-
     if cfg.training.precision == "fp16":
         model_dtype = jnp.float16
     elif cfg.training.precision == "bf16":
@@ -80,16 +72,17 @@ def main():
     else:
         model_dtype = jnp.float32
 
-    # Helper function for converting dtypes across model
-    def to_precision(t, dtype: jnp.dtype):
-        return jax.tree_map(
-            lambda x: x.astype(dtype) if x.dtype == jnp.float32 else x, t
-        )
+    state = create_train_state(
+        init_rng,
+        learning_rate_fn,
+        weight_decay=cfg.training.weight_decay,
+        model=model,
+        grad_accum_steps=cfg.training.gradient_accumulation_steps,
+        dtype = model_dtype
+    )
 
     logging.info(f"Host setup with {num_devices} devices.")
     logging.info(f"Using platform: {platform} with precision {model_dtype}")
-
-    state.params = to_precision(state.params, model_dtype)
 
     # replicating state across devices
     state = flax.jax_utils.replicate(state)
