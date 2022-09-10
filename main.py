@@ -139,14 +139,14 @@ def main():
         dataset=train_dataset,
         batch_size=cfg.training.batch_size,
         collate_fn=numpy_collate,
-        num_workers = cfg.data.workers
+        # num_workers = cfg.data.workers
     )
 
     vl = DataLoader(
         dataset=validation_dataset,
         batch_size=cfg.training.batch_size,
         collate_fn=numpy_collate,
-        num_workers = cfg.data.workers
+        # num_workers = cfg.data.workers
     )
 
     running_metrics = []
