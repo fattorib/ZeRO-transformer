@@ -1,5 +1,5 @@
 training:
-  batch_size: 2
+  batch_size: 8
   peak_learning_rate: 6e-4
   warmup_steps: 2000
   decay_steps: 10000
