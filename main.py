@@ -81,8 +81,9 @@ def main():
         dtype = model_dtype
     )
 
-    logging.info(f"Host setup with {num_devices} devices.")
-    logging.info(f"Using platform: {platform} with precision {model_dtype}")
+    if jax.process_index() == 0:
+        logging.info(f"Host setup with {num_devices} devices.")
+        logging.info(f"Using platform: {platform} with precision {model_dtype}")
 
     # replicating state across devices
     state = flax.jax_utils.replicate(state)
