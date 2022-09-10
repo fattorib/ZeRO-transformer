@@ -150,13 +150,13 @@ def main():
 
         # sharding batch/keys for dataparallel
         sharded_batch = shard(text)
-        rng, batch_rng = random.split(rng)
-        sharded_rng = shard_prng_key(batch_rng)
+        # rng, batch_rng = random.split(rng)
+        # sharded_rng = shard_prng_key(batch_rng)
 
         state, metrics = train_step(
             state,
             sharded_batch,
-            sharded_rng,
+            # sharded_rng,
         )
         running_metrics.append(metrics)
 
@@ -197,7 +197,7 @@ def main():
 
 
 @partial(jax.pmap, axis_name="batch")
-def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey):
+def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
     """Train on a single batch"""
 
     def loss_fn(params):
@@ -205,8 +205,8 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey):
             {"params": params["params"]},
             x=batch,
             labels=batch,
-            train=True,
-            rngs={"dropout": rng_key},
+            train=False,
+            # rngs={"dropout": rng_key},
         )
 
         return loss
