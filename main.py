@@ -22,7 +22,9 @@ from src.models.GPT import model_getter
 from src.training.training_utils import create_train_state
 from src.utils.dataloader import numpy_collate
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig()
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def parse():
@@ -54,6 +56,7 @@ def main():
 
     model = model_getter(cfg.model.size, config_path=args.model_cfg)
 
+    
     learning_rate_fn = optax.warmup_cosine_decay_schedule(
         init_value=0,
         peak_value=cfg.training.peak_learning_rate,
@@ -82,8 +85,8 @@ def main():
     )
 
     if jax.process_index() == 0:
-        logging.info(f"Host setup with {num_devices} devices.")
-        logging.info(f"Using platform: {platform} with precision {model_dtype}")
+        logger.debug(f"Host setup with {num_devices} devices.")
+        logger.debug(f"Using platform: {platform} with precision {model_dtype}")
 
     # replicating state across devices
     state = flax.jax_utils.replicate(state)

@@ -1,5 +1,5 @@
 training:
-  batch_size: 8
+  batch_size: 2
   peak_learning_rate: 6e-4
   warmup_steps: 2000
   decay_steps: 10000
@@ -9,7 +9,7 @@ training:
   gradient_accumulation_steps: 32
   evaluation_frequency: 100
   maximum_evaluation_steps: 500
-  precision: 'bf16'
+  precision: 'fp16'
 
 model:
   size: "small"
@@ -19,3 +19,4 @@ data:
   train_shard_urls: "data/processed/books_train-{000000..000013}.tar.gz"
   validation_shard_urls: "data/processed/bookcorpus_val-{000000..000002}.tar.gz"
   max_context: 1024
+  workers: 4
