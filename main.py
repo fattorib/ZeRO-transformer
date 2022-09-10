@@ -178,7 +178,7 @@ def main():
 
             validation_metrics = []
 
-            if (i) % (cfg.training.evaluation_frequency) == 0:
+            if (i) % (cfg.training.evaluation_frequency*cfg.training.gradient_accumulation_steps) == 0:
                 for val_it, val_text in enumerate(
                     tqdm(vl, disable=not jax.process_index() == 0)
                 ):
