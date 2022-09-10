@@ -1,7 +1,9 @@
 import unittest
+
 import jax.random as random
-from src.models.GPT import model_getter
 from omegaconf import OmegaConf
+
+from src.models.GPT import model_getter
 
 
 class TestLoadModels(unittest.TestCase):

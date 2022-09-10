@@ -1,13 +1,15 @@
 """ 
 Replication of GPT2 transformers in Flax
 """
-import jax
-import jax.numpy as jnp
-import flax.linen as nn
 from functools import partial
 from typing import Any
+
+import flax.linen as nn
+import jax
 import jax.nn.initializers as initializers
+import jax.numpy as jnp
 from omegaconf import OmegaConf
+
 from src.utils.losses import cross_entropy_loss
 
 
@@ -22,9 +24,7 @@ class MLPBlock(nn.Module):
     # TODO: How does mixed precision work?
     @nn.compact
     def __call__(self, x: jnp.array, train: bool) -> jnp.array:
-        dropout = partial(
-            nn.Dropout, rate=self.dropout, deterministic=not train
-        )
+        dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
         x = nn.Dense(
             features=self.dimension_multiplier * self.embedding_dim,
             name="fc_in",
@@ -54,9 +54,7 @@ class CausalAttention(nn.Module):
 
     @nn.compact
     def __call__(self, x: jnp.array, train: bool) -> jnp.array:
-        dropout = partial(
-            nn.Dropout, rate=self.dropout, deterministic=not train
-        )
+        dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
 
         B, T, C = x.shape[:3]
 
@@ -113,9 +111,7 @@ class CausalAttention(nn.Module):
         out = nn.Dense(
             name="residual_out",
             features=self.embedding_dim,
-            kernel_init=jax.nn.initializers.normal(
-                stddev=0.02 / jnp.sqrt(self.N)
-            ),
+            kernel_init=jax.nn.initializers.normal(stddev=0.02 / jnp.sqrt(self.N)),
             bias_init=initializers.zeros,
         )(attn_out)
 

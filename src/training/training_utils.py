@@ -1,13 +1,14 @@
 """ 
 Helper methods used during training setup. 
 """
+from typing import Callable, Union
+
+import flax.linen as nn
 import jax
 import jax.numpy as jnp
-from jax import random
 import optax
 from flax.training import train_state
-import flax.linen as nn
-from typing import Union, Callable
+from jax import random
 
 
 def initialized(key: random.PRNGKey, model: nn.Module):
@@ -48,8 +49,7 @@ def create_train_state(
 
     # This mask turns off weight decay for bias terms, LN terms and position embeddings
     mask = jax.tree_map(
-        lambda x: x.ndim != 1
-        and x.shape != (model.block_size, model.embedding_dim),
+        lambda x: x.ndim != 1 and x.shape != (model.block_size, model.embedding_dim),
         params,
     )
 

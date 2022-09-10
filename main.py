@@ -1,25 +1,23 @@
-import numpy as np
-from jax import random
-from typing import Any
-import jax.numpy as jnp
-
-# Jax/Flax imports
-import jax
-import optax
-import flax
-from flax.training import checkpoints
-
-from src.models.GPT import model_getter
-from src.training.training_utils import create_train_state
-from functools import partial
-
 # Logging/Config Stuffs
 import argparse
 import logging
-from omegaconf import OmegaConf
-import wandb
+from functools import partial
+from typing import Any
 
+import flax
+# Jax/Flax imports
+import jax
+import jax.numpy as jnp
+import numpy as np
+import optax
+from flax.training import checkpoints
+from jax import random
+from omegaconf import OmegaConf
 from tqdm import tqdm
+
+import wandb
+from src.models.GPT import model_getter
+from src.training.training_utils import create_train_state
 
 logging.basicConfig(level=logging.INFO)
 
@@ -29,9 +27,7 @@ def parse():
 
     parser.add_argument("--cfg", default="conf/config.yaml", type=str)
 
-    parser.add_argument(
-        "--model-cfg", default="conf/model_config.yaml", type=str
-    )
+    parser.add_argument("--model-cfg", default="conf/model_config.yaml", type=str)
 
     args = parser.parse_args()
     return args
