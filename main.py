@@ -179,10 +179,12 @@ def main():
                     for k in validation_metrics[0]
                 }
 
-                wandb.log(train_metrics_np.update(validation_metrics_np))
+                if jax.process_index() == 0:
+                    wandb.log(train_metrics_np.update(validation_metrics_np))
 
             else:
-                wandb.log(train_metrics_np)
+                if jax.process_index() == 0:
+                    wandb.log(train_metrics_np)
 
 
 @partial(jax.pmap, axis_name="batch")
