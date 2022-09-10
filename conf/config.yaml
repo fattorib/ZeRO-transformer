@@ -19,4 +19,4 @@ data:
   train_shard_urls: "data/processed/books_train-{000000..000013}.tar.gz"
   validation_shard_urls: "data/processed/bookcorpus_val-{000000..000002}.tar.gz"
   max_context: 1024
-  workers: 4
+  workers: 1
