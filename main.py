@@ -1,14 +1,13 @@
-# Logging/Config Stuffs
 import argparse
 import logging
 from functools import partial
 from typing import Any
 
 import flax
-# Jax/Flax imports
 import jax
 import jax.numpy as jnp
 import numpy as np
+import webdataset as wds
 import optax
 from flax.training import checkpoints
 from jax import random
@@ -18,6 +17,9 @@ from tqdm import tqdm
 import wandb
 from src.models.GPT import model_getter
 from src.training.training_utils import create_train_state
+from src.utils.dataloader import numpy_collate
+import random 
+from torch.utils.data import DataLoader
 
 logging.basicConfig(level=logging.INFO)
 
@@ -98,6 +100,37 @@ def main():
 
         # Model setup
         wandb.config.corpus = cfg.data.corpus
+    
+
+    train_shards = cfg.data.train_shard_urls
+    validation_shards = cfg.data.validation_shard_urls
+
+    def preprocess(batch):
+        x = batch["input_id.pth"][: cfg.data.max_context]
+        return jnp.array(x.long(), dtype = jnp.int32) 
+
+    train_dataset = wds.DataPipeline(
+        wds.SimpleShardList(train_shards),
+        wds.split_by_worker,
+        wds.tarfile_to_samples(),
+        wds.shuffle(1e4, initial=1e4, rng=random.Random(23)),
+        wds.decode(),
+        wds.map(preprocess),
+    )
+    
+    validation_dataset = wds.DataPipeline(
+        wds.SimpleShardList(validation_shards),
+        wds.split_by_worker,
+        wds.tarfile_to_samples(),
+        wds.shuffle(1e4, initial=1e4, rng=random.Random(23)),
+        wds.decode(),
+        wds.map(preprocess),
+    )   
+
+    tl = DataLoader(dataset = train_dataset, batch_size = cfg.training.batch_size, collate_fn=numpy_collate)
+
+    vl = DataLoader(dataset = validation_dataset, batch_size = cfg.training.batch_size, collate_fn=numpy_collate)
+
 
     # for
 

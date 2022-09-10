@@ -16,4 +16,4 @@ data:
   corpus: "bookcorpus2"
   train_shard_urls: "data/processed/bookcorpus2/bookcorpus_train-{000000..000013}.tar.gz"
   validation_shard_urls: "data/processed/bookcorpus2/bookcorpus_val-{000000..000002}.tar.gz"
-  
+  max_context: 1024
