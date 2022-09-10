@@ -195,6 +195,8 @@ def main():
                 }
 
                 if jax.process_index() == 0:
+                    print(type(train_metrics_np))
+                    print(train_metrics_np.update(validation_metrics_np))
                     wandb.log(train_metrics_np.update(validation_metrics_np))
 
             else:
