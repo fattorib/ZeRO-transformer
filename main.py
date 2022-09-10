@@ -52,7 +52,6 @@ def main():
     num_devices = jax.device_count()
     platform = jax.local_devices()[0].platform
 
-
     model = model_getter(cfg.model.size, config_path=args.model_cfg)
 
     learning_rate_fn = optax.warmup_cosine_decay_schedule(
@@ -74,16 +73,18 @@ def main():
         grad_accum_steps=cfg.training.gradient_accumulation_steps,
     )
 
-    if cfg.training.precision == 'fp16':
+    if cfg.training.precision == "fp16":
         model_dtype = jnp.float16
-    elif cfg.training.precision == 'bf16':
+    elif cfg.training.precision == "bf16":
         model_dtype = jnp.bfloat16
     else:
         model_dtype = jnp.float32
 
     # Helper function for converting dtypes across model
     def to_precision(t, dtype: jnp.dtype):
-        return jax.tree_map(lambda x: x.astype(dtype) if x.dtype == jnp.float32 else x, t)
+        return jax.tree_map(
+            lambda x: x.astype(dtype) if x.dtype == jnp.float32 else x, t
+        )
 
     logging.info(f"Host setup with {num_devices} devices.")
     logging.info(f"Using platform: {platform} with precision {model_dtype}")
