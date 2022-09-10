@@ -17,3 +17,8 @@ TODOS:
 - How does mixed precision work?
 
 
+# Testing
+
+```bash 
+python -m pytest
+```

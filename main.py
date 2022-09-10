@@ -89,7 +89,7 @@ def main():
     logging.info(f"Host setup with {num_devices} devices.")
     logging.info(f"Using platform: {platform} with precision {model_dtype}")
 
-    state.params = to_precision(state.params)
+    state.params = to_precision(state.params, model_dtype)
 
     # replicating state across devices
     state = flax.jax_utils.replicate(state)

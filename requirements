@@ -2,3 +2,7 @@ boto3
 flax
 wandb
 optax 
+omegaconf
+webdataset
+tensorflow
+pytest 
