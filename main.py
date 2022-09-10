@@ -1,6 +1,6 @@
 import argparse
 import logging
-import random
+import random as pyrandom
 from functools import partial
 from typing import Any
 
@@ -117,7 +117,7 @@ def main():
         wds.SimpleShardList(train_shards),
         wds.split_by_worker,
         wds.tarfile_to_samples(),
-        wds.shuffle(1e4, initial=1e4, rng=random.Random(23)),
+        wds.shuffle(1e4, initial=1e4, rng=pyrandom.Random(23)),
         wds.decode(),
         wds.map(preprocess),
     )
@@ -126,7 +126,7 @@ def main():
         wds.SimpleShardList(validation_shards),
         wds.split_by_worker,
         wds.tarfile_to_samples(),
-        wds.shuffle(1e4, initial=1e4, rng=random.Random(23)),
+        wds.shuffle(1e4, initial=1e4, rng=pyrandom.Random(23)),
         wds.decode(),
         wds.map(preprocess),
     )
