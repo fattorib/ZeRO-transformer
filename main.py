@@ -101,6 +101,7 @@ def main():
         wandb.init(id=id, resume="allow", project="LJX")
         wandb.config.steps = cfg.training.total_steps
         wandb.config.batch_size = cfg.training.batch_size
+        wandb.config.per_device_batch_size = local_batch_size
 
         # Hyperparam Setup
         wandb.config.weight_decay = cfg.training.weight_decay
