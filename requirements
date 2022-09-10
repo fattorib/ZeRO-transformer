@@ -1,4 +1,4 @@
 boto3
 flax
-jaxlib
 wandb
+optax 
