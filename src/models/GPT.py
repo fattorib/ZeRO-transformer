@@ -126,7 +126,7 @@ class TransformerBlock(nn.Module):
     block_size: int
     residual_dropout: float = 0.0
     N: int = None
-    dtype: Any = None
+    dtype: Any = jnp.float32
     fused_residuals: bool = False
 
     @nn.compact

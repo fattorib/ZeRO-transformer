@@ -10,6 +10,7 @@ training:
   gradient_accumulation_steps: 8
   evaluation_frequency: 100
   maximum_evaluation_steps: 500
+  precision: 'bf16'
 
 model:
   size: "small"
