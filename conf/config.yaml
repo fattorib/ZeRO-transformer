@@ -8,6 +8,8 @@ training:
   end_learning_rate: 6e-5
   weight_decay: 0.1
   gradient_accumulation_steps: 8
+  evaluation_frequency: 100
+  maximum_evaluation_steps: 500
 
 model:
   size: "small"

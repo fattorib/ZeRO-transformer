@@ -1,5 +1,6 @@
 import argparse
 import logging
+import random
 from functools import partial
 from typing import Any
 
@@ -7,19 +8,19 @@ import flax
 import jax
 import jax.numpy as jnp
 import numpy as np
-import webdataset as wds
 import optax
+import webdataset as wds
 from flax.training import checkpoints
+from flax.training.common_utils import shard, shard_prng_key
 from jax import random
 from omegaconf import OmegaConf
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import wandb
 from src.models.GPT import model_getter
 from src.training.training_utils import create_train_state
 from src.utils.dataloader import numpy_collate
-import random 
-from torch.utils.data import DataLoader
 
 logging.basicConfig(level=logging.INFO)
 
@@ -33,11 +34,6 @@ def parse():
 
     args = parser.parse_args()
     return args
-
-
-def shard_batch(xs):
-    local_device_count = jax.local_device_count()
-    return xs.reshape((local_device_count, -1) + xs.shape[1:])
 
 
 def save_checkpoint(state, workdir):
@@ -100,14 +96,13 @@ def main():
 
         # Model setup
         wandb.config.corpus = cfg.data.corpus
-    
 
     train_shards = cfg.data.train_shard_urls
     validation_shards = cfg.data.validation_shard_urls
 
     def preprocess(batch):
         x = batch["input_id.pth"][: cfg.data.max_context]
-        return jnp.array(x.long(), dtype = jnp.int32) 
+        return jnp.array(x.long(), dtype=jnp.int32)
 
     train_dataset = wds.DataPipeline(
         wds.SimpleShardList(train_shards),
@@ -117,7 +112,7 @@ def main():
         wds.decode(),
         wds.map(preprocess),
     )
-    
+
     validation_dataset = wds.DataPipeline(
         wds.SimpleShardList(validation_shards),
         wds.split_by_worker,
@@ -125,14 +120,69 @@ def main():
         wds.shuffle(1e4, initial=1e4, rng=random.Random(23)),
         wds.decode(),
         wds.map(preprocess),
-    )   
+    )
 
-    tl = DataLoader(dataset = train_dataset, batch_size = cfg.training.batch_size, collate_fn=numpy_collate)
+    tl = DataLoader(
+        dataset=train_dataset,
+        batch_size=cfg.training.batch_size,
+        collate_fn=numpy_collate,
+    )
 
-    vl = DataLoader(dataset = validation_dataset, batch_size = cfg.training.batch_size, collate_fn=numpy_collate)
+    vl = DataLoader(
+        dataset=validation_dataset,
+        batch_size=cfg.training.batch_size,
+        collate_fn=numpy_collate,
+    )
 
+    running_metrics = []
 
-    # for
+    # I mean, we should eventually wrap this in an epoch loop
+    for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
+
+        # sharding batch/keys for dataparallel
+        sharded_batch = shard(text)
+        rng, batch_rng = random.split(rng)
+        sharded_rng = shard_prng_key(batch_rng)
+
+        state, metrics = train_step(
+            state,
+            sharded_batch,
+            sharded_rng,
+        )
+        running_metrics.append(metrics)
+
+        if (i) % cfg.training.gradient_accumulation_steps == 0:
+            # we've completed a full batch of data, log the metrics
+
+            train_metrics_np = {
+                k: np.mean([metrics[k] for metrics in running_metrics])
+                for k in running_metrics[0]
+            }
+
+            running_metrics = []
+
+            validation_metrics = []
+
+            if (i) % cfg.training.evaluation_frequency == 0:
+                for val_it, val_text in enumerate(
+                    tqdm(vl, disable=not jax.process_index() == 0)
+                ):
+                    if val_it < cfg.training.maximum_evaluation_steps:
+                        sharded_batch = shard(val_text)
+                        metrics = eval_step(state, sharded_batch)
+                        validation_metrics.append(metrics)
+                    else:
+                        break
+
+                validation_metrics_np = {
+                    k: np.mean([metrics[k] for metrics in validation_metrics])
+                    for k in validation_metrics[0]
+                }
+
+                wandb.log(train_metrics_np.update(validation_metrics_np))
+
+            else:
+                wandb.log(train_metrics_np)
 
 
 @partial(jax.pmap, axis_name="batch")
@@ -163,7 +213,7 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey):
         grads=grads,
     )
 
-    metrics = {"LM Loss": loss, "LM PPL": jnp.exp(loss)}
+    metrics = {"Train LM Loss": loss, "Train LM PPL": jnp.exp(loss)}
 
     return state, metrics
 
@@ -180,7 +230,7 @@ def eval_step(state: Any, batch: jnp.array):
     )
     loss = jax.lax.pmean(loss, axis_name="batch")
 
-    metrics = {"LM Loss": loss, "LM PPL": jnp.exp(loss)}
+    metrics = {"Validation LM Loss": loss, "Validation LM PPL": jnp.exp(loss)}
 
     return metrics
 
