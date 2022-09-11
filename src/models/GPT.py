@@ -178,6 +178,7 @@ class TransformerBlock(nn.Module):
                 self.block_size,
                 self.residual_dropout,
                 self.N,
+                self.alibi_attn,
             )(norm(x), train) + MLPBlock(
                 self.embedding_dim, dropout=self.residual_dropout, N=self.N
             )(
@@ -190,6 +191,7 @@ class TransformerBlock(nn.Module):
                 self.block_size,
                 self.residual_dropout,
                 self.N,
+                self.alibi_attn,
             )(nn.LayerNorm()(x), train)
             x = x + MLPBlock(
                 self.embedding_dim, dropout=self.residual_dropout, N=self.N
