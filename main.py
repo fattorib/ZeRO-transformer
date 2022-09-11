@@ -173,7 +173,7 @@ def main():
 
         if (
             resume_step != None
-            and i <= cfg.training.gradient_accumulation_steps * resume_step
+            and i <= resume_step
         ):
             continue
 
