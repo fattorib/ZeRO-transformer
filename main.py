@@ -220,7 +220,7 @@ def main():
                 if jax.process_index() == 0:
                     train_metrics_np.update(validation_metrics_np)
                     train_metrics_np['Train Step Time'] = cfg.training.gradient_accumulation_steps*train_metrics_np['Train Batch Time']
-                    train_metrics_np.pop(['Train Batch Time'])
+                    train_metrics_np.pop('Train Batch Time')
                     wandb.log(train_metrics_np)
 
                     save_checkpoint(state, workdir=cfg.data.checkpoint_directory)
@@ -228,7 +228,7 @@ def main():
             else:
                 if jax.process_index() == 0:
                     train_metrics_np['Train Step Time'] = cfg.training.gradient_accumulation_steps*train_metrics_np['Train Batch Time']
-                    train_metrics_np.pop(['Train Batch Time'])
+                    train_metrics_np.pop('Train Batch Time')
                     wandb.log(train_metrics_np)
 
 
