@@ -75,8 +75,13 @@ class CausalAttention(nn.Module):
 
     dtype = None
 
+    def setup(self):
+        self.slopes = jnp.array(get_slopes(self.num_head))
+
     @nn.compact
-    def __call__(self, x: jnp.array, train: bool) -> jnp.array:
+    def __call__(
+        self, x: jnp.array, train: bool, alibi_mask: jnp.array = None
+    ) -> jnp.array:
         dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
 
         B, T, C = x.shape[:3]
@@ -123,18 +128,23 @@ class CausalAttention(nn.Module):
         )  # Shape is (B, nh, T, T)
 
         if self.alibi_attn:
+
             seq_len_k, seq_len_q = key.shape[-2], query.shape[-2]
 
-            a = -jnp.tril(
-                jnp.tile(jnp.arange(seq_len_k).reshape(seq_len_k, 1), (1,seq_len_k)) + jnp.arange(0, -seq_len_k, step=-1)
-                
-            )
-            slopes = self.get_slopes(self.n_head)
-            a = a * (slopes.reshape(self.slopes.shape[0], 1, 1))
+            if alibi_mask is None:
 
-            alibi_cache = a[:, seq_len_k - 1, :].reshape(a.shape[0], 1, a.shape[2])
+                a = -jnp.tril(
+                    jnp.tile(
+                        jnp.arange(seq_len_k).reshape(seq_len_k, 1), (1, seq_len_k)
+                    )
+                    + jnp.arange(0, -seq_len_k, step=-1)
+                )
 
-            attn_full = attn_full + alibi_cache
+                a = a * (self.slopes.reshape(self.slopes.shape[0], 1, 1))
+
+                alibi_mask = a[:, seq_len_k - 1, :].reshape(a.shape[0], 1, a.shape[2])
+
+                attn_full = attn_full + alibi_mask
 
         mask = jnp.tril(jnp.ones((T, T), dtype=jnp.int8)).reshape(1, 1, T, T)
         masked_attn = jnp.where(mask, attn_full, jnp.finfo(self.dtype).min)
