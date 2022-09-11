@@ -179,11 +179,13 @@ def main():
         # rng, batch_rng = random.split(rng)
         # sharded_rng = shard_prng_key(batch_rng)
 
+        t0 = time.time()
         state, metrics = train_step(
             state,
             sharded_batch,
             # sharded_rng,
         )
+        metrics['Train Batch Time'] = time.time() - t0
         running_metrics.append(metrics)
 
         if (i) % cfg.training.gradient_accumulation_steps == 0:
@@ -236,7 +238,6 @@ def main():
 def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
     """Train on a single batch"""
 
-    t0 = time.time()
     def loss_fn(params):
         _, loss = state.apply_fn(
             {"params": params["params"]},
@@ -261,7 +262,7 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
         grads=grads,
     )
 
-    metrics = {"Train LM Loss": loss, "Train LM PPL": jnp.exp(loss), 'Train Batch Time': time.time() - t0}
+    metrics = {"Train LM Loss": loss, "Train LM PPL": jnp.exp(loss)}
 
     return state, metrics
 
