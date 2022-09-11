@@ -85,6 +85,29 @@ class TestAttn(unittest.TestCase):
         )
         self.assertEqual(out.shape, batch_cts.shape)
 
+    def test_attn_fwd_ALiBi(self):
+        attn = CausalAttention(
+            embedding_dim=128, num_head=8, block_size=512, dropout=0.1, N=6, alibi_attn = True
+        )
+        batch_cts = random.normal(self.rng, shape=(1, 512, 128))
+        params = attn.init(self.init_rng, batch_cts, False)
+
+        out = attn.apply(
+            {"params": params["params"]},
+            batch_cts,
+            train=True,
+            rngs={"dropout": self.rng},
+        )
+        self.assertEqual(out.shape, batch_cts.shape)
+
+        out = attn.apply(
+            {"params": params["params"]},
+            batch_cts,
+            train=False,
+            rngs={"dropout": self.rng},
+        )
+        self.assertEqual(out.shape, batch_cts.shape)
+
 
 class TestTransformerBlock(unittest.TestCase):
     def setUp(self) -> None:

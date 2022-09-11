@@ -126,8 +126,8 @@ class CausalAttention(nn.Module):
             seq_len_k, seq_len_q = key.shape[-2], query.shape[-2]
 
             a = -jnp.tril(
-                jnp.arange(seq_len_k, step=1).reshape(seq_len_k, 1).repeat(1, seq_len_k)
-                + jnp.arange(0, -seq_len_k, step=-1)
+                jnp.tile(jnp.arange(seq_len_k).reshape(seq_len_k, 1), (1,seq_len_k)) + jnp.arange(0, -seq_len_k, step=-1)
+                
             )
             slopes = self.get_slopes(self.n_head)
             a = a * (slopes.reshape(self.slopes.shape[0], 1, 1))
