@@ -16,6 +16,7 @@ from jax import random
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import time 
 
 import wandb
 from src.models.GPT import model_getter
@@ -218,12 +219,16 @@ def main():
 
                 if jax.process_index() == 0:
                     train_metrics_np.update(validation_metrics_np)
+                    train_metrics_np['Train Step Time'] = cfg.training.gradient_accumulation_steps*train_metrics_np['Train Batch Time']
+                    train_metrics_np.pop(['Train Batch Time'])
                     wandb.log(train_metrics_np)
 
                     save_checkpoint(state, workdir=cfg.data.checkpoint_directory)
 
             else:
                 if jax.process_index() == 0:
+                    train_metrics_np['Train Step Time'] = cfg.training.gradient_accumulation_steps*train_metrics_np['Train Batch Time']
+                    train_metrics_np.pop(['Train Batch Time'])
                     wandb.log(train_metrics_np)
 
 
@@ -231,6 +236,7 @@ def main():
 def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
     """Train on a single batch"""
 
+    t0 = time.time()
     def loss_fn(params):
         _, loss = state.apply_fn(
             {"params": params["params"]},
@@ -255,7 +261,7 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
         grads=grads,
     )
 
-    metrics = {"Train LM Loss": loss, "Train LM PPL": jnp.exp(loss)}
+    metrics = {"Train LM Loss": loss, "Train LM PPL": jnp.exp(loss), 'Train Batch Time': time.time() - t0}
 
     return state, metrics
 
