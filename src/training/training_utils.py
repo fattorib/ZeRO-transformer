@@ -10,10 +10,10 @@ import optax
 from flax.training import train_state
 from jax import random
 
+
 def to_precision(t, dtype: jnp.dtype):
-    return jax.tree_map(
-        lambda x: x.astype(dtype) if x.dtype == dtype else x, t
-    )
+    return jax.tree_map(lambda x: x.astype(dtype) if x.dtype == dtype else x, t)
+
 
 def initialized(key: random.PRNGKey, model: nn.Module, dtype: jnp.dtype):
     """Initializes param dict for a model
@@ -48,7 +48,7 @@ def create_train_state(
     weight_decay: float,
     model: nn.Module,
     grad_accum_steps: int,
-    dtype: jnp.dtype = jnp.float32
+    dtype: jnp.dtype = jnp.float32,
 ):
     """Creates initial `TrainState` for model."""
     params = initialized(rng, model, dtype)

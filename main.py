@@ -10,6 +10,7 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 import webdataset as wds
+from bcrypt import re
 from flax.training import checkpoints
 from flax.training.common_utils import shard, shard_prng_key
 from jax import random
@@ -34,6 +35,12 @@ def parse():
 
     parser.add_argument("--model-cfg", default="conf/model_config.yaml", type=str)
 
+    parser.add_argument(
+        "--resume",
+        default=False,
+        action="store_true",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -43,7 +50,11 @@ def save_checkpoint(state, workdir):
         # get train state from the first replica
         state = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], state))
         step = int(state.step)
-        checkpoints.save_checkpoint(workdir, state, step, keep=3)
+        checkpoints.save_checkpoint(workdir, state, step, keep=2)
+
+
+def restore_checkpoint(state, workdir):
+    return checkpoints.restore_checkpoint(workdir, state)
 
 
 def main():
@@ -56,7 +67,6 @@ def main():
 
     model = model_getter(cfg.model.size, config_path=args.model_cfg)
 
-    
     learning_rate_fn = optax.warmup_cosine_decay_schedule(
         init_value=0,
         peak_value=cfg.training.peak_learning_rate,
@@ -81,12 +91,21 @@ def main():
         weight_decay=cfg.training.weight_decay,
         model=model,
         grad_accum_steps=cfg.training.gradient_accumulation_steps,
-        dtype = model_dtype
+        dtype=model_dtype,
     )
 
     if jax.process_index() == 0:
         logger.debug(f"Host setup with {num_devices} devices.")
         logger.debug(f"Using platform: {platform} with precision {model_dtype}")
+
+    resume_step = None
+
+    if args.resume:
+        # TODO: Get wandb ID for run too
+        restore_checkpoint(state, cfg.data.checkpoint_directory)
+        if jax.process_index() == 0:
+            logger.debug(f"Resuming training from step {int(state.step)}")
+        resume_step = int(state.step)
 
     # replicating state across devices
     state = flax.jax_utils.replicate(state)
@@ -121,7 +140,7 @@ def main():
         wds.SimpleShardList(train_shards),
         wds.split_by_worker,
         wds.tarfile_to_samples(),
-        wds.shuffle(1e4, initial=1e4, rng=pyrandom.Random(23)),
+        wds.shuffle(1e5, initial=1e5, rng=pyrandom.Random(23)),
         wds.decode(),
         wds.map(preprocess),
     )
@@ -130,7 +149,7 @@ def main():
         wds.SimpleShardList(validation_shards),
         wds.split_by_worker,
         wds.tarfile_to_samples(),
-        wds.shuffle(1e4, initial=1e4, rng=pyrandom.Random(23)),
+        wds.shuffle(1e5, initial=1e5, rng=pyrandom.Random(23)),
         wds.decode(),
         wds.map(preprocess),
     )
@@ -139,20 +158,24 @@ def main():
         dataset=train_dataset,
         batch_size=cfg.training.batch_size,
         collate_fn=numpy_collate,
-        # num_workers = cfg.data.workers
     )
 
     vl = DataLoader(
         dataset=validation_dataset,
         batch_size=cfg.training.batch_size,
         collate_fn=numpy_collate,
-        # num_workers = cfg.data.workers
     )
 
     running_metrics = []
 
     # I mean, we should eventually wrap this in an epoch loop
     for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
+
+        if (
+            resume_step != None
+            and i <= cfg.training.gradient_accumulation_steps * resume_step
+        ):
+            continue
 
         # sharding batch/keys for dataparallel
         sharded_batch = shard(text)
@@ -178,7 +201,10 @@ def main():
 
             validation_metrics = []
 
-            if (i) % (cfg.training.evaluation_frequency*cfg.training.gradient_accumulation_steps) == 0:
+            if (i) % (
+                cfg.training.evaluation_frequency
+                * cfg.training.gradient_accumulation_steps
+            ) == 0:
                 for val_it, val_text in enumerate(
                     tqdm(vl, disable=not jax.process_index() == 0)
                 ):
@@ -197,6 +223,8 @@ def main():
                 if jax.process_index() == 0:
                     train_metrics_np.update(validation_metrics_np)
                     wandb.log(train_metrics_np)
+
+                    save_checkpoint(state, workdir=cfg.data.checkpoint_directory)
 
             else:
                 if jax.process_index() == 0:
