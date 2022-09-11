@@ -174,8 +174,12 @@ def main():
         if resume_step != None and i <= resume_step:
             continue
 
-        # sharding batch/keys for dataparallel
+        # sharding batch
         sharded_batch = shard(text)
+
+        # technically this is how we would shard the RNG keys. I'm assuming we're always training for <1 epoch 
+        # so dropout is turned off
+         
         # rng, batch_rng = random.split(rng)
         # sharded_rng = shard_prng_key(batch_rng)
 
