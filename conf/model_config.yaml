@@ -6,6 +6,7 @@ small:
   dropout: 0.0
   N: 6
   fused_residuals: True
+  alibi_attn: False
 
 base:
   embedding_dim: 768
@@ -15,6 +16,7 @@ base:
   dropout: 0.0
   N: 12
   fused_residuals: True
+  alibi_attn: False
 
 medium:
   embedding_dim: 1024
@@ -24,3 +26,4 @@ medium:
   dropout: 0.0
   N: 24
   fused_residuals: True
+  alibi_attn: False
