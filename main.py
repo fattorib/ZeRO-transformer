@@ -105,6 +105,8 @@ def main():
         state = restore_checkpoint(state, cfg.data.checkpoint_directory)
         if jax.process_index() == 0:
             logger.debug(f"Resuming training from step {int(state.step)}")
+        
+        # resume step is ga_steps*global steps
         resume_step = int(state.step)
 
     # replicating state across devices

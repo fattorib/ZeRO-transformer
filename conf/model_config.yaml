@@ -6,7 +6,7 @@ small:
   dropout: 0.0
   N: 6
   fused_residuals: True
-  alibi_attn: True
+  alibi_attn: False
   
 base:
   embedding_dim: 768
