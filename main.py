@@ -193,11 +193,6 @@ def main():
         )
         metrics['Train Batch Time'] = time.time() - t0
 
-        #access learning rate
-        internal_step_ct = state.opt_state.inner_state[0].count
-        lr = learning_rate_fn(internal_step_ct)
-        metrics['Learning Rate'] = lr
-
         running_metrics.append(metrics)
 
         if (i) % cfg.training.gradient_accumulation_steps == 0:
