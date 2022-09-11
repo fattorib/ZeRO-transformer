@@ -175,7 +175,7 @@ class TestTransformerBlock(unittest.TestCase):
             N=6,
             dtype=None,
             fused_residuals=True,
-            alibi_attn = True
+            alibi_attn=True,
         )
         batch_cts = random.normal(self.rng, shape=(1, 512, 128))
         params = block.init(self.init_rng, batch_cts, False)
@@ -232,7 +232,7 @@ class TestTransformerBlock(unittest.TestCase):
             N=6,
             dtype=None,
             fused_residuals=False,
-            alibi_attn = True
+            alibi_attn=True,
         )
         batch_cts = random.normal(self.rng, shape=(1, 512, 128))
         params = block.init(self.init_rng, batch_cts, False)
@@ -302,7 +302,7 @@ class TestGPT(unittest.TestCase):
             N=6,
             dtype=None,
             fused_residuals=True,
-            alibi_attn = True
+            alibi_attn=True,
         )
         batch_tok = random.randint(self.rng, shape=(1, 512), maxval=256, minval=0)
         params = block.init(self.init_rng, batch_tok, None, False)
@@ -362,7 +362,7 @@ class TestGPT(unittest.TestCase):
             N=6,
             dtype=None,
             fused_residuals=False,
-            alibi_attn = True
+            alibi_attn=True,
         )
         batch_tok = random.randint(self.rng, shape=(1, 512), maxval=256, minval=0)
         params = block.init(self.init_rng, batch_tok, None, False)
