@@ -6,8 +6,7 @@ small:
   dropout: 0.0
   N: 6
   fused_residuals: True
-  alibi_attn: False
-
+  alibi_attn: True
 base:
   embedding_dim: 768
   vocab_size: 50257
