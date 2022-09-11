@@ -14,6 +14,22 @@ from omegaconf import OmegaConf
 from src.utils.losses import cross_entropy_loss
 
 
+def get_slopes(n: int) -> List:
+    def get_slopes_power_of_2(n):
+        start = 2 ** (-(2 ** -(math.log2(n) - 3)))
+        ratio = start
+        return [start * ratio ** i for i in range(n)]
+
+    if math.log2(n).is_integer():
+        return get_slopes_power_of_2(n)
+    else:
+        closest_power_of_2 = 2 ** math.floor(math.log2(n))
+        return (
+            get_slopes_power_of_2(closest_power_of_2)
+            + get_slopes(2 * closest_power_of_2)[0::2][: n - closest_power_of_2]
+        )
+
+
 class MLPBlock(nn.Module):
     """Standard MLP Block"""
 
@@ -42,87 +58,12 @@ class MLPBlock(nn.Module):
 
 
 class CausalAttention(nn.Module):
-    """Standard causal multi-headed attention"""
+    """Standard causal multi-headed attention
 
-    embedding_dim: int
-    num_head: int
-    block_size: int
-    dropout: float = 0.0
-    N: int = None
-
-    dtype = None
-
-    @nn.compact
-    def __call__(self, x: jnp.array, train: bool) -> jnp.array:
-        dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
-
-        B, T, C = x.shape[:3]
-
-        # Shape is (B, nh, T, h_dim)
-        key = (
-            nn.Dense(
-                name="key_proj",
-                features=self.embedding_dim,
-                kernel_init=initializers.normal(stddev=0.02),
-                bias_init=initializers.zeros,
-            )(x)
-            .reshape(B, T, self.num_head, self.embedding_dim // self.num_head)
-            .transpose(0, 2, 1, 3)
-        )
-
-        # Shape is (B, nh, T, h_dim)
-        value = (
-            nn.Dense(
-                name="value_proj",
-                features=self.embedding_dim,
-                kernel_init=initializers.normal(stddev=0.02),
-                bias_init=initializers.zeros,
-            )(x)
-            .reshape(B, T, self.num_head, self.embedding_dim // self.num_head)
-            .transpose(0, 2, 1, 3)
-        )
-
-        # Shape is (B, nh, T, h_dim)
-        query = (
-            nn.Dense(
-                name="query_proj",
-                features=self.embedding_dim,
-                kernel_init=initializers.normal(stddev=0.02),
-                bias_init=initializers.zeros,
-            )(x)
-            .reshape(B, T, self.num_head, self.embedding_dim // self.num_head)
-            .transpose(0, 2, 1, 3)
-        )
-
-        # get raw attention scores
-        attn_full = (query @ key.transpose(0, 1, 3, 2)) / jnp.sqrt(
-            key.shape[-1]
-        )  # Shape is (B, nh, T, T)
-
-        mask = jnp.tril(jnp.ones((T, T), dtype=jnp.int8)).reshape(1, 1, T, T)
-        masked_attn = jnp.where(mask, attn_full, jnp.finfo(self.dtype).min)
-
-        attn_scores = nn.softmax(masked_attn, axis=-1)
-        attn_out = (attn_scores @ value).transpose(
-            0, 2, 1, 3
-        )  # Shape is (B, T, nh, h_dim)
-
-        attn_out = attn_out.reshape(B, T, C)
-        out = nn.Dense(
-            name="residual_out",
-            features=self.embedding_dim,
-            kernel_init=jax.nn.initializers.normal(stddev=0.02 / jnp.sqrt(self.N)),
-            bias_init=initializers.zeros,
-        )(attn_out)
-
-        return dropout()(out)
-
-
-class ALiBi(nn.Module):
-    """
-    Self-attention module with ALiBi as described in paper
-    `From Train Short, Test Long: Attention with Linear Biases Enables Input
+    Supports ALiBi attention biasing from
+    `Train Short, Test Long: Attention with Linear Biases Enables Input
     Length Extrapolation <https://ofir.io/train_short_test_long.pdf>`
+
     """
 
     embedding_dim: int
@@ -130,25 +71,9 @@ class ALiBi(nn.Module):
     block_size: int
     dropout: float = 0.0
     N: int = None
+    alibi_attn: bool = False
 
     dtype = None
-
-    def get_slopes(self, n: int) -> List:
-        def get_slopes_power_of_2(n):
-            start = 2 ** (-(2 ** -(math.log2(n) - 3)))
-            ratio = start
-            return [start * ratio ** i for i in range(n)]
-
-        if math.log2(n).is_integer():
-            return get_slopes_power_of_2(n)
-        else:
-            closest_power_of_2 = 2 ** math.floor(math.log2(n))
-            return (
-                get_slopes_power_of_2(closest_power_of_2)
-                + self.get_slopes(2 * closest_power_of_2)[0::2][
-                    : n - closest_power_of_2
-                ]
-            )
 
     @nn.compact
     def __call__(self, x: jnp.array, train: bool) -> jnp.array:
@@ -197,27 +122,24 @@ class ALiBi(nn.Module):
             key.shape[-1]
         )  # Shape is (B, nh, T, T)
 
-        # create ALiBi mask
+        if self.alibi_attn:
+            seq_len_k, seq_len_q = key.shape[-2], query.shape[-2]
 
-        seq_len_k, seq_len_q = key.shape[-2], query.shape[-2]
+            a = -jnp.tril(
+                jnp.arange(seq_len_k, step=1).reshape(seq_len_k, 1).repeat(1, seq_len_k)
+                + jnp.arange(0, -seq_len_k, step=-1)
+            )
+            slopes = self.get_slopes(self.n_head)
+            a = a * (slopes.reshape(self.slopes.shape[0], 1, 1))
 
-        a = -jnp.tril(
-            jnp.arange(seq_len_k, step=1).reshape(seq_len_k, 1).repeat(1, seq_len_k)
-            + jnp.arange(0, -seq_len_k, step=-1)
-        )
-        slopes = self.get_slopes(self.n_head)
-        a = a * (slopes.reshape(self.slopes.shape[0], 1, 1))
+            alibi_cache = a[:, seq_len_k - 1, :].reshape(a.shape[0], 1, a.shape[2])
 
-        alibi_cache = a[:, seq_len_k - 1, :].reshape(a.shape[0], 1, a.shape[2])
+            attn_full = attn_full + alibi_cache
 
         mask = jnp.tril(jnp.ones((T, T), dtype=jnp.int8)).reshape(1, 1, T, T)
-
-        attn_full = attn_full + alibi_cache
-
         masked_attn = jnp.where(mask, attn_full, jnp.finfo(self.dtype).min)
 
         attn_scores = nn.softmax(masked_attn, axis=-1)
-
         attn_out = (attn_scores @ value).transpose(
             0, 2, 1, 3
         )  # Shape is (B, T, nh, h_dim)
@@ -243,6 +165,7 @@ class TransformerBlock(nn.Module):
     N: int = None
     dtype: Any = jnp.float32
     fused_residuals: bool = False
+    alibi_attn: bool = False
 
     @nn.compact
     def __call__(self, x: jnp.array, train: bool = False) -> jnp.array:
@@ -287,6 +210,7 @@ class Transformer(nn.Module):
     N: int = None
     dtype: Any = None
     fused_residuals: bool = False
+    alibi_attn: bool = False
 
     @nn.compact
     def __call__(
@@ -304,14 +228,16 @@ class Transformer(nn.Module):
 
         wte = embed(x)
 
-        wpe = nn.Embed(
-            name="wpe",
-            num_embeddings=self.block_size,
-            features=self.embedding_dim,
-            embedding_init=initializers.normal(stddev=0.02),
-        )(jnp.ones((B, T), dtype=jnp.uint8))
+        x = wte
+        if not self.alibi_attn:
+            wpe = nn.Embed(
+                name="wpe",
+                num_embeddings=self.block_size,
+                features=self.embedding_dim,
+                embedding_init=initializers.normal(stddev=0.02),
+            )(jnp.ones((B, T), dtype=jnp.uint8))
 
-        x = wte + wpe
+            x += wpe
 
         for _ in range(self.N):
 
@@ -322,6 +248,7 @@ class Transformer(nn.Module):
                 self.dropout,
                 self.N,
                 self.fused_residuals,
+                self.alibi_attn,
             )(x, train)
 
         x = nn.LayerNorm()(x)
