@@ -171,10 +171,7 @@ def main():
     # I mean, we should eventually wrap this in an epoch loop
     for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
-        if (
-            resume_step != None
-            and i <= resume_step
-        ):
+        if resume_step != None and i <= resume_step:
             continue
 
         # sharding batch/keys for dataparallel
