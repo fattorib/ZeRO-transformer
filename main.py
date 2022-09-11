@@ -101,7 +101,7 @@ def main():
 
     if args.resume:
         # TODO: Get wandb ID for run too
-        restore_checkpoint(state, cfg.data.checkpoint_directory)
+        state = restore_checkpoint(state, cfg.data.checkpoint_directory)
         if jax.process_index() == 0:
             logger.debug(f"Resuming training from step {int(state.step)}")
         resume_step = int(state.step)
