@@ -10,7 +10,6 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 import webdataset as wds
-from bcrypt import re
 from flax.training import checkpoints
 from flax.training.common_utils import shard, shard_prng_key
 from jax import random
