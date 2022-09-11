@@ -2,5 +2,5 @@ style:
 	black .
 	isort .
 
-tests:
+test:
 	python -m pytest
