@@ -11,7 +11,7 @@ training:
   maximum_evaluation_steps: 500
   precision: 'bf16'
   staged_sequences: [256,512]
-  staged_warmup_steps: 1500
+  staged_warmup_steps: 1250
 
 model:
   size: "small"
