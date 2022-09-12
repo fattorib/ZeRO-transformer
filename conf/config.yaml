@@ -14,7 +14,7 @@ training:
   staged_warmup_steps: 400
 
 model:
-  size: "QA"
+  size: "small"
 
 data:
   corpus: "bookcorpus2"
