@@ -1,6 +1,7 @@
 import argparse
 import logging
 import random as pyrandom
+import time
 from functools import partial
 from typing import Any
 
@@ -16,7 +17,6 @@ from jax import random
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import time 
 
 import wandb
 from src.models.GPT import model_getter
@@ -105,7 +105,7 @@ def main():
         state = restore_checkpoint(state, cfg.data.checkpoint_directory)
         if jax.process_index() == 0:
             logger.debug(f"Resuming training from step {int(state.step)}")
-        
+
         # resume step is ga_steps*global steps
         resume_step = int(state.step)
 
@@ -169,34 +169,39 @@ def main():
     )
 
     running_metrics = []
-    
-
 
     if cfg.training.staged_sequences is not None:
         if jax.process_index() == 0:
-            logger.debug(f"Running sequence length warmup for {cfg.training.staged_warmup_steps} total steps with stages: {cfg.training.staged_sequences}")
+            logger.debug(
+                f"Running sequence length warmup for {cfg.training.staged_warmup_steps} total steps with stages: {cfg.training.staged_sequences}"
+            )
 
-        step_to_seq = partial(step_to_seq_len, stages = cfg.training.staged_sequences, max_steps = cfg.training.gradient_accumulation_steps*cfg.training.staged_warmup_steps, max_context = cfg.data.max_context)
-    
+        step_to_seq = partial(
+            step_to_seq_len,
+            stages=cfg.training.staged_sequences,
+            max_steps=cfg.training.gradient_accumulation_steps
+            * cfg.training.staged_warmup_steps,
+            max_context=cfg.data.max_context,
+        )
+
     else:
         step_to_seq = lambda x: cfg.data.max_context
-
 
     # I mean, we should eventually wrap this in an epoch loop
     for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
         if resume_step != None and i <= resume_step:
-            continue    
-        
+            continue
+
         seq_len = step_to_seq(i)
-        text = text[:,:seq_len]
-        
+        text = text[:, :seq_len]
+
         # sharding batch
         sharded_batch = shard(text)
 
-        # technically this is how we would shard the RNG keys. I'm assuming we're always training for <1 epoch 
+        # technically this is how we would shard the RNG keys. I'm assuming we're always training for <1 epoch
         # so dropout is turned off
-         
+
         # rng, batch_rng = random.split(rng)
         # sharded_rng = shard_prng_key(batch_rng)
 
@@ -206,8 +211,8 @@ def main():
             sharded_batch,
             # sharded_rng,
         )
-        metrics['Train Batch Time'] = time.time() - t0
-        metrics['Train Sequence Length'] = seq_len
+        metrics["Train Batch Time"] = time.time() - t0
+        metrics["Train Sequence Length"] = seq_len
 
         running_metrics.append(metrics)
 
@@ -244,17 +249,23 @@ def main():
 
                 if jax.process_index() == 0:
                     train_metrics_np.update(validation_metrics_np)
-                    train_metrics_np['Train Step Time'] = cfg.training.gradient_accumulation_steps*train_metrics_np['Train Batch Time']
-                    
-                    train_metrics_np.pop('Train Batch Time')
+                    train_metrics_np["Train Step Time"] = (
+                        cfg.training.gradient_accumulation_steps
+                        * train_metrics_np["Train Batch Time"]
+                    )
+
+                    train_metrics_np.pop("Train Batch Time")
                     wandb.log(train_metrics_np)
 
                     save_checkpoint(state, workdir=cfg.data.checkpoint_directory)
 
             else:
                 if jax.process_index() == 0:
-                    train_metrics_np['Train Step Time'] = cfg.training.gradient_accumulation_steps*train_metrics_np['Train Batch Time']
-                    train_metrics_np.pop('Train Batch Time')
+                    train_metrics_np["Train Step Time"] = (
+                        cfg.training.gradient_accumulation_steps
+                        * train_metrics_np["Train Batch Time"]
+                    )
+                    train_metrics_np.pop("Train Batch Time")
                     wandb.log(train_metrics_np)
 
 
