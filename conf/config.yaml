@@ -4,14 +4,14 @@ training:
   warmup_steps: 500
   decay_steps: 2000
   total_steps: 2500
-  end_learning_rate: 6e-5
+  end_learning_rate: 8e-5
   weight_decay: 0.1
   gradient_accumulation_steps: 64
   evaluation_frequency: 500
   maximum_evaluation_steps: 500
   precision: 'bf16'
   staged_sequences: [256,512]
-  staged_warmup_steps: 1000
+  staged_warmup_steps: 1500
 
 model:
   size: "small"
