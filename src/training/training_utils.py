@@ -81,7 +81,7 @@ def step_to_seq_len(
     stages: List, max_steps: int, current_step: int, max_context=1024
 ) -> int:
     """
-    Returns the sequence length used for train steps
+    Returns the sequence length at a specific training step (if using staged sequence training)
 
     Example::
         >>> step_to_seq_len([256, 512], 1200, 400, 1024)
