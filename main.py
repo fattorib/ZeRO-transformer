@@ -96,12 +96,23 @@ def main():
     )
 
     if cfg.distillation.distill:
+        from flax.training import train_state
         from transformers import FlaxAutoModelForCausalLM
 
         teacher = FlaxAutoModelForCausalLM.from_pretrained("gpt2", dtype=model_dtype)
 
+        # Yes, I'm aware this is silly. Without spending too much time this is a pretty quick fix, sgd doesn't consume extra params
+        teacher_state = train_state.TrainState.create(
+            apply_fn=teacher.__call__,
+            params={"params": teacher.params},
+            tx=optax.sgd(
+                learning_rate=0,
+            ),
+        )
         temperature = cfg.distillation.temperature
         alpha = cfg.distillation.alpha
+
+        teacher_state = flax.jax_utils.replicate(teacher_state)
 
     if jax.process_index() == 0:
         logger.debug(f"Host setup with {num_devices} devices.")
@@ -224,7 +235,7 @@ def main():
         if cfg.distillation.distill:
             state, metrics = distillation_train_step(
                 state,
-                teacher,
+                teacher_state,
                 sharded_batch,
                 temperature,
                 alpha
@@ -327,10 +338,10 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
     return state, metrics
 
 
-@partial(jax.pmap, axis_name="batch")
+@partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=(3, 4))
 def distillation_train_step(
     state: Any,
-    teacher: Any,
+    teacher_state: Any,
     batch: jnp.array,
     temperature: float,
     alpha: float,
@@ -347,7 +358,9 @@ def distillation_train_step(
             # rngs={"dropout": rng_key},
         )
 
-        teacher_logits = teacher(batch, train=False).logits
+        teacher_logits = teacher_state.apply_fn(
+            **batch, params=teacher["params"], train=False
+        ).logits
 
         student_logits = student_logits / temperature
 
@@ -360,7 +373,7 @@ def distillation_train_step(
         return total_loss, kd_loss, loss
 
     grad_fn = jax.value_and_grad(loss_fn, argnums=0, has_aux=True)
-    (loss, kd_loss, ce_loss), grads = grad_fn(state.params, teacher)
+    (loss, kd_loss, ce_loss), grads = grad_fn(state.params, teacher_state.params)
 
     # compute all-reduce mean for gradients and loss
     # Ex: If we have 8 devices, each device takes the gradients from the other 7 and averages them all together
