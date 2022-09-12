@@ -78,19 +78,19 @@ def create_train_state(
 
 
 def step_to_seq_len(
-    stages: List, max_steps: int, current_step: int, max_context=1024
+    current_step: int, stages: List, max_steps: int,  max_context=1024
 ) -> int:
     """
     Returns the sequence length at a specific training step (if using staged sequence training)
 
     Example::
-        >>> step_to_seq_len([256, 512], 1200, 400, 1024)
+        >>> step_to_seq_len(400,[256, 512], 1200, 1024)
         256
 
-        >>> step_to_seq_len([256, 512], 1200, 800, 1024)
+        >>> step_to_seq_len(800, [256, 512], 1200, 1024)
         512
 
-        >>> step_to_seq_len([256, 512], 1200, 1300, 1024)
+        >>> step_to_seq_len(1300, [256, 512], 1200, 1024)
         1024
 
     """
