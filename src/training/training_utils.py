@@ -1,7 +1,7 @@
 """ 
 Helper methods used during training setup. 
 """
-from typing import Callable, Union
+from typing import Callable, Union, List
 
 import flax.linen as nn
 import jax
@@ -75,3 +75,33 @@ def create_train_state(
         tx=tx,
     )
     return state
+
+
+
+def step_to_seq_len(stages: List , max_steps: int, current_step: int, max_context = 1024) -> int:
+    """
+    Returns the sequence length used for train steps 
+    
+    Example::
+        >>> step_to_seq_len([256, 512], 1200, 400, 1024)
+        256
+
+        >>> step_to_seq_len([256, 512], 1200, 800, 1024)
+        512 
+
+        >>> step_to_seq_len([256, 512], 1200, 1300, 1024)
+        1024
+
+    """
+    steps_per_stage = max_steps//len(stages)
+
+    remainder = current_step%steps_per_stage
+    stage_idx = (current_step - remainder)//steps_per_stage
+
+    if stage_idx > (len(stages) - 1):
+        return max_context
+    else:
+        return stages[stage_idx]
+
+
+

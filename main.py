@@ -20,7 +20,7 @@ import time
 
 import wandb
 from src.models.GPT import model_getter
-from src.training.training_utils import create_train_state
+from src.training.training_utils import create_train_state, step_to_seq_len
 from src.utils.dataloader import numpy_collate
 
 logging.basicConfig()
@@ -169,13 +169,28 @@ def main():
     )
 
     running_metrics = []
+    
+
+
+    if cfg.training.staged_sequences is not None:
+        if jax.process_index() == 0:
+            logger.debug(f"Running sequence length warmup for {cfg.training.staged_warmup_steps} total steps with stages: {cfg.training.staged_sequences}")
+
+        step_to_seq = partial(step_to_seq_len, stages = cfg.training.staged_sequences, max_steps = cfg.training.gradient_accumulation_steps*cfg.training.staged_warmup_steps, max_context = cfg.data.max_context)
+    
+    else:
+        step_to_seq = lambda x: cfg.data.max_context
+
 
     # I mean, we should eventually wrap this in an epoch loop
     for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
         if resume_step != None and i <= resume_step:
-            continue
-
+            continue    
+        
+        seq_len = step_to_seq(i)
+        text = text[:,:seq_len]
+        
         # sharding batch
         sharded_batch = shard(text)
 
@@ -192,6 +207,7 @@ def main():
             # sharded_rng,
         )
         metrics['Train Batch Time'] = time.time() - t0
+        metrics['Train Sequence Length'] = seq_len
 
         running_metrics.append(metrics)
 
