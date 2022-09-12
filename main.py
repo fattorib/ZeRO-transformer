@@ -22,6 +22,7 @@ import wandb
 from src.models.GPT import model_getter
 from src.training.training_utils import create_train_state, step_to_seq_len
 from src.utils.dataloader import numpy_collate
+from src.utils.losses import kl_div_loss
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -94,6 +95,14 @@ def main():
         dtype=model_dtype,
     )
 
+    if cfg.distillation.distill:
+        from transformers import FlaxAutoModelForCausalLM
+
+        teacher = FlaxAutoModelForCausalLM.from_pretrained("gpt2", dtype=model_dtype)
+
+        temperature = cfg.distillation.temperature
+        alpha = cfg.distillation.alpha
+
     if jax.process_index() == 0:
         logger.debug(f"Host setup with {num_devices} devices.")
         logger.debug(f"Using platform: {platform} with precision {model_dtype}")
@@ -135,6 +144,11 @@ def main():
         # Model setup
         wandb.config.corpus = cfg.data.corpus
 
+        # Distillation
+        if cfg.distillation.distill:
+            wandb.config.temperature = cfg.distillation.temperature
+            wandb.config.alpha = cfg.distillation.alpha
+
     train_shards = cfg.data.train_shard_urls
     validation_shards = cfg.data.validation_shard_urls
 
@@ -175,7 +189,7 @@ def main():
     running_metrics = []
 
     if cfg.training.staged_sequences is not None:
-        
+
         step_to_seq = partial(
             step_to_seq_len,
             stages=cfg.training.staged_sequences,
@@ -206,11 +220,22 @@ def main():
         # sharded_rng = shard_prng_key(batch_rng)
 
         t0 = time.time()
-        state, metrics = train_step(
-            state,
-            sharded_batch,
-            # sharded_rng,
-        )
+
+        if cfg.distillation.distill:
+            state, metrics = distillation_train_step(
+                state,
+                teacher,
+                sharded_batch,
+                temperature,
+                alpha
+                # sharded_rng,
+            )
+        else:
+            state, metrics = train_step(
+                state,
+                sharded_batch,
+                # sharded_rng,
+            )
         metrics["Train Batch Time"] = time.time() - t0
         metrics["Train Sequence Length"] = seq_len
 
@@ -298,6 +323,61 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
     )
 
     metrics = {"Train LM Loss": loss, "Train LM PPL": jnp.exp(loss)}
+
+    return state, metrics
+
+
+@partial(jax.pmap, axis_name="batch")
+def distillation_train_step(
+    state: Any,
+    teacher: Any,
+    batch: jnp.array,
+    temperature: float,
+    alpha: float,
+    rng_key: random.PRNGKey = None,
+):
+    """Train on a single batch"""
+
+    def loss_fn(params, teacher):
+        student_logits, loss = state.apply_fn(
+            {"params": params["params"]},
+            x=batch,
+            labels=batch,
+            train=False,
+            # rngs={"dropout": rng_key},
+        )
+
+        teacher_logits = teacher(batch, train=False).logits
+
+        student_logits = student_logits / temperature
+
+        teacher_logits = teacher_logits / temperature
+
+        kd_loss = kl_div_loss(teacher_logits, student_logits)
+
+        total_loss = kd_loss * (alpha * (temperature ** 2)) + (loss * (1 - alpha))
+
+        return total_loss, kd_loss, loss
+
+    grad_fn = jax.value_and_grad(loss_fn, argnums=0, has_aux=True)
+    (loss, kd_loss, ce_loss), grads = grad_fn(state.params, teacher)
+
+    # compute all-reduce mean for gradients and loss
+    # Ex: If we have 8 devices, each device takes the gradients from the other 7 and averages them all together
+    # that way, all device replicas have the same gradients and optimization step can occur in parallel
+    loss = jax.lax.pmean(loss, axis_name="batch")
+    grads = jax.lax.pmean(grads, axis_name="batch")
+
+    state = state.apply_gradients(
+        grads=grads,
+    )
+
+    metrics = {
+        "Train Total Loss": loss,
+        "Train KD Loss": kd_loss,
+        "Train LM Loss": ce_loss,
+        "Train LM PPL": jnp.exp(ce_loss),
+    }
 
     return state, metrics
 

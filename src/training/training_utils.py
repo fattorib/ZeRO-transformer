@@ -78,7 +78,7 @@ def create_train_state(
 
 
 def step_to_seq_len(
-    current_step: int, stages: List, max_steps: int,  max_context=1024
+    current_step: int, stages: List, max_steps: int, max_context=1024
 ) -> int:
     """
     Returns the sequence length at a specific training step (if using staged sequence training)

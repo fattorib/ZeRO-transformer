@@ -16,6 +16,11 @@ training:
 model:
   size: "small"
 
+distillation:
+  distill: True
+  temperature: 0.8
+  alpha: 0.9
+
 data:
   corpus: "bookcorpus2"
   train_shard_urls: "data/processed/books_train-{000000..000013}.tar.gz"
