@@ -34,6 +34,6 @@ def kl_div_loss(teacher_logits: jnp.array, student_logits: jnp.array) -> jnp.arr
         jnp.array: Loss
     """
     targets = nn.softmax(teacher_logits, axis=-1)
-    return -jnp.sum(
-        targets * (jnp.log(targets) - nn.log_softmax(student_logits, axis=-1)), axis=-1
-    )
+    log_predictions = nn.log_softmax(student_logits, axis=-1)
+    loss = targets * (jnp.log(targets) - log_predictions)
+    return jnp.mean(jnp.sum(loss, axis=-1))
