@@ -386,6 +386,9 @@ def distillation_train_step(
         grads=grads,
     )
 
+    kd_loss = jax.lax.pmean(kd_loss, axis_name="batch")
+    ce_loss = jax.lax.pmean(ce_loss, axis_name="batch")
+
     metrics = {
         "Train Total Loss": loss,
         "Train KD Loss": kd_loss,
