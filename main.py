@@ -146,11 +146,14 @@ def main():
         flat_dict['training.local_batch_size'] = local_batch_size
         wandb.config.update(flat_dict)
 
+    save_to_bucket = False
     if cfg.data.bucket_path is not None:
         # use GCP  
         from google.cloud import storage
         from google.cloud.exceptions import NotFound
         client = storage.Client()
+        save_to_bucket = True
+        
 
     else:
         train_shards = cfg.data.train_shard_urls
@@ -286,7 +289,10 @@ def main():
                     train_metrics_np.pop("Train Batch Time")
                     wandb.log(train_metrics_np)
 
-                    save_checkpoint(state, workdir=cfg.data.checkpoint_directory)
+                    if save_to_bucket:
+                        save_checkpoint(state, workdir=f"gs://{cfg.data.bucket_path}/checkpoints/{cfg.data.checkpoint_directory}")
+                    else:
+                        save_checkpoint(state, workdir=cfg.data.checkpoint_directory)
 
             else:
                 if jax.process_index() == 0:
