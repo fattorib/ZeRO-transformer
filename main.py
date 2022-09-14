@@ -23,6 +23,7 @@ from src.models.GPT import model_getter
 from src.training.training_utils import create_train_state, step_to_seq_len
 from src.utils.dataloader import numpy_collate
 from src.utils.losses import kl_div_loss
+from src.utils.configs import flatten_dict
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -140,25 +141,10 @@ def main():
 
     if jax.process_index() == 0:
         id = wandb.util.generate_id()
-        wandb.init(id=id, resume="allow", project="LJX")
-        wandb.config.steps = cfg.training.total_steps
-        wandb.config.batch_size = cfg.training.batch_size
-        wandb.config.per_device_batch_size = local_batch_size
-
-        # Hyperparam Setup
-        wandb.config.weight_decay = cfg.training.weight_decay
-        wandb.config.warmup = cfg.training.warmup_steps
-        wandb.config.accum_steps = cfg.training.gradient_accumulation_steps
-        wandb.config.seq_len = model.block_size
-        wandb.config.model = cfg.model.size
-
-        # Model setup
-        wandb.config.corpus = cfg.data.corpus
-
-        # Distillation
-        if cfg.distillation.distill:
-            wandb.config.temperature = cfg.distillation.temperature
-            wandb.config.alpha = cfg.distillation.alpha
+        wandb.init(id = id , resume="allow", project="LJX")
+        flat_dict = flatten_dict(cfg)
+        flat_dict['training.local_batch_size'] = local_batch_size
+        wandb.config.update(flat_dict)
 
     train_shards = cfg.data.train_shard_urls
     validation_shards = cfg.data.validation_shard_urls
