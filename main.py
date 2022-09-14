@@ -21,9 +21,9 @@ from tqdm import tqdm
 import wandb
 from src.models.GPT import model_getter
 from src.training.training_utils import create_train_state, step_to_seq_len
+from src.utils.configs import flatten_dict
 from src.utils.dataloader import numpy_collate
 from src.utils.losses import kl_div_loss
-from src.utils.configs import flatten_dict
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -141,19 +141,23 @@ def main():
 
     if jax.process_index() == 0:
         id = wandb.util.generate_id()
-        wandb.init(id = id , resume="allow", project="LJX")
+        wandb.init(id=id, resume="allow", project="LJX")
         flat_dict = flatten_dict(cfg)
-        flat_dict['training.local_batch_size'] = local_batch_size
+        flat_dict["training.local_batch_size"] = local_batch_size
         wandb.config.update(flat_dict)
 
     save_to_bucket = False
     if cfg.data.bucket_path is not None:
-        # use GCP  
+        # use GCP
         from google.cloud import storage
         from google.cloud.exceptions import NotFound
+
         client = storage.Client()
         save_to_bucket = True
-        
+
+        # will this work?
+        train_shards = open(cfg.data.index_path_train).read().splitlines()
+        validation_shards = open(cfg.data.index_path_validation).read().splitlines()
 
     else:
         train_shards = cfg.data.train_shard_urls
@@ -290,7 +294,10 @@ def main():
                     wandb.log(train_metrics_np)
 
                     if save_to_bucket:
-                        save_checkpoint(state, workdir=f"gs://{cfg.data.bucket_path}/checkpoints/{cfg.data.checkpoint_directory}")
+                        save_checkpoint(
+                            state,
+                            workdir=f"gs://{cfg.data.bucket_path}/checkpoints/{cfg.data.checkpoint_directory}",
+                        )
                     else:
                         save_checkpoint(state, workdir=cfg.data.checkpoint_directory)
 
