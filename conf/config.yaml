@@ -17,7 +17,7 @@ model:
   size: "small"
 
 distillation:
-  distill: True
+  distill: False
   temperature: 2
   alpha: 0.5
 
