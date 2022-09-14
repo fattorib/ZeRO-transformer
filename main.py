@@ -146,8 +146,15 @@ def main():
         flat_dict['training.local_batch_size'] = local_batch_size
         wandb.config.update(flat_dict)
 
-    train_shards = cfg.data.train_shard_urls
-    validation_shards = cfg.data.validation_shard_urls
+    if cfg.data.bucket_path is not None:
+        # use GCP  
+        from google.cloud import storage
+        from google.cloud.exceptions import NotFound
+        client = storage.Client()
+
+    else:
+        train_shards = cfg.data.train_shard_urls
+        validation_shards = cfg.data.validation_shard_urls
 
     def preprocess(batch):
         x = batch["input_id.pth"][: cfg.data.max_context]

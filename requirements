@@ -6,3 +6,4 @@ omegaconf
 webdataset
 tensorflow
 pytest 
+google-cloud-storage
