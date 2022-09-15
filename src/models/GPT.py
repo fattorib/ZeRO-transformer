@@ -220,7 +220,7 @@ class Transformer(nn.Module):
     block_size: int
     dropout: float = 0.0
     N: int = None
-    dtype: Any = None
+    dtype: Any = jnp.float32
     fused_residuals: bool = False
     alibi_attn: bool = False
     head_qk_trick: bool = False
@@ -287,8 +287,8 @@ class Transformer(nn.Module):
             c = (q_head @ k_head.transpose(0, 2, 1)) / (k_head.shape[-1])
 
             mask = jnp.tril(jnp.ones((T, T), dtype=jnp.int8)).reshape(1, T, T)
-            c = jnp.where(mask, c, jnp.finfo(self.dtype).min)
-
+            c = jnp.where(mask, c, 0)
+            
             c = c @ jax.nn.one_hot(x, num_classes=self.vocab_size)
 
             logits = logits + c

@@ -14,7 +14,7 @@ training:
   staged_warmup_steps: 1000
 
 model:
-  size: "QA"
+  size: "small"
 
 distillation:
   distill: False

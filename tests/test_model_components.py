@@ -386,6 +386,7 @@ class TestGPT(unittest.TestCase):
             N=6,
             dtype=None,
             fused_residuals=False,
+            head_qk_trick=True,
         )
         batch_tok = random.randint(self.rng, shape=(1, 512), maxval=256, minval=0)
         params = block.init(self.init_rng, batch_tok, None, False)
