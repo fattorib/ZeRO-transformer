@@ -223,6 +223,7 @@ class Transformer(nn.Module):
     dtype: Any = None
     fused_residuals: bool = False
     alibi_attn: bool = False
+    head_qk_trick: bool = False
 
     @nn.compact
     def __call__(
@@ -240,7 +241,7 @@ class Transformer(nn.Module):
 
         wte = embed(x)
 
-        x = wte
+        out = wte
         if not self.alibi_attn:
             wpe = nn.Embed(
                 name="wpe",
@@ -249,11 +250,11 @@ class Transformer(nn.Module):
                 embedding_init=initializers.normal(stddev=0.02),
             )(jnp.ones((B, T), dtype=jnp.uint8))
 
-            x += wpe
+            out += wpe
 
         for _ in range(self.N):
 
-            x = TransformerBlock(
+            out = TransformerBlock(
                 self.embedding_dim,
                 self.num_head,
                 self.block_size,
@@ -261,11 +262,36 @@ class Transformer(nn.Module):
                 self.N,
                 self.fused_residuals,
                 self.alibi_attn,
-            )(x, train)
+            )(out, train)
 
-        x = nn.LayerNorm()(x)
+        out = nn.LayerNorm()(out)
 
-        logits = embed.attend(x)
+        logits = embed.attend(out)
+
+        if self.head_qk_trick:
+            # from: https://github.com/BlinkDL/RWKV-LM#the-head-qk-trick-learning-to-copy-and-avoid-tokens
+            q_head = nn.Dense(
+                name="head_q",
+                features=256,
+                kernel_init=initializers.normal(stddev=0.02),
+                use_bias=False,
+            )(out)
+
+            k_head = nn.Dense(
+                name="head_k",
+                features=256,
+                kernel_init=initializers.normal(stddev=0.02),
+                use_bias=False,
+            )(out)
+
+            c = (q_head @ k_head.transpose(0, 2, 1)) / (k_head.shape[-1])
+
+            mask = jnp.tril(jnp.ones((T, T), dtype=jnp.int8)).reshape(1, T, T)
+            c = jnp.where(mask, c, jnp.finfo(self.dtype).min)
+
+            c = c @ jax.nn.one_hot(x, num_classes=self.vocab_size)
+
+            logits = logits + c
 
         if labels is None:
             return logits
