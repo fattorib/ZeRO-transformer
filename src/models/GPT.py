@@ -187,7 +187,7 @@ class TransformerBlock(nn.Module):
                 norm = nn.LayerNorm()
                 split_dim = x.shape[-1] // 2
                 x_sgu, x_attn = jnp.split(
-                    norm(x), split_size_or_sections=[split_dim, split_dim], axis=-1
+                    norm(x), indices_or_sections=[split_dim, split_dim], axis=-1
                 )
 
                 attn_out = CausalAttention(
