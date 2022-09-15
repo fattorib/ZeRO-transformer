@@ -67,7 +67,7 @@ def main():
     num_devices = jax.device_count()
     platform = jax.local_devices()[0].platform
 
-    model = model_getter(cfg.model.size, config_path=args.model_cfg)
+    model, model_config = model_getter(cfg.model.size, config_path=args.model_cfg, return_cfg = True)
 
     learning_rate_fn = optax.warmup_cosine_decay_schedule(
         init_value=0,
@@ -143,6 +143,9 @@ def main():
         id = wandb.util.generate_id()
         wandb.init(id=id, resume="allow", project="LJX")
         flat_dict = flatten_dict(cfg)
+
+        flat_dict.update(model_config)
+
         flat_dict["training.local_batch_size"] = local_batch_size
         wandb.config.update(flat_dict)
 

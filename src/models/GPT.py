@@ -367,7 +367,7 @@ class Transformer(nn.Module):
             return logits, loss
 
 
-def model_getter(model_size, config_path="conf/model_config.yaml") -> nn.Module:
+def model_getter(model_size, config_path="conf/model_config.yaml", return_cfg = False) -> nn.Module:
     """Loads model configuration from YAML files
     and returns models
 
@@ -380,4 +380,7 @@ def model_getter(model_size, config_path="conf/model_config.yaml") -> nn.Module:
     configs = OmegaConf.load(config_path)
     assert model_size in list(configs.keys()), "Invalid model name provided"
 
-    return Transformer(**configs[model_size])
+    if return_cfg:
+        return Transformer(**configs[model_size]), configs[model_size]
+    else:
+        return Transformer(**configs[model_size])
