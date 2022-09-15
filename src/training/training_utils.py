@@ -59,12 +59,14 @@ def create_train_state(
         params,
     )
 
-    tx = optax.adamw(
+    tx = optax.chain(
+        optax.clip(1.0),
+        optax.adamw(
         learning_rate=learning_rate_fn,
         weight_decay=weight_decay,
         mask=mask,
         b2=0.95,
-    )
+    ))
 
     if grad_accum_steps > 1:
         tx = optax.MultiSteps(tx, every_k_schedule=grad_accum_steps)
