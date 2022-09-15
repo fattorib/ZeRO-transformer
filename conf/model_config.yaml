@@ -1,5 +1,5 @@
 QA:
-  embedding_dim: 256
+  embedding_dim: 512
   vocab_size: 50257
   num_head: 8
   block_size: 512
@@ -7,6 +7,7 @@ QA:
   N: 3
   fused_residuals: True
   alibi_attn: True
+  head_qk_trick: True
   
 
 small:
