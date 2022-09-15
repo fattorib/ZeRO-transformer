@@ -150,17 +150,18 @@ def main():
         wandb.config.update(flat_dict)
 
     save_to_bucket = False
-    if cfg.data.bucket_path is not None:
-        # use GCP
-        from google.cloud import storage
-        from google.cloud.exceptions import NotFound
+    if platform == 'tpu':
+        if cfg.data.bucket_path is not None:
+            # use GCP
+            from google.cloud import storage
+            from google.cloud.exceptions import NotFound
 
-        client = storage.Client()
-        save_to_bucket = True
+            client = storage.Client()
+            save_to_bucket = True
 
-        # will this work?
-        train_shards = open(cfg.data.index_path_train).read().splitlines()
-        validation_shards = open(cfg.data.index_path_validation).read().splitlines()
+            # will this work?
+            train_shards = open(cfg.data.index_path_train).read().splitlines()
+            validation_shards = open(cfg.data.index_path_validation).read().splitlines()
 
     else:
         train_shards = cfg.data.train_shard_urls
