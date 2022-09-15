@@ -280,7 +280,7 @@ class Transformer(nn.Module):
             k_head = nn.Dense(
                 name="head_k",
                 features=256,
-                kernel_init=initializers.orthogonal(scale = 0.1),
+                kernel_init=initializers.orthogonal(scale=0.1),
                 use_bias=False,
             )(out)
 
