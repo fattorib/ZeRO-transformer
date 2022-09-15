@@ -273,14 +273,14 @@ class Transformer(nn.Module):
             q_head = nn.Dense(
                 name="head_q",
                 features=256,
-                kernel_init=initializers.normal(stddev=0.02),
+                kernel_init=initializers.zeros,
                 use_bias=False,
             )(out)
 
             k_head = nn.Dense(
                 name="head_k",
                 features=256,
-                kernel_init=initializers.normal(stddev=0.02),
+                kernel_init=initializers.orthogonal(scale = 0.1),
                 use_bias=False,
             )(out)
 
@@ -288,7 +288,7 @@ class Transformer(nn.Module):
 
             mask = jnp.tril(jnp.ones((T, T), dtype=jnp.int8)).reshape(1, T, T)
             c = jnp.where(mask, c, 0)
-            
+
             c = c @ jax.nn.one_hot(x, num_classes=self.vocab_size)
 
             logits = logits + c
