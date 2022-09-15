@@ -53,6 +53,7 @@ class TestTransformerBlock(unittest.TestCase):
             dtype=None,
             fused_residuals=True,
             alibi_attn=True,
+            use_static_sgu=True,
         )
         batch_cts = random.normal(self.rng, shape=(1, 512, 128))
         params = block.init(self.init_rng, batch_cts, False)
@@ -86,7 +87,7 @@ class TestGPT(unittest.TestCase):
             dropout=0.1,
             N=6,
             dtype=None,
-            fused_residuals=False,
+            fused_residuals=True,
             head_qk_trick=False,
             use_static_sgu=True,
         )
@@ -109,7 +110,7 @@ class TestGPT(unittest.TestCase):
             dropout=0.1,
             N=6,
             dtype=None,
-            fused_residuals=False,
+            fused_residuals=True,
             alibi_attn=True,
             use_static_sgu=True,
         )

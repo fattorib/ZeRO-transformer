@@ -166,6 +166,34 @@ class CausalAttention(nn.Module):
         return dropout()(out)
 
 
+class SGU(nn.Module):
+    """Static SGU module"""
+
+    block_size: int
+    embedding_dim: int
+    kernel_size: int
+
+    def setup(self):
+        k = jnp.triu(
+            jnp.tril(
+                jnp.ones((self.block_size, self.block_size)), -1 * self.kernel_size
+            )
+        )
+        k = k / (k.cumsum(-2) + 1)
+        self.kernel = k
+
+    @nn.compact
+    def __call__(self, x: jnp.array) -> jnp.array:
+
+        x = jax.lax.stop_gradient(x)
+
+        x = rearrange(x, "b n d -> b d n")
+        x = x @ (self.kernel.T)
+        x = rearrange(x, "b d n -> b n d")
+
+        return x
+
+
 class TransformerBlock(nn.Module):
     """One full transformer block"""
 
@@ -186,9 +214,8 @@ class TransformerBlock(nn.Module):
             if self.use_static_sgu:
                 norm = nn.LayerNorm()
                 split_dim = x.shape[-1] // 2
-                x_sgu, x_attn = jnp.split(
-                    norm(x), indices_or_sections=[split_dim, split_dim], axis=-1
-                )
+                split_arr = jnp.split(norm(x), indices_or_sections=2, axis=-1)
+                x_sgu, x_attn = split_arr[0], split_arr[1]
 
                 attn_out = CausalAttention(
                     self.embedding_dim // 2,
@@ -201,7 +228,7 @@ class TransformerBlock(nn.Module):
 
                 sgu_out = SGU(self.block_size, self.embedding_dim // 2, 128)(x_sgu)
 
-                fused_out = jnp.concatenate((sgu_out, attn_out), dim=-1)
+                fused_out = jnp.concatenate((sgu_out, attn_out), axis=-1)
 
                 return (
                     x
@@ -238,34 +265,6 @@ class TransformerBlock(nn.Module):
                 self.embedding_dim, dropout=self.residual_dropout, N=self.N
             )(nn.LayerNorm()(x), train)
             return x
-
-
-class SGU(nn.Module):
-    """Static SGU module"""
-
-    block_size: int
-    embedding_dim: int
-    kernel_size: int
-
-    def setup(self):
-        k = (
-            jnp.ones(self.block_size, self.block_size)
-            .tril_()
-            .triu(-1 * self.kernel_size)
-        )
-        k = k / (k.cumsum(-2) + 1)
-        self.kernel = k
-
-    @nn.compact
-    def __call__(self, x: jnp.array) -> jnp.array:
-
-        x = jax.lax.stop_gradient(x)
-
-        x = rearrange(x, "b n d -> b d n")
-        x = x @ (self.mixing_kernel.T)
-        x = rearrange(x, "b d n -> b n d")
-
-        return x
 
 
 class Transformer(nn.Module):
