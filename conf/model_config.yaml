@@ -10,7 +10,7 @@ QA:
   
 
 small:
-  embedding_dim: 768
+  embedding_dim: 512
   vocab_size: 50257
   num_head: 8
   block_size: 512
