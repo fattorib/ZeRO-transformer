@@ -7,3 +7,5 @@ webdataset
 tensorflow
 pytest 
 google-cloud-storage
+torch 
+tqdm 

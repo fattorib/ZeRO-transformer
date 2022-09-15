@@ -18,6 +18,7 @@ small:
   N: 6
   fused_residuals: True
   alibi_attn: True
+  head_qk_trick: True
   
 base:
   embedding_dim: 768
