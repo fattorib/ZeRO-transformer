@@ -296,7 +296,7 @@ def main():
                     if save_to_bucket:
                         save_checkpoint(
                             state,
-                            workdir=f"gs://{cfg.data.bucket_path}/checkpoints/{cfg.data.checkpoint_directory}",
+                            workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
                         )
                     else:
                         save_checkpoint(state, workdir=cfg.data.checkpoint_directory)
