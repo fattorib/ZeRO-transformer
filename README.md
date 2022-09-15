@@ -2,6 +2,9 @@
 
 little-GPT replication in JAX
 
+TPU Development and training supported with Cloud TPUs from Google's TPU Research Cloud (TRC)
+
+
 TODOS:
 1. Windowed attention 
 2. Ability to port weights (from GPT-354)

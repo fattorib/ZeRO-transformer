@@ -9,6 +9,7 @@ import flax.linen as nn
 import jax
 import jax.nn.initializers as initializers
 import jax.numpy as jnp
+from einops import rearrange
 from omegaconf import OmegaConf
 
 from src.utils.losses import cross_entropy_loss
@@ -176,24 +177,54 @@ class TransformerBlock(nn.Module):
     dtype: Any = jnp.float32
     fused_residuals: bool = False
     alibi_attn: bool = False
+    use_static_sgu: bool = False
 
     @nn.compact
     def __call__(self, x: jnp.array, train: bool = False) -> jnp.array:
 
         if self.fused_residuals:
-            norm = nn.LayerNorm()
-            return CausalAttention(
-                self.embedding_dim,
-                self.num_head,
-                self.block_size,
-                self.residual_dropout,
-                self.N,
-                self.alibi_attn,
-            )(norm(x), train) + MLPBlock(
-                self.embedding_dim, dropout=self.residual_dropout, N=self.N
-            )(
-                norm(x), train
-            )
+            if self.use_static_sgu:
+                norm = nn.LayerNorm()
+                split_dim = x.shape[-1] // 2
+                x_sgu, x_attn = jnp.split(
+                    norm(x), split_size_or_sections=[split_dim, split_dim], axis=-1
+                )
+
+                attn_out = CausalAttention(
+                    self.embedding_dim // 2,
+                    self.num_head,
+                    self.block_size,
+                    self.residual_dropout,
+                    self.N,
+                    self.alibi_attn,
+                )(x_attn, train)
+
+                sgu_out = SGU(self.block_size, self.embedding_dim // 2, 128)(x_sgu)
+
+                fused_out = jnp.concatenate((sgu_out, attn_out), dim=-1)
+
+                return (
+                    x
+                    + fused_out
+                    + MLPBlock(
+                        self.embedding_dim, dropout=self.residual_dropout, N=self.N
+                    )(norm(x), train)
+                )
+
+            else:
+                norm = nn.LayerNorm()
+                return CausalAttention(
+                    self.embedding_dim,
+                    self.num_head,
+                    self.block_size,
+                    self.residual_dropout,
+                    self.N,
+                    self.alibi_attn,
+                )(norm(x), train) + MLPBlock(
+                    self.embedding_dim, dropout=self.residual_dropout, N=self.N
+                )(
+                    norm(x), train
+                )
         else:
             x = x + CausalAttention(
                 self.embedding_dim,
@@ -207,6 +238,34 @@ class TransformerBlock(nn.Module):
                 self.embedding_dim, dropout=self.residual_dropout, N=self.N
             )(nn.LayerNorm()(x), train)
             return x
+
+
+class SGU(nn.Module):
+    """Static SGU module"""
+
+    block_size: int
+    embedding_dim: int
+    kernel_size: int
+
+    def setup(self):
+        k = (
+            jnp.ones(self.block_size, self.block_size)
+            .tril_()
+            .triu(-1 * self.kernel_size)
+        )
+        k = k / (k.cumsum(-2) + 1)
+        self.kernel = k
+
+    @nn.compact
+    def __call__(self, x: jnp.array) -> jnp.array:
+
+        x = jax.lax.stop_gradient(x)
+
+        x = rearrange(x, "b n d -> b d n")
+        x = x @ (self.mixing_kernel.T)
+        x = rearrange(x, "b d n -> b n d")
+
+        return x
 
 
 class Transformer(nn.Module):
@@ -224,6 +283,7 @@ class Transformer(nn.Module):
     fused_residuals: bool = False
     alibi_attn: bool = False
     head_qk_trick: bool = False
+    use_static_sgu: bool = False
 
     @nn.compact
     def __call__(
@@ -262,6 +322,7 @@ class Transformer(nn.Module):
                 self.N,
                 self.fused_residuals,
                 self.alibi_attn,
+                self.use_static_sgu,
             )(out, train)
 
         out = nn.LayerNorm()(out)
