@@ -144,7 +144,8 @@ def main():
         wandb.init(id=id, resume="allow", project="LJX")
         flat_dict = flatten_dict(cfg)
 
-        flat_dict.update(model_config)
+        for key in model_config.keys():
+            flat_dict[f'model.{key}'] = model_config[key]
 
         flat_dict["training.local_batch_size"] = local_batch_size
         wandb.config.update(flat_dict)
