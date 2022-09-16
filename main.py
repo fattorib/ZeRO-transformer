@@ -67,7 +67,9 @@ def main():
     num_devices = jax.device_count()
     platform = jax.local_devices()[0].platform
 
-    model, model_config = model_getter(cfg.model.size, config_path=args.model_cfg, return_cfg = True)
+    model, model_config = model_getter(
+        cfg.model.size, config_path=args.model_cfg, return_cfg=True
+    )
 
     learning_rate_fn = optax.warmup_cosine_decay_schedule(
         init_value=0,
@@ -145,13 +147,13 @@ def main():
         flat_dict = flatten_dict(cfg)
 
         for key in model_config.keys():
-            flat_dict[f'model.{key}'] = model_config[key]
+            flat_dict[f"model.{key}"] = model_config[key]
 
         flat_dict["training.local_batch_size"] = local_batch_size
         wandb.config.update(flat_dict)
 
     save_to_bucket = False
-    if platform == 'tpu':
+    if platform == "tpu":
         if cfg.data.bucket_path is not None:
             # use GCP
             from google.cloud import storage
@@ -219,6 +221,10 @@ def main():
 
     # I mean, we should eventually wrap this in an epoch loop
     for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
+
+        if i > cfg.training.total_steps * cfg.training.gradient_accumulation_steps:
+            # End training
+            break
 
         if resume_step != None and i <= resume_step:
             continue
