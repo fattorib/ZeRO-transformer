@@ -11,9 +11,7 @@ import jax.nn.initializers as initializers
 import jax.numpy as jnp
 from einops import rearrange
 from omegaconf import OmegaConf
-
 from src.utils.losses import cross_entropy_loss
-
 
 def get_slopes(n: int) -> List:
     def get_slopes_power_of_2(n):
@@ -283,6 +281,20 @@ class Transformer(nn.Module):
     alibi_attn: bool = False
     head_qk_trick: bool = False
     use_static_sgu: bool = False
+
+    def greedy_generate(self, input: jnp.array, max_length: int = 50, sample: bool = False) -> jnp.array:
+        """Performs greedy text generation
+
+        Args:
+            input (jnp.array): tokenized text to continue
+            max_length (int): The maximum length of tokens to generate (sum of context + *generated tokens*)
+            sample (bool): Boolean whether to sample from logits distribution
+            
+        Returns:
+            jnp.array: Generated text, must be detokenized
+        """
+            
+        raise NotImplementedError
 
     @nn.compact
     def __call__(
