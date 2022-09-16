@@ -1,0 +1,5 @@
+corpus: "openwebtext2"
+tokenizer: "GPT2"
+n_ctx: 1024
+num_train_samples: 12574161
+num_validation_samples: 806093
