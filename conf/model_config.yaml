@@ -20,7 +20,7 @@ small:
   fused_residuals: True
   alibi_attn: True
   head_qk_trick: False
-  use_static_sgu: True
+  use_static_sgu: False
   
 base:
   embedding_dim: 768
