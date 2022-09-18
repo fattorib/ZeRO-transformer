@@ -15,6 +15,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
+import torch
 import webdataset as wds
 from flax.training import checkpoints
 from flax.training.common_utils import shard
@@ -40,7 +41,7 @@ def parse():
 
     parser.add_argument("--model-cfg", default="conf/model_config.yaml", type=str)
 
-    parser.add_argument("--batch-size", default = 2,  type=int)
+    parser.add_argument("--batch-size", default=2, type=int)
 
     args = parser.parse_args()
     return args
@@ -117,7 +118,10 @@ def main():
 
     def preprocess(batch):
         x = batch["input_id.pth"][: cfg.data.max_context]
-        return jnp.array(x.long(), dtype=jnp.int32)
+        if type(x) == torch.tensor:
+            return jnp.array(x.long(), dtype=jnp.int32)
+        else:
+            return jnp.array(x, dtype=jnp.int32)
 
     train_dataset = wds.DataPipeline(
         wds.SimpleShardList(train_shards),

@@ -10,6 +10,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
+import torch
 import webdataset as wds
 from flax.training import checkpoints
 from flax.training.common_utils import shard, shard_prng_key
@@ -150,7 +151,7 @@ def main():
             flat_dict[f"model.{key}"] = model_config[key]
 
         flat_dict["training.local_batch_size"] = local_batch_size
-        flat_dict['runtime'] = platform
+        flat_dict["runtime"] = platform
         wandb.config.update(flat_dict)
 
     save_to_bucket = False
@@ -172,8 +173,10 @@ def main():
         validation_shards = cfg.data.validation_shard_urls
 
     def preprocess(batch):
-        x = batch["input_id.pth"][: cfg.data.max_context]
-        return jnp.array(x.long(), dtype=jnp.int32)
+        if type(x) == torch.tensor:
+            return jnp.array(x.long(), dtype=jnp.int32)
+        else:
+            return jnp.array(x, dtype=jnp.int32)
 
     train_dataset = wds.DataPipeline(
         wds.SimpleShardList(train_shards),
@@ -289,7 +292,9 @@ def main():
                         cfg.training.gradient_accumulation_steps
                         * train_metrics_np["Train Batch Time"]
                     )
-                    train_metrics_np['Tokens Seen (B)'] = cfg.training.gradient_accumulation_steps*i
+                    train_metrics_np["Tokens Seen (B)"] = (
+                        cfg.training.gradient_accumulation_steps * i
+                    )
 
                     train_metrics_np.pop("Train Batch Time")
                     wandb.log(train_metrics_np)
