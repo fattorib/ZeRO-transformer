@@ -19,8 +19,8 @@ small:
   N: 6
   fused_residuals: True
   alibi_attn: True
-  head_qk_trick: False
-  use_static_sgu: False
+  head_qk_trick: True
+  use_static_sgu: True
   
 base:
   embedding_dim: 768
