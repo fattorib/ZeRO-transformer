@@ -150,6 +150,7 @@ def main():
             flat_dict[f"model.{key}"] = model_config[key]
 
         flat_dict["training.local_batch_size"] = local_batch_size
+        flat_dict['runtime'] = platform
         wandb.config.update(flat_dict)
 
     save_to_bucket = False
