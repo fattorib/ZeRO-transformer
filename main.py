@@ -130,7 +130,15 @@ def main():
 
     if args.resume:
         # TODO: Get wandb ID for run too
-        state = restore_checkpoint(state, cfg.data.checkpoint_directory)
+        if platform == "tpu":
+            restore_checkpoint(
+                state,
+                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+            )
+        else:
+            restore_checkpoint(state, workdir=cfg.data.checkpoint_directory)
+
+
         if jax.process_index() == 0:
             logger.debug(f"Resuming training from step {int(state.step)}")
 
@@ -170,7 +178,6 @@ def main():
             client = storage.Client()
             save_to_bucket = True
 
-            # will this work?
             train_shards = open(cfg.data.index_path_train).read().splitlines()
             validation_shards = open(cfg.data.index_path_validation).read().splitlines()
 
