@@ -173,6 +173,7 @@ def main():
         validation_shards = cfg.data.validation_shard_urls
 
     def preprocess(batch):
+        x = batch["input_id.pth"][: cfg.data.max_context]
         if type(x) == torch.tensor:
             return jnp.array(x.long(), dtype=jnp.int32)
         else:
