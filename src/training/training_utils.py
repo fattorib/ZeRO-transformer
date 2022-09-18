@@ -106,3 +106,47 @@ def step_to_seq_len(
         return max_context
     else:
         return stages[stage_idx]
+
+
+def compute_tokens_seen(
+    current_step: int, stages: List, max_steps: int, max_context=1024
+) -> int:
+    """Compute the number of tokens seen by the model. Requires scaling by batch size after
+
+    Example::
+        >>> compute_tokens_seen(400,[256, 512], 1200, 1024)
+        102400
+
+        >>> compute_tokens_seen(800, [256, 512], 1200, 1024)
+        256000
+
+        >>> compute_tokens_seen(1300, [256, 512], 1200, 1024)
+        563200
+    """
+
+    steps_per_stage = max_steps // len(stages)
+
+    # get how many steps we have passed in the current stage
+    remainder = current_step % steps_per_stage
+
+    stage_idx = (current_step - remainder) // steps_per_stage
+    if stage_idx > 0:
+        tokens_seen = 0
+        for stage in range(0, stage_idx):
+            if stage < len(stages):
+                tokens_seen += stages[stage] * steps_per_stage
+
+        if stage_idx >= len(stages):
+            remaining_steps = current_step - max_steps
+            tokens_seen += max_context * remaining_steps
+        else:
+            tokens_seen += stages[stage_idx] * remainder
+        return tokens_seen
+    else:
+        # end is scaled by BS - This is constant
+        return stages[0] * remainder
+
+
+if __name__ == "__main__":
+
+    print(f"{compute_tokens_seen(1300, [256, 512], 1200, 1024)}")
