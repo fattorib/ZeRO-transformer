@@ -40,7 +40,7 @@ def parse():
 
     parser.add_argument("--model-cfg", default="conf/model_config.yaml", type=str)
 
-    parser.add_argument("--batch-size", type=int)
+    parser.add_argument("--batch-size", default = 2,  type=int)
 
     args = parser.parse_args()
     return args
@@ -88,10 +88,6 @@ def main():
     if jax.process_index() == 0:
         logger.debug(f"Host setup with {num_devices} devices.")
         logger.debug(f"Using platform: {platform} with precision {model_dtype}")
-        if cfg.training.staged_sequences is not None:
-            logger.debug(
-                f"Running sequence length warmup for {cfg.training.staged_warmup_steps} total steps with stages: {cfg.training.staged_sequences}"
-            )
 
     # replicating state across devices
     state = flax.jax_utils.replicate(state)
