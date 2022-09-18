@@ -21,7 +21,7 @@ from tqdm import tqdm
 
 import wandb
 from src.models.GPT import model_getter
-from src.training.training_utils import create_train_state, step_to_seq_len
+from src.training.training_utils import create_train_state, step_to_seq_len, compute_tokens_seen
 from src.utils.configs import flatten_dict
 from src.utils.dataloader import numpy_collate
 from src.utils.losses import kl_div_loss
@@ -142,6 +142,11 @@ def main():
 
     local_batch_size = cfg.training.batch_size // jax.device_count()
 
+    # This is computed in terms of absolute steps
+    total_tokens = cfg.training.batch_size*cfg.training.gradient_accumulation_steps*compute_tokens_seen(cfg.training.total_steps, stages = cfg.training.staged_sequences, max_steps = cfg.training.staged_warmup_steps,
+            max_context=cfg.data.max_context)
+
+
     if jax.process_index() == 0:
         id = wandb.util.generate_id()
         wandb.init(id=id, resume="allow", project="LJX")
@@ -152,6 +157,7 @@ def main():
 
         flat_dict["training.local_batch_size"] = local_batch_size
         flat_dict["runtime"] = platform
+        flat_dict["Total Training Tokens"] = total_tokens/1e9
         wandb.config.update(flat_dict)
 
     save_to_bucket = False
@@ -253,6 +259,7 @@ def main():
             )
         metrics["Train Batch Time"] = time.time() - t0
         metrics["Train Sequence Length"] = seq_len
+        metrics["Tokens Seen (B)"] = (i/cfg.training.gradient_accumulation_steps)/total_tokens
 
         running_metrics.append(metrics)
 
