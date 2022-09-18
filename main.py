@@ -235,28 +235,16 @@ def main():
         # sharding batch
         sharded_batch = shard(text)
 
-        # technically this is how we would shard the RNG keys. I'm assuming we're always training for <1 epoch
-        # so dropout is turned off
-
-        # rng, batch_rng = random.split(rng)
-        # sharded_rng = shard_prng_key(batch_rng)
-
         t0 = time.time()
 
         if cfg.distillation.distill:
             state, metrics = distillation_train_step(
-                state,
-                teacher_state,
-                sharded_batch,
-                temperature,
-                alpha
-                # sharded_rng,
+                state, teacher_state, sharded_batch, temperature, alpha
             )
         else:
             state, metrics = train_step(
                 state,
                 sharded_batch,
-                # sharded_rng,
             )
         metrics["Train Batch Time"] = time.time() - t0
         metrics["Train Sequence Length"] = seq_len
@@ -332,7 +320,6 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
             x=batch,
             labels=batch,
             train=False,
-            # rngs={"dropout": rng_key},
         )
 
         return loss
@@ -373,7 +360,6 @@ def distillation_train_step(
             x=batch,
             labels=batch,
             train=False,
-            # rngs={"dropout": rng_key},
         )
 
         teacher_logits = teacher_state.apply_fn(
