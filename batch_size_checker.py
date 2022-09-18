@@ -34,6 +34,7 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+
 def parse():
     parser = argparse.ArgumentParser(description="Transformer Training")
 
@@ -41,7 +42,7 @@ def parse():
 
     parser.add_argument("--model-cfg", default="conf/model_config.yaml", type=str)
 
-    parser.add_argument("--batch-size", type = int)
+    parser.add_argument("--batch-size", type=int)
 
     args = parser.parse_args()
     return args
@@ -76,7 +77,7 @@ def main():
         model_dtype = jnp.bfloat16
     else:
         model_dtype = jnp.float32
-    
+
     state = create_train_state(
         init_rng,
         learning_rate_fn,
@@ -93,12 +94,12 @@ def main():
             logger.debug(
                 f"Running sequence length warmup for {cfg.training.staged_warmup_steps} total steps with stages: {cfg.training.staged_sequences}"
             )
-    
+
     # replicating state across devices
     state = flax.jax_utils.replicate(state)
 
     if jax.process_index() == 0:
-            logger.debug(f"Attempting run with global batch size {args.batch_size}")
+        logger.debug(f"Attempting run with global batch size {args.batch_size}")
 
     local_batch_size = args.batch_size // jax.device_count()
 
@@ -156,7 +157,7 @@ def main():
 
     step_to_seq = lambda x: cfg.data.max_context
 
-    for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0, total = 100)):
+    for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0, total=100)):
 
         seq_len = step_to_seq(i)
         text = text[:, :seq_len]
@@ -165,13 +166,14 @@ def main():
         sharded_batch = shard(text)
 
         state, metrics = train_step(
-                state,
-                sharded_batch,
-                # sharded_rng,
-            )
-        
-        if (i+1) % 100 == 0:
-            break 
+            state,
+            sharded_batch,
+            # sharded_rng,
+        )
+
+        if (i + 1) % 100 == 0:
+            break
+
 
 @partial(jax.pmap, axis_name="batch")
 def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
