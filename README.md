@@ -1,6 +1,6 @@
 # Transformer - JAX
 
-Tested codebase for TPU/GPU training on GPT-style transformers in JAX.
+Tested codebase for TPU/GPU training on GPT-style transformers in JAX. Supports 
 
 # Setup
 
@@ -44,7 +44,7 @@ data:
 ```
 
 # TODOS:
-1. Ability to port weights [Little-GPT](https://github.com/fattorib/Little-GPT)
+1. Ability to port weights from [Little-GPT](https://github.com/fattorib/Little-GPT)
 
 # Acknowledgements
 TPU Development and training supported with Cloud TPUs from Google's TPU Research Cloud (TRC)
