@@ -17,7 +17,7 @@ import numpy as np
 import optax
 import webdataset as wds
 from flax.training import checkpoints
-from flax.training.common_utils import shard, shard_prng_key
+from flax.training.common_utils import shard
 from jax import random
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
@@ -25,10 +25,8 @@ from tqdm import tqdm
 
 import wandb
 from src.models.GPT import model_getter
-from src.training.training_utils import create_train_state, step_to_seq_len
-from src.utils.configs import flatten_dict
+from src.training.training_utils import create_train_state
 from src.utils.dataloader import numpy_collate
-from src.utils.losses import kl_div_loss
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
