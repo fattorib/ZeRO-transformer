@@ -21,9 +21,7 @@ pip install -r requirements
 ```bash
 git clone https://github.com/fattorib/transformer.git
 cd transformer 
-pip install --upgrade pip
-pip install "jax[tpu]>=0.2.16" -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
-pip install -r requirements
+bash prepareTPUVM.sh
 ```
 
 # Dataset
@@ -45,6 +43,8 @@ data:
 
 # TODOS:
 1. Ability to port weights from [Little-GPT](https://github.com/fattorib/Little-GPT)
+
+2. Ensure resume scripts work
 
 # Acknowledgements
 TPU Development and training supported with Cloud TPUs from Google's TPU Research Cloud (TRC)
