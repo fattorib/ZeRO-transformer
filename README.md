@@ -1,13 +1,32 @@
-# transformer
+# Transformer - JAX
 
-little-GPT replication in JAX
+Tested codebase for TPU/GPU training on GPT-style transformers in JAX.
 
-TPU Development and training supported with Cloud TPUs from Google's TPU Research Cloud (TRC)
+# Setup
+
+## GPU:
+
+```bash
+git clone https://github.com/fattorib/transformer.git
+cd transformer 
+# download your data and unpack it 
+pip install --upgrade pip
+pip install "jax[cuda11_cudnn805]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+pip install -r requirements
+```
+
+## TPU:
 
 
-TODOS:
-1. Windowed attention 
-2. Ability to port weights (from GPT-354)
+```bash
+git clone https://github.com/fattorib/transformer.git
+cd transformer 
+pip install --upgrade pip
+pip install "jax[tpu]>=0.2.16" -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+pip install -r requirements
+```
+
+# Dataset
 
 The dataset scripts here assume your dataset has been processed into a collection of tar archives that can be read with [webdataset](https://github.com/webdataset/webdataset). Once that is done change the required paths in ```conf/config.yaml```:
 
@@ -24,8 +43,11 @@ data:
     index_path_validation: "data/index/openwebtext.val.index" # list of all shards + GCP urls
 ```
 
+# TODOS:
+1. Ability to port weights [Little-GPT](https://github.com/fattorib/Little-GPT)
 
-
+# Acknowledgements
+TPU Development and training supported with Cloud TPUs from Google's TPU Research Cloud (TRC)
 
 
 # Testing
