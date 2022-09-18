@@ -57,7 +57,7 @@ def save_checkpoint(state, workdir):
 
 
 def restore_checkpoint(state, workdir):
-    return checkpoints.restore_checkpoint(workdir, state, step = 368001)
+    return checkpoints.restore_checkpoint(workdir, state)
 
 
 def main():
@@ -126,11 +126,28 @@ def main():
                 f"Running sequence length warmup for {cfg.training.staged_warmup_steps} total steps with stages: {cfg.training.staged_sequences}"
             )
 
-    resume_step = None
+    save_to_bucket = False
+    if platform == "tpu":
+        if cfg.data.bucket_path is not None:
+            # use GCP
+            from google.cloud import storage
+            from google.cloud.exceptions import NotFound
 
+            client = storage.Client()
+            save_to_bucket = True
+
+            train_shards = open(cfg.data.index_path_train).read().splitlines()
+            validation_shards = open(cfg.data.index_path_validation).read().splitlines()
+
+    else:
+        train_shards = cfg.data.train_shard_urls
+        validation_shards = cfg.data.validation_shard_urls
+
+
+    resume_step = None
     if args.resume:
         # TODO: Get wandb ID for run too
-        if platform == "tpu":
+        if save_to_bucket:
             restore_checkpoint(
                 state,
                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
@@ -168,22 +185,7 @@ def main():
         flat_dict["Total Training Tokens"] = total_tokens/1e9
         wandb.config.update(flat_dict)
 
-    save_to_bucket = False
-    if platform == "tpu":
-        if cfg.data.bucket_path is not None:
-            # use GCP
-            from google.cloud import storage
-            from google.cloud.exceptions import NotFound
-
-            client = storage.Client()
-            save_to_bucket = True
-
-            train_shards = open(cfg.data.index_path_train).read().splitlines()
-            validation_shards = open(cfg.data.index_path_validation).read().splitlines()
-
-    else:
-        train_shards = cfg.data.train_shard_urls
-        validation_shards = cfg.data.validation_shard_urls
+    
 
     def preprocess(batch):
         x = batch["input_id.pth"][: cfg.data.max_context]
