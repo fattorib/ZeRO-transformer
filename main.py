@@ -57,7 +57,7 @@ def save_checkpoint(state, workdir):
 
 
 def restore_checkpoint(state, workdir):
-    return checkpoints.restore_checkpoint(workdir, state)
+    return checkpoints.restore_checkpoint(workdir, state, step = 368001)
 
 
 def main():
