@@ -289,6 +289,7 @@ def main():
                         cfg.training.gradient_accumulation_steps
                         * train_metrics_np["Train Batch Time"]
                     )
+                    train_metrics_np['Tokens Seen (B)'] = cfg.training.gradient_accumulation_steps*i
 
                     train_metrics_np.pop("Train Batch Time")
                     wandb.log(train_metrics_np)
