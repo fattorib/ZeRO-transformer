@@ -321,7 +321,7 @@ def main():
                             train_metrics_np["Tokens Seen (B)"] = (
                                 cfg.training.batch_size
                                 * cfg.training.gradient_accumulation_steps
-                                * absolute_step
+                                * absolute_step * cfg.data.max_context
                             ) / 1e9
 
                         train_metrics_np.pop("Train Batch Time")
@@ -360,7 +360,7 @@ def main():
                             train_metrics_np["Tokens Seen (B)"] = (
                                 cfg.training.batch_size
                                 * cfg.training.gradient_accumulation_steps
-                                * absolute_step
+                                * absolute_step * cfg.data.max_context
                             ) / 1e9
 
                         train_metrics_np.pop("Train Batch Time")
