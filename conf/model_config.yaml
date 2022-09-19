@@ -7,8 +7,8 @@ QA:
   N: 3
   fused_residuals: True
   alibi_attn: True
-  head_qk_trick: True
-  
+  head_qk_trick: False
+  use_static_sgu: False
 
 small:
   embedding_dim: 768
