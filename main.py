@@ -250,7 +250,7 @@ def main():
             # End training
             break
 
-        if resume_step != None and i <= resume_step:
+        if resume_step != None and i <= 400000:
             continue
 
         seq_len = step_to_seq(i)
