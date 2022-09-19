@@ -122,7 +122,7 @@ def main():
     if jax.process_index() == 0:
         logger.debug(f"Host setup with {num_devices} devices.")
         logger.debug(f"Using platform: {platform} with precision {model_dtype}")
-        if cfg.training.staged_sequences is not None:
+        if len(cfg.training.staged_sequences) > 0:
             logger.debug(
                 f"Running sequence length warmup for {cfg.training.staged_warmup_steps} total steps with stages: {cfg.training.staged_sequences}"
             )
@@ -230,7 +230,7 @@ def main():
 
     running_metrics = []
 
-    if cfg.training.staged_sequences is not None:
+    if len(cfg.training.staged_sequences) > 0:
 
         step_to_seq = partial(
             step_to_seq_len,
