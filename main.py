@@ -167,16 +167,23 @@ def main():
     local_batch_size = cfg.training.batch_size // jax.device_count()
 
     # This is computed in terms of absolute steps
-    total_tokens = (
-        cfg.training.batch_size
-        * cfg.training.gradient_accumulation_steps
-        * compute_tokens_seen(
-            cfg.training.total_steps,
-            stages=cfg.training.staged_sequences,
-            max_steps=cfg.training.staged_warmup_steps,
-            max_context=cfg.data.max_context,
+    if len(cfg.training.staged_sequences) > 0:
+        total_tokens = (
+            cfg.training.batch_size
+            * cfg.training.gradient_accumulation_steps
+            * compute_tokens_seen(
+                cfg.training.total_steps,
+                stages=cfg.training.staged_sequences,
+                max_steps=cfg.training.staged_warmup_steps,
+                max_context=cfg.data.max_context,
+            )
         )
-    )
+    else:
+        total_tokens = (
+            cfg.training.batch_size
+            * cfg.training.gradient_accumulation_steps
+            * cfg.data.max_context
+        )
 
     if jax.process_index() == 0:
         id = wandb.util.generate_id()
@@ -336,16 +343,23 @@ def main():
                         )
 
                         absolute_step = i // cfg.training.gradient_accumulation_steps
-                        metrics["Tokens Seen (B)"] = (
-                            cfg.training.batch_size
-                            * cfg.training.gradient_accumulation_steps
-                            * compute_tokens_seen(
-                                absolute_step,
-                                stages=cfg.training.staged_sequences,
-                                max_steps=cfg.training.staged_warmup_steps,
-                                max_context=cfg.data.max_context,
+                        if len(cfg.training.staged_sequences) > 0:
+                            metrics["Tokens Seen (B)"] = (
+                                cfg.training.batch_size
+                                * cfg.training.gradient_accumulation_steps
+                                * compute_tokens_seen(
+                                    absolute_step,
+                                    stages=cfg.training.staged_sequences,
+                                    max_steps=cfg.training.staged_warmup_steps,
+                                    max_context=cfg.data.max_context,
+                                )
+                            ) / 1e9
+                        else:
+                            metrics["Tokens Seen (B)"] = (
+                                cfg.training.batch_size
+                                * cfg.training.gradient_accumulation_steps
+                                * absolute_step
                             )
-                        )/1e9
 
                         train_metrics_np.pop("Train Batch Time")
                         wandb.log(train_metrics_np)
