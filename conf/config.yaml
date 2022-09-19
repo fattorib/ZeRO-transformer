@@ -18,11 +18,6 @@ training:
 model:
   size: "QA"
 
-distillation:
-  distill: False
-  temperature: 2
-  alpha: 0.5
-
 data:
   corpus: "openwebtext"
   train_shard_urls: "data/processed/books_train-{000000..000013}.tar.gz"

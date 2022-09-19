@@ -100,25 +100,6 @@ def main():
         dtype=model_dtype,
     )
 
-    if cfg.distillation.distill:
-        from flax.training import train_state
-        from transformers import FlaxAutoModelForCausalLM
-
-        teacher = FlaxAutoModelForCausalLM.from_pretrained("gpt2", dtype=model_dtype)
-
-        # Yes, I'm aware this is silly. Without spending too much time this is a pretty quick fix, sgd doesn't consume extra params
-        teacher_state = train_state.TrainState.create(
-            apply_fn=teacher.__call__,
-            params=teacher.params,
-            tx=optax.sgd(
-                learning_rate=0,
-            ),
-        )
-        temperature = cfg.distillation.temperature
-        alpha = cfg.distillation.alpha
-
-        teacher_state = flax.jax_utils.replicate(teacher_state)
-
     if jax.process_index() == 0:
         logger.debug(f"Host setup with {num_devices} devices.")
         logger.debug(f"Using platform: {platform} with precision {model_dtype}")
@@ -276,15 +257,11 @@ def main():
 
             t0 = time.time()
 
-            if cfg.distillation.distill:
-                state, metrics = distillation_train_step(
-                    state, teacher_state, sharded_batch, temperature, alpha
-                )
-            else:
-                state, metrics = train_step(
-                    state,
-                    sharded_batch,
-                )
+            state, metrics = train_step(
+                state,
+                sharded_batch,
+            )
+
             metrics["Train Batch Time"] = time.time() - t0
             metrics["Train Sequence Length"] = seq_len
 
