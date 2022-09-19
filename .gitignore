@@ -20,4 +20,6 @@ experimenting.py
 logs/*
 
 keys.py
-cmds
+cmds.md
+
+.gitignore
