@@ -202,7 +202,7 @@ def main():
         wds.SimpleShardList(train_shards),
         wds.split_by_worker,
         wds.tarfile_to_samples(),
-        wds.shuffle(1e5, initial=1e5, rng=pyrandom.Random(23)),
+        wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23)),
         wds.decode(),
         wds.map(preprocess),
     )
@@ -211,7 +211,7 @@ def main():
         wds.SimpleShardList(validation_shards),
         wds.split_by_worker,
         wds.tarfile_to_samples(),
-        wds.shuffle(1e5, initial=1e5, rng=pyrandom.Random(23)),
+        wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23)),
         wds.decode(),
         wds.map(preprocess),
     )
