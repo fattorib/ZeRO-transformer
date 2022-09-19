@@ -152,7 +152,6 @@ def main():
 
     resume_step = None
     if args.resume:
-        # TODO: Get wandb ID for run too
         if save_to_bucket:
             state = restore_checkpoint(
                 state,
@@ -351,7 +350,7 @@ def main():
 
                         absolute_step = i // cfg.training.gradient_accumulation_steps
                         if len(cfg.training.staged_sequences) > 0:
-                            metrics["Tokens Seen (B)"] = (
+                            train_metrics_np["Tokens Seen (B)"] = (
                                 cfg.training.batch_size
                                 * cfg.training.gradient_accumulation_steps
                                 * compute_tokens_seen(
@@ -362,7 +361,7 @@ def main():
                                 )
                             ) / 1e9
                         else:
-                            metrics["Tokens Seen (B)"] = (
+                            train_metrics_np["Tokens Seen (B)"] = (
                                 cfg.training.batch_size
                                 * cfg.training.gradient_accumulation_steps
                                 * absolute_step
