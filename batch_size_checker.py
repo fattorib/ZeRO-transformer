@@ -158,7 +158,6 @@ def main():
 
     for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0, total=100)):
 
-
         # sharding batch
         sharded_batch = shard(text)
 

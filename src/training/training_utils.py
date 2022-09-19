@@ -149,4 +149,4 @@ def compute_tokens_seen(
 
 if __name__ == "__main__":
 
-    print(f"{compute_tokens_seen(1300, [256, 512], 1200, 1024)}")
+    print(f"{512*compute_tokens_seen(34300, [128, 256], 12000, 1024)/1e9:.2f}")
