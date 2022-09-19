@@ -182,7 +182,7 @@ def main():
         total_tokens = (
             cfg.training.batch_size
             * cfg.training.gradient_accumulation_steps
-            * cfg.data.max_context
+            * cfg.data.max_context * cfg.training.total_steps
         )
 
     if jax.process_index() == 0:
