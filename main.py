@@ -399,66 +399,6 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
     return state, metrics
 
 
-# static_broadcasted_argnums is used for constants (@compile time) that aren't broadcasted
-@partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=(3, 4))
-def distillation_train_step(
-    state: Any,
-    teacher_state: Any,
-    batch: jnp.array,
-    temperature: float,
-    alpha: float,
-    rng_key: random.PRNGKey = None,
-):
-    """Train on a single batch"""
-
-    def loss_fn(params, teacher):
-        student_logits, loss = state.apply_fn(
-            {"params": params["params"]},
-            x=batch,
-            labels=batch,
-            train=False,
-        )
-
-        teacher_logits = teacher_state.apply_fn(
-            batch, params=teacher, train=False
-        ).logits
-
-        student_logits = student_logits / temperature
-
-        teacher_logits = teacher_logits / temperature
-
-        kd_loss = (temperature ** 2) * kl_div_loss(teacher_logits, student_logits)
-
-        total_loss = (kd_loss * alpha) + (loss * (1 - alpha))
-
-        return total_loss, (kd_loss, loss)
-
-    grad_fn = jax.value_and_grad(loss_fn, argnums=0, has_aux=True)
-    (loss, (kd_loss, ce_loss)), grads = grad_fn(state.params, teacher_state.params)
-
-    # compute all-reduce mean for gradients and loss
-    # Ex: If we have 8 devices, each device takes the gradients from the other 7 and averages them all together
-    # that way, all device replicas have the same gradients and optimization step can occur in parallel
-    loss = jax.lax.pmean(loss, axis_name="batch")
-    grads = jax.lax.pmean(grads, axis_name="batch")
-
-    state = state.apply_gradients(
-        grads=grads,
-    )
-
-    kd_loss = jax.lax.pmean(kd_loss, axis_name="batch")
-    ce_loss = jax.lax.pmean(ce_loss, axis_name="batch")
-
-    metrics = {
-        "Train Total Loss": loss,
-        "Train KD Loss": kd_loss,
-        "Train LM Loss": ce_loss,
-        "Train LM PPL": jnp.exp(ce_loss),
-    }
-
-    return state, metrics
-
-
 @partial(jax.pmap, axis_name="batch")
 def eval_step(state: Any, batch: jnp.array):
     """Evaluate on a single batch"""
