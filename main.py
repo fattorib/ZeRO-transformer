@@ -345,7 +345,7 @@ def main():
                                 max_steps=cfg.training.staged_warmup_steps,
                                 max_context=cfg.data.max_context,
                             )
-                        )
+                        )/1e9
 
                         train_metrics_np.pop("Train Batch Time")
                         wandb.log(train_metrics_np)
