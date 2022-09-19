@@ -129,6 +129,12 @@ def main():
 
     save_to_bucket = False
     if platform == "tpu":
+        # TPU VM supports caching: https://github.com/google/jax/issues/476#issuecomment-1015773039
+        from jax.experimental.compilation_cache import compilation_cache as cc
+        
+        if jax.process_index() == 0: 
+            cc.initialize_cache("XLA_cache", max_cache_size_bytes=32 * 2**30)
+
         if cfg.data.bucket_path is not None:
             # use GCP
             from google.cloud import storage
