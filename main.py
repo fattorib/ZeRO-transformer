@@ -328,10 +328,11 @@ def main():
                         wandb.log(train_metrics_np)
 
                         if save_to_bucket:
-                            save_checkpoint(
-                                state,
-                                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                            )
+                            # save_checkpoint(
+                            #     state,
+                            #     workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                            # )
+                            pass 
                         else:
                             save_checkpoint(
                                 state, workdir=cfg.data.checkpoint_directory
