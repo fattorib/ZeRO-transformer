@@ -95,6 +95,7 @@ def main():
 
     if jax.process_index() == 0:
         logger.debug(f"Attempting run with global batch size {args.batch_size}")
+        logger.debug(f"Attempting run with context length {cfg.data.max_context}")
 
     local_batch_size = args.batch_size // jax.device_count()
 
@@ -157,8 +158,6 @@ def main():
 
     for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0, total=100)):
 
-        seq_len = step_to_seq(i)
-        text = text[:, :seq_len]
 
         # sharding batch
         sharded_batch = shard(text)
