@@ -322,7 +322,7 @@ def main():
                                 cfg.training.batch_size
                                 * cfg.training.gradient_accumulation_steps
                                 * absolute_step
-                            )
+                            ) / 1e9
 
                         train_metrics_np.pop("Train Batch Time")
                         wandb.log(train_metrics_np)
@@ -361,7 +361,7 @@ def main():
                                 cfg.training.batch_size
                                 * cfg.training.gradient_accumulation_steps
                                 * absolute_step
-                            )
+                            ) / 1e9
 
                         train_metrics_np.pop("Train Batch Time")
                         wandb.log(train_metrics_np)
