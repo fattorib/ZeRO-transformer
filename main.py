@@ -255,10 +255,7 @@ def main():
                 continue
             
             # TODO: This may be problematic when crossing epoch boundary.
-            if epoch == 0:
-                seq_len = step_to_seq(i)
-            else:
-                seq_len = cfg.data.max_context
+            seq_len = step_to_seq(i + (epoch * cfg.data.full_steps_in_batch * cfg.training.gradient_accumulation_steps))
 
             text = text[:, :seq_len]
 
@@ -315,7 +312,7 @@ def main():
                             * train_metrics_np["Train Batch Time"]
                         )
 
-                        absolute_step = i // cfg.training.gradient_accumulation_steps
+                        absolute_step = (i // cfg.training.gradient_accumulation_steps) + (epoch * cfg.data.full_steps_in_batch)
                         if len(cfg.training.staged_sequences) > 0:
                             train_metrics_np["Tokens Seen (B)"] = (
                                 cfg.training.batch_size
@@ -356,7 +353,7 @@ def main():
                             * train_metrics_np["Train Batch Time"]
                         )
 
-                        absolute_step = i // cfg.training.gradient_accumulation_steps
+                        absolute_step = (i // cfg.training.gradient_accumulation_steps) + (epoch * cfg.data.full_steps_in_batch)
                         if len(cfg.training.staged_sequences) > 0:
                             train_metrics_np["Tokens Seen (B)"] = (
                                 cfg.training.batch_size
