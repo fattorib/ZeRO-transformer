@@ -208,18 +208,22 @@ def main():
         wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23)),
         wds.decode(),
         wds.map(preprocess),
+        
     )
 
     tl = DataLoader(
         dataset=train_dataset,
         batch_size=cfg.training.batch_size,
         collate_fn=numpy_collate,
+        drop_last=True,
+        
     )
 
     vl = DataLoader(
         dataset=validation_dataset,
         batch_size=cfg.training.batch_size,
         collate_fn=numpy_collate,
+        drop_last=True,
     )
 
     running_metrics = []
@@ -329,10 +333,12 @@ def main():
                         wandb.log(train_metrics_np)
 
                         if save_to_bucket:
-                            save_checkpoint(
-                                state,
-                                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                            )
+                            #TODO: offset by epoch 
+                            # save_checkpoint(
+                            #     state,
+                            #     workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                            # )
+                            pass
                         else:
                             save_checkpoint(
                                 state, workdir=cfg.data.checkpoint_directory
