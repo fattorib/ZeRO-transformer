@@ -333,12 +333,10 @@ def main():
                         wandb.log(train_metrics_np)
 
                         if save_to_bucket:
-                            #TODO: offset by epoch 
-                            # save_checkpoint(
-                            #     state,
-                            #     workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                            # )
-                            pass
+                            save_checkpoint(
+                                state,
+                                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                            )
                         else:
                             save_checkpoint(
                                 state, workdir=cfg.data.checkpoint_directory
