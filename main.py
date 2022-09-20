@@ -321,18 +321,18 @@ def main():
                             train_metrics_np["Tokens Seen (B)"] = (
                                 cfg.training.batch_size
                                 * cfg.training.gradient_accumulation_steps
-                                * absolute_step * cfg.data.max_context
+                                * absolute_step
+                                * cfg.data.max_context
                             ) / 1e9
 
                         train_metrics_np.pop("Train Batch Time")
                         wandb.log(train_metrics_np)
 
                         if save_to_bucket:
-                            # save_checkpoint(
-                            #     state,
-                            #     workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                            # )
-                            pass 
+                            save_checkpoint(
+                                state,
+                                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                            )
                         else:
                             save_checkpoint(
                                 state, workdir=cfg.data.checkpoint_directory
@@ -361,7 +361,8 @@ def main():
                             train_metrics_np["Tokens Seen (B)"] = (
                                 cfg.training.batch_size
                                 * cfg.training.gradient_accumulation_steps
-                                * absolute_step * cfg.data.max_context
+                                * absolute_step
+                                * cfg.data.max_context
                             ) / 1e9
 
                         train_metrics_np.pop("Train Batch Time")
