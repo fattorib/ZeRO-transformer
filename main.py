@@ -250,7 +250,7 @@ def main():
 
                 return True
 
-            if resume_step != None and i <= resume_step:
+            if resume_step != None and i <= resume_step and epoch == 0:
                 continue
 
             seq_len = step_to_seq(i)
