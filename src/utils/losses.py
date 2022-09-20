@@ -3,8 +3,7 @@
 """
 import flax.linen as nn
 import jax.numpy as jnp
-from jax import jit, vmap
-from jax.nn import one_hot
+from jax import jit
 
 
 @jit
