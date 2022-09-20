@@ -241,8 +241,9 @@ def main():
 
     for epoch in range(cfg.training.max_epochs):
         for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
-
-            if i > cfg.training.total_steps * cfg.training.gradient_accumulation_steps:
+            
+            # TODO: This may be problematic when crossing epoch boundary.
+            if i + (epoch*cfg.data.full_steps_in_batch) > cfg.training.total_steps * cfg.training.gradient_accumulation_steps:
                 if jax.process_index() == 0:
                     logger.debug(f"Training has completed.")
 
