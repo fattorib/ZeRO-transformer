@@ -254,6 +254,7 @@ def main():
             if resume_step != None and i <= resume_step and epoch == 0:
                 continue
             
+            # TODO: This may be problematic when crossing epoch boundary.
             if epoch == 0:
                 seq_len = step_to_seq(i)
             else:
