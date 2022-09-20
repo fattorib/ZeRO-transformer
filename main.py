@@ -13,7 +13,7 @@ import optax
 import torch
 import webdataset as wds
 from flax.training import checkpoints
-from flax.training.common_utils import shard, shard_prng_key
+from flax.training.common_utils import shard
 from jax import random
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
@@ -25,7 +25,6 @@ from src.training.training_utils import (compute_tokens_seen,
                                          create_train_state, step_to_seq_len)
 from src.utils.configs import flatten_dict
 from src.utils.dataloader import numpy_collate
-from src.utils.losses import kl_div_loss
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -241,9 +240,12 @@ def main():
 
     for epoch in range(cfg.training.max_epochs):
         for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
-            
+
             # TODO: This may be problematic when crossing epoch boundary.
-            if i + (epoch*cfg.data.full_steps_in_batch) > cfg.training.total_steps * cfg.training.gradient_accumulation_steps:
+            if (
+                i + (epoch * cfg.data.full_steps_in_batch)
+                > cfg.training.total_steps * cfg.training.gradient_accumulation_steps
+            ):
                 if jax.process_index() == 0:
                     logger.debug(f"Training has completed.")
 
