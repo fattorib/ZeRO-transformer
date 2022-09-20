@@ -208,7 +208,6 @@ def main():
         wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23)),
         wds.decode(),
         wds.map(preprocess),
-        
     )
 
     tl = DataLoader(
@@ -216,7 +215,6 @@ def main():
         batch_size=cfg.training.batch_size,
         collate_fn=numpy_collate,
         drop_last=True,
-        
     )
 
     vl = DataLoader(
