@@ -243,8 +243,8 @@ def main():
 
             # TODO: This may be problematic when crossing epoch boundary.
             if (
-                i + (epoch * cfg.data.full_steps_in_batch)
-                > cfg.training.total_steps * cfg.training.gradient_accumulation_steps
+                (i // cfg.training.gradient_accumulation_steps) + (epoch * cfg.data.full_steps_in_batch)
+                > cfg.training.total_steps
             ):
                 if jax.process_index() == 0:
                     logger.debug(f"Training has completed.")
@@ -254,7 +254,6 @@ def main():
             if resume_step != None and i <= resume_step and epoch == 0:
                 continue
             
-            # TODO: This may be problematic when crossing epoch boundary.
             seq_len = step_to_seq(i + (epoch * cfg.data.full_steps_in_batch * cfg.training.gradient_accumulation_steps))
 
             text = text[:, :seq_len]
