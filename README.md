@@ -1,6 +1,6 @@
 # Transformer - JAX
 
-Codebase for TPU/GPU training of GPT-style transformers in JAX. A JAX successor to [Little-GPT](https://github.com/fattorib/Little-GPT). Supports 
+Codebase for TPU/GPU training of GPT-style transformers in JAX. A JAX successor to [Little-GPT](https://github.com/fattorib/Little-GPT).
 
 ## Setup
 

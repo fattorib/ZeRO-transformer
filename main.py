@@ -21,8 +21,11 @@ from tqdm import tqdm
 
 import wandb
 from src.models.GPT import model_getter
-from src.training.training_utils import (compute_tokens_seen,
-                                         create_train_state, step_to_seq_len)
+from src.training.training_utils import (
+    compute_tokens_seen,
+    create_train_state,
+    step_to_seq_len,
+)
 from src.utils.configs import flatten_dict
 from src.utils.dataloader import numpy_collate
 
