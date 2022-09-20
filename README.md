@@ -1,10 +1,10 @@
 # Transformer - JAX
 
-Tested codebase for TPU/GPU training of GPT-style transformers in JAX. Supports 
+Codebase for TPU/GPU training of GPT-style transformers in JAX. A JAX successor to [Little-GPT](https://github.com/fattorib/Little-GPT). Supports 
 
-# Setup
+## Setup
 
-## GPU:
+### GPU:
 
 ```bash
 git clone https://github.com/fattorib/transformer.git
@@ -15,7 +15,7 @@ pip install "jax[cuda11_cudnn805]" -f https://storage.googleapis.com/jax-release
 pip install -r requirements
 ```
 
-## TPU:
+### TPU:
 
 ```bash
 git clone https://github.com/fattorib/transformer.git
@@ -23,7 +23,7 @@ cd transformer
 bash prepareTPUVM.sh
 ```
 
-# Dataset
+### Dataset
 
 The dataset scripts here assume your dataset has been processed into a collection of tar archives that can be read with [webdataset](https://github.com/webdataset/webdataset). Once that is done change the required paths in ```conf/config.yaml```:
 
@@ -40,6 +40,9 @@ data:
     index_path_train: "data/index/openwebtext.train.index" # list of all shards + GCP urls
     index_path_validation: "data/index/openwebtext.val.index" # list of all shards + GCP urls
 ```
+
+# Training 
+
 
 # TODOS:
 1. Ability to port weights from [Little-GPT](https://github.com/fattorib/Little-GPT)
