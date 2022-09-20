@@ -1,6 +1,6 @@
 # Transformer - JAX
 
-Tested codebase for TPU/GPU training on GPT-style transformers in JAX. Supports 
+Tested codebase for TPU/GPU training of GPT-style transformers in JAX. Supports 
 
 # Setup
 
@@ -17,7 +17,6 @@ pip install -r requirements
 
 ## TPU:
 
-
 ```bash
 git clone https://github.com/fattorib/transformer.git
 cd transformer 
@@ -31,9 +30,10 @@ The dataset scripts here assume your dataset has been processed into a collectio
 ```yaml
 data:
     corpus: "openwebtext" #for logging corpus name in Weights and Biases
-    train_shard_urls: "data/processed/books_train-{000000..000013}.tar.gz" # required if not using TPUs
-    validation_shard_urls: "data/processed/bookcorpus_val-{000000..000002}.tar.gz" # required if not using TPUs
+    train_shard_urls: "data/processed/books_train-{000000..000013}.tar.gz" # required if not using TPUs. This is the path where you unpacked your dataset from above
+    validation_shard_urls: "data/processed/bookcorpus_val-{000000..000002}.tar.gz" # required if not using TPUs. This is the path where you unpacked your dataset from above
     max_context: 1024 # maximum sequence length in tokens
+    full_steps_in_batch: 24558 # Number of individual steps required to complete an epoch
     workers: 1 # number of workers for PyTorch dataloader 
     checkpoint_directory: "checkpoints"
     bucket_path: "bfattoribooks2" #bucket path if training with TPUs
