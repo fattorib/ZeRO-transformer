@@ -50,38 +50,11 @@ def grab_run_data(run_query: str) -> pd.DataFrame:
 
 if __name__ == "__main__":
 
-    # Time: 11hrs 0min
-    run_df_full_ctx = pd.read_csv("run_visualization/processed_runs/full_context.csv")
+    # finishes at 7.76
+    run_part1 = grab_run_data('/bfattori/LJX/runs/i00ewqs9')
+    run_part2 = grab_run_data('/bfattori/LJX/runs/3o8ktcnn')
 
-    # Time: 8hrs 32min
-    run_staged_1_epoch = pd.read_csv(
-        "run_visualization/processed_runs/staged_1_epoch.csv"
-    )
+    run_df_full = run_part1.append(run_part2)
+    run_df_full.to_csv('run_visualization/processed_runs/staged_multi_epoch.csv')
 
-    # Time: 12hrs 10min
-    run_staged_multi_epoch = pd.read_csv(
-        "run_visualization/processed_runs/staged_multi_epoch.csv"
-    )
-
-    sns.set_theme()
-    sns.lineplot(
-        x="Tokens Seen (B)",
-        y="Validation LM Loss",
-        data=run_df_full_ctx,
-        label="1 Epoch - Full Context",
-    )
-    sns.lineplot(
-        x="Tokens Seen (B)",
-        y="Validation LM Loss",
-        data=run_staged_1_epoch,
-        label="1 Epoch - Context Warmup",
-    )
-    sns.lineplot(
-        x="Tokens Seen (B)",
-        y="Validation LM Loss",
-        data=run_staged_multi_epoch,
-        label="Multi Epoch - Context Warmup",
-    )
-    plt.title("Tokens Seen vs. Validation Loss")
-    plt.legend()
-    plt.show()
+    
