@@ -66,6 +66,7 @@ def main():
 
     # getting system information
     num_devices = jax.device_count()
+    num_local_devices = jax.local_device_count()
     platform = jax.local_devices()[0].platform
 
     model, model_config = model_getter(
@@ -100,7 +101,8 @@ def main():
     )
 
     if jax.process_index() == 0:
-        logger.debug(f"Host setup with {num_devices} devices.")
+        logger.debug(f"VM setup with {num_devices} devices.")
+        logger.debug(f"Host setup with {num_local_devices} devices.")
         logger.debug(f"Using platform: {platform} with precision {model_dtype}")
         if len(cfg.training.staged_sequences) > 0:
             logger.debug(
@@ -149,7 +151,7 @@ def main():
     # replicating state across devices
     state = flax.jax_utils.replicate(state)
 
-    local_batch_size = cfg.training.batch_size // jax.device_count()
+    local_batch_size = cfg.training.batch_size // jax.local_device_count()
 
     # This is computed in terms of absolute steps
     if len(cfg.training.staged_sequences) > 0:
@@ -335,10 +337,10 @@ def main():
                         wandb.log(train_metrics_np)
 
                         if save_to_bucket:
-                            # save_checkpoint(
-                            #     state,
-                            #     workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                            # )
+                            save_checkpoint(
+                                state,
+                                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                            )
                             pass
                         else:
                             save_checkpoint(

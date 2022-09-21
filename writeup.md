@@ -5,11 +5,11 @@ Staged Sequence training involves initially training models with much shorter co
 1. Do we still see the same benefits?
 2. Can we reuse some of 'warmed' up sequences to further increase performance?
 
-For question 2, during the warmup stage of training, we truncate the batches to reach the desired sequence length. In the case shown below, by utilizing a sequence warmup for 50% of the total training steps, we 'truncate out' almost 5.1B tokens! Could we retrain on these sequences at their full context and see furhter performance improvements?
+For question 2, during the warmup stage of training, we truncate the batches to reach the desired sequence length. In the case shown below, by utilizing a sequence warmup for 50% of the total training steps, we 'truncate out' almost 5.1B tokens! Could we retrain on these sequences at their full context and see further performance improvements?
 
 ## Background
 
-We use the original OpenWebText corpus and add in all components of the OpenWebText2 corpus that were scraped after the creation of the original OWT corpus. Dataset is encoded with GPT2's tokenizer. Final dataset statistics:
+We use the original OpenWebText (OWT) corpus and add in all components of the OpenWebText2 corpus that were scraped after the creation of OWT. Dataset is encoded with GPT2's tokenizer. Final dataset statistics are:
 
 ```yaml
 corpus: "openwebtext1+2"
@@ -28,7 +28,8 @@ total_training_tokens: 12875940864 #~12B tokens
 - Learning rate warmup over first 2000 batches from 0 to peak
 - Learning rate decay follows cosine schedule to 10% of the peak over 90% of the remaining steps
 - Final 10% of training steps are conducted at the final learning rate
-- No dropout is used, only regularization comes from a weight decay of 0.1  
+- No dropout is used, only regularization comes from a weight decay of 0.1 applied to all non-bias and LN weights. 
+- Initial Experiments are performed with the 'QA' model listed under ```conf/model_config.yaml```. Model is approximaltely 35M params.
 
 ## Staged Sequence Training:
 
@@ -42,6 +43,17 @@ total_training_tokens: 12875940864 #~12B tokens
 1. (**Baseline**): One epoch training at maximum context. *Tokens seen during training: 12.9B*
 2. (**Experiment 1**): One epoch training with staged sequence length warmup as described above. *Tokens seen during training: 7.8B*
 3. (**Experiment 2**): Staged sequence length warmup + total training step count adjusted (~+9.5K steps) to hit equal number of training tokens as baseline model. *Tokens seen during training: 12.9B*
+
+## Results:
+
+For initial results, all models were trained on a single TPU V2 provided by Google's TPU Research Cloud (TRC). We compare final validation losses of all models:
+
+| Model/Experiment | Validation PPL | Training Time (hrs) | Tokens Seen (B) |
+|------------------|----------------|---------------------|-----------------|
+| Baseline         | 56.39          | 11.0                | 12.9            |
+| Experiment #1    | 55.89          | 8.5                 | 7.8             |
+| Experiment #2    | 54.36          | 12.2                | 12.9            |
+
 
 # Acknowledgements
 TPU Development and training supported with Cloud TPUs from Google's TPU Research Cloud (TRC)
