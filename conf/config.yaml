@@ -19,12 +19,12 @@ model:
 
 data:
   corpus: "openwebtext"
-  train_shard_urls: "data/processed/books_train-{000000..000013}.tar.gz"
-  validation_shard_urls: "data/processed/bookcorpus_val-{000000..000002}.tar.gz"
+  train_shard_urls: "N/A"
+  validation_shard_urls: "N/A"
   max_context: 1024
   full_steps_in_batch: 24558
   workers: 1
   checkpoint_directory: "checkpoints"
-  bucket_path: "bfattoribooks2"
-  index_path_train: "data/index/openwebtext.train.index"
-  index_path_validation: "data/index/openwebtext.val.index"
+  bucket_path: "bfattoriwebtext2"
+  index_path_train: "data/index/openwebtext_useast.train.index"
+  index_path_validation: "data/index/openwebtext_useast.val.index"

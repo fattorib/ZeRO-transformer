@@ -13,7 +13,9 @@ __pycache__/
 .vscode/*
 
 # Data 
-data/*
+data/interim/*
+data/processed/*
+data/raw/*
 checkpoints/*
 
 experimenting.py
@@ -23,3 +25,5 @@ keys.py
 cmds.md
 
 .gitignore
+
+run_visualization/processed_runs/*
