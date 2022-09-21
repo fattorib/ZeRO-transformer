@@ -64,7 +64,7 @@ def main():
     args = parse()
     cfg = OmegaConf.load(args.cfg)
 
-    jax.distributed.initialize()
+    # jax.distributed.initialize()
 
     # getting system information
     num_devices = jax.device_count()
