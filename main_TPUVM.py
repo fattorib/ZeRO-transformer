@@ -194,8 +194,12 @@ def main():
             return jnp.array(x, dtype=jnp.int32)
 
     from itertools import islice
+
     def split_by_jax_process(src):
-        host_id, num_process = jax.process_index(), jax.device_count()//jax.local_device_count()
+        host_id, num_process = (
+            jax.process_index(),
+            jax.device_count() // jax.local_device_count(),
+        )
         if num_process > 1:
             for s in islice(src, host_id, None, num_process):
                 yield s
@@ -254,10 +258,9 @@ def main():
         for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
             # TODO: This may be problematic when crossing epoch boundary.
-            if (
-                (i // cfg.training.gradient_accumulation_steps) + (epoch * cfg.data.full_steps_in_batch)
-                > cfg.training.total_steps
-            ):
+            if (i // cfg.training.gradient_accumulation_steps) + (
+                epoch * cfg.data.full_steps_in_batch
+            ) > cfg.training.total_steps:
                 if jax.process_index() == 0:
                     logger.debug(f"Training has completed.")
 
@@ -265,8 +268,15 @@ def main():
 
             if resume_step != None and i <= resume_step and epoch == 0:
                 continue
-            
-            seq_len = step_to_seq(i + (epoch * cfg.data.full_steps_in_batch * cfg.training.gradient_accumulation_steps))
+
+            seq_len = step_to_seq(
+                i
+                + (
+                    epoch
+                    * cfg.data.full_steps_in_batch
+                    * cfg.training.gradient_accumulation_steps
+                )
+            )
 
             text = text[:, :seq_len]
 
@@ -323,7 +333,9 @@ def main():
                             * train_metrics_np["Train Batch Time"]
                         )
 
-                        absolute_step = (i // cfg.training.gradient_accumulation_steps) + (epoch * cfg.data.full_steps_in_batch)
+                        absolute_step = (
+                            i // cfg.training.gradient_accumulation_steps
+                        ) + (epoch * cfg.data.full_steps_in_batch)
                         if len(cfg.training.staged_sequences) > 0:
                             train_metrics_np["Tokens Seen (B)"] = (
                                 cfg.training.batch_size
@@ -364,7 +376,9 @@ def main():
                             * train_metrics_np["Train Batch Time"]
                         )
 
-                        absolute_step = (i // cfg.training.gradient_accumulation_steps) + (epoch * cfg.data.full_steps_in_batch)
+                        absolute_step = (
+                            i // cfg.training.gradient_accumulation_steps
+                        ) + (epoch * cfg.data.full_steps_in_batch)
                         if len(cfg.training.staged_sequences) > 0:
                             train_metrics_np["Tokens Seen (B)"] = (
                                 cfg.training.batch_size

@@ -5,6 +5,7 @@ Taken/modified from https://jax.readthedocs.io/en/latest/notebooks/Neural_Networ
 
 import numpy as np
 
+
 def numpy_collate(batch):
     if isinstance(batch[0], np.ndarray):
         return np.stack(batch)

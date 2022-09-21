@@ -51,10 +51,8 @@ def grab_run_data(run_query: str) -> pd.DataFrame:
 if __name__ == "__main__":
 
     # finishes at 7.76
-    run_part1 = grab_run_data('/bfattori/LJX/runs/i00ewqs9')
-    run_part2 = grab_run_data('/bfattori/LJX/runs/3o8ktcnn')
+    run_part1 = grab_run_data("/bfattori/LJX/runs/i00ewqs9")
+    run_part2 = grab_run_data("/bfattori/LJX/runs/3o8ktcnn")
 
     run_df_full = run_part1.append(run_part2)
-    run_df_full.to_csv('run_visualization/processed_runs/staged_multi_epoch.csv')
-
-    
+    run_df_full.to_csv("run_visualization/processed_runs/staged_multi_epoch.csv")
