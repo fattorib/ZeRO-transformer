@@ -193,9 +193,19 @@ def main():
         else:
             return jnp.array(x, dtype=jnp.int32)
 
+    from itertools import islice
+    def split_by_jax_process(src):
+        host_id, num_process = jax.process_index(), jax.device_count()//jax.local_device_count()
+        if num_process > 1:
+            for s in islice(src, host_id, None, num_process):
+                yield s
+        else:
+            for s in src:
+                yield s
+
     train_dataset = wds.DataPipeline(
         wds.SimpleShardList(train_shards),
-        wds.split_by_worker,
+        split_by_jax_process,
         wds.tarfile_to_samples(),
         wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23)),
         wds.decode(),
@@ -204,7 +214,7 @@ def main():
 
     validation_dataset = wds.DataPipeline(
         wds.SimpleShardList(validation_shards),
-        wds.split_by_worker,
+        split_by_jax_process,
         wds.tarfile_to_samples(),
         wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23)),
         wds.decode(),
