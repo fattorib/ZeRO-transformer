@@ -41,13 +41,16 @@ data:
     index_path_validation: "data/index/openwebtext.val.index" # list of all shards + GCP urls
 ```
 
+# Experiments:
+
+See ```writeup.md```
+
 # Training 
 
 TODO 
 
 # TODOS:
 1. Ability to port weights from [Little-GPT](https://github.com/fattorib/Little-GPT)
-
 
 # Acknowledgements
 TPU Development and training supported with Cloud TPUs from Google's TPU Research Cloud (TRC)
