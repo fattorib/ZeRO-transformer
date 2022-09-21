@@ -42,3 +42,6 @@ total_training_tokens: 12875940864 #~12B tokens
 1. (**Baseline**): One epoch training at maximum context. *Tokens seen during training: 12.9B*
 2. (**Experiment 1**): One epoch training with staged sequence length warmup as described above. *Tokens seen during training: 7.8B*
 3. (**Experiment 2**): Staged sequence length warmup + total training step count adjusted (~+9.5K steps) to hit equal number of training tokens as baseline model. *Tokens seen during training: 12.9B*
+
+# Acknowledgements
+TPU Development and training supported with Cloud TPUs from Google's TPU Research Cloud (TRC)
