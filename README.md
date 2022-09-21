@@ -43,6 +43,7 @@ data:
 
 # Training 
 
+TODO 
 
 # TODOS:
 1. Ability to port weights from [Little-GPT](https://github.com/fattorib/Little-GPT)
