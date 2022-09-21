@@ -64,6 +64,8 @@ def main():
     args = parse()
     cfg = OmegaConf.load(args.cfg)
 
+    jax.distributed.initialize()
+
     # getting system information
     num_devices = jax.device_count()
     num_local_devices = jax.local_device_count()
@@ -184,6 +186,7 @@ def main():
         flat_dict["training.local_batch_size"] = local_batch_size
         flat_dict["runtime"] = platform
         flat_dict["Total Training Tokens"] = total_tokens / 1e9
+        flat_dict["Total Devices"] = num_devices
         wandb.config.update(flat_dict)
 
     def preprocess(batch):
