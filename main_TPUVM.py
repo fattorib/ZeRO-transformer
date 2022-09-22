@@ -146,10 +146,11 @@ def main():
     else:
         # clear bucket here
         client = storage.Client()
-        bucket = client.get_bucket(f"gs://{cfg.data.bucket_path}")
-        blobs = bucket.list_blobs(prefix=f"{cfg.data.checkpoint_directory}")
-        for blob in blobs:
-            blob.delete()
+        if jax.process_index() == 0:
+            bucket = client.get_bucket(f"gs://{cfg.data.bucket_path}")
+            blobs = bucket.list_blobs(prefix=f"{cfg.data.checkpoint_directory}")
+            for blob in blobs:
+                blob.delete()
 
     # replicating state across devices
     state = flax.jax_utils.replicate(state)
