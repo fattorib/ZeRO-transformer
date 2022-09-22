@@ -11,7 +11,8 @@ client = storage.Client()
 
 bucket = storage.Bucket(client, "bfattoriwebtext2")
 all_blobs = list(client.list_blobs(bucket, prefix='shards'))
-print(all_blobs)
+for blob in all_blobs:
+    blob.delete()
 
 # for blob in client.list_blobs(f"gs://bfattoriwebtext2", prefix=f"checkpoints/"):
 #     print(blob)
