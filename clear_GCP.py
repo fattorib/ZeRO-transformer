@@ -9,7 +9,7 @@ client = storage.Client()
 # for blob in blobs:
 #     blob.delete()
 
-bucket = storage.Bucket(client, "gs://bfattoriwebtext2")
+bucket = storage.Bucket(client, "bfattoriwebtext2")
 all_blobs = list(client.list_blobs(bucket))
 print(all_blobs)
 
