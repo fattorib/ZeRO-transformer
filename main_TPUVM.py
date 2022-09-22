@@ -157,7 +157,7 @@ def main():
 
     # This is computed in terms of absolute steps
     if len(cfg.training.staged_sequences) > 0:
-        total_tokens = (
+        total_tokens = jax.device_count()//jax.local_device_count() * (
             cfg.training.batch_size
             * cfg.training.gradient_accumulation_steps
             * compute_tokens_seen(
