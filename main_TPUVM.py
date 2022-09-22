@@ -48,15 +48,15 @@ def parse():
     return args
 
 
-def save_checkpoint(state, workdir):
+def save_checkpoint(state, workdir, run_id):
     if jax.process_index() == 0:
         # get train state from the first replica
         state = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], state))
         step = int(state.step)
-        checkpoints.save_checkpoint(workdir, state, step, keep=2, overwrite=True)
+        checkpoints.save_checkpoint(workdir, state, step, prefix = run_id, keep=2, overwrite=True)
 
 
-def restore_checkpoint(state, workdir):
+def restore_checkpoint(state, workdir, run_id):
     return checkpoints.restore_checkpoint(workdir, state)
 
 
@@ -64,11 +64,10 @@ def main():
     args = parse()
     cfg = OmegaConf.load(args.cfg)
 
-    # jax.distributed.initialize()
-
     # getting system information
     num_devices = jax.device_count()
     num_local_devices = jax.local_device_count()
+    num_host = num_devices//num_local_devices
     platform = jax.local_devices()[0].platform
 
     model, model_config = model_getter(
@@ -157,7 +156,7 @@ def main():
 
     # This is computed in terms of absolute steps
     if len(cfg.training.staged_sequences) > 0:
-        total_tokens = jax.device_count()//jax.local_device_count() * (
+        total_tokens = num_host * (
             cfg.training.batch_size
             * cfg.training.gradient_accumulation_steps
             * compute_tokens_seen(
@@ -168,7 +167,7 @@ def main():
             )
         )
     else:
-        total_tokens = jax.device_count()//jax.local_device_count() * (
+        total_tokens = num_host * (
             cfg.training.batch_size
             * cfg.training.gradient_accumulation_steps
             * cfg.data.max_context
@@ -340,7 +339,7 @@ def main():
                             i // cfg.training.gradient_accumulation_steps
                         ) + (epoch * cfg.data.full_steps_in_batch)
                         if len(cfg.training.staged_sequences) > 0:
-                            train_metrics_np["Tokens Seen (B)"] = (
+                            train_metrics_np["Tokens Seen (B)"] = num_host * (
                                 cfg.training.batch_size
                                 * cfg.training.gradient_accumulation_steps
                                 * compute_tokens_seen(
@@ -351,7 +350,7 @@ def main():
                                 )
                             ) / 1e9
                         else:
-                            train_metrics_np["Tokens Seen (B)"] = (
+                            train_metrics_np["Tokens Seen (B)"] = num_host * (
                                 cfg.training.batch_size
                                 * cfg.training.gradient_accumulation_steps
                                 * absolute_step
@@ -364,12 +363,12 @@ def main():
                         if save_to_bucket:
                             # save_checkpoint(
                             #     state,
-                            #     workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                            #     workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}", run_id = id
                             # )
                             pass 
                         else:
                             save_checkpoint(
-                                state, workdir=cfg.data.checkpoint_directory
+                                state, workdir=cfg.data.checkpoint_directory, run_id = id
                             )
 
                 else:
