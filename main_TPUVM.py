@@ -203,7 +203,7 @@ def main():
     def split_by_jax_process(src):
         host_id, num_process = (
             jax.process_index(),
-            jax.device_count() // jax.local_device_count(),
+            num_host,
         )
         if num_process > 1:
             for s in islice(src, host_id, None, num_process):
