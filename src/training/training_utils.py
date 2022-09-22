@@ -33,7 +33,7 @@ def initialized(key: random.PRNGKey, model: nn.Module, dtype: jnp.dtype):
         minval=0,
     )
 
-    @jax.jit(backend="cpu")
+    @jax.jit(backend="cpu") #https://github.com/google/flax/discussions/1690
     def init(rng, init_batch):
         return model.init(rng, init_batch, None, False)
 
