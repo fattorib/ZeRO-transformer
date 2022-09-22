@@ -33,11 +33,11 @@ def initialized(key: random.PRNGKey, model: nn.Module, dtype: jnp.dtype):
         minval=0,
     )
 
-    @jax.jit(backend="cpu")  # https://github.com/google/flax/discussions/1690
     def init(rng, init_batch):
         return model.init(rng, init_batch, None, False)
 
-    variables = init(rng=rng_init, init_batch=init_batch)
+    jit_apply = jax.jit(init, backend="cpu")
+    variables = jit_apply(rng=rng_init, init_batch=init_batch)
     variables = to_precision(variables, dtype)
     return variables
 
