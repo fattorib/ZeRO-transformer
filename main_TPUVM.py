@@ -168,7 +168,7 @@ def main():
             )
         )
     else:
-        total_tokens = (
+        total_tokens = jax.device_count()//jax.local_device_count() * (
             cfg.training.batch_size
             * cfg.training.gradient_accumulation_steps
             * cfg.data.max_context
@@ -362,11 +362,11 @@ def main():
                         wandb.log(train_metrics_np)
 
                         if save_to_bucket:
-                            save_checkpoint(
-                                state,
-                                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                            )
-                            pass
+                            # save_checkpoint(
+                            #     state,
+                            #     workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                            # )
+                            pass 
                         else:
                             save_checkpoint(
                                 state, workdir=cfg.data.checkpoint_directory
