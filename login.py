@@ -1,5 +1,7 @@
-import wandb
 import argparse
+
+import wandb
+
 
 def parse():
     parser = argparse.ArgumentParser(description="Transformer Training")
@@ -11,6 +13,7 @@ def parse():
     args = parser.parse_args()
     return args
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     args = parse()
-    wandb.login(key = args.key)
+    wandb.login(key=args.key)

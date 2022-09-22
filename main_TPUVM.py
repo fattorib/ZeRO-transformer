@@ -67,7 +67,7 @@ def main():
     # getting system information
     num_devices = jax.device_count()
     num_local_devices = jax.local_device_count()
-    num_host = num_devices//num_local_devices
+    num_host = num_devices // num_local_devices
     platform = jax.local_devices()[0].platform
 
     model, model_config = model_getter(
@@ -339,23 +339,31 @@ def main():
                             i // cfg.training.gradient_accumulation_steps
                         ) + (epoch * cfg.data.full_steps_in_batch)
                         if len(cfg.training.staged_sequences) > 0:
-                            train_metrics_np["Tokens Seen (B)"] = num_host * (
-                                cfg.training.batch_size
-                                * cfg.training.gradient_accumulation_steps
-                                * compute_tokens_seen(
-                                    absolute_step,
-                                    stages=cfg.training.staged_sequences,
-                                    max_steps=cfg.training.staged_warmup_steps,
-                                    max_context=cfg.data.max_context,
+                            train_metrics_np["Tokens Seen (B)"] = (
+                                num_host
+                                * (
+                                    cfg.training.batch_size
+                                    * cfg.training.gradient_accumulation_steps
+                                    * compute_tokens_seen(
+                                        absolute_step,
+                                        stages=cfg.training.staged_sequences,
+                                        max_steps=cfg.training.staged_warmup_steps,
+                                        max_context=cfg.data.max_context,
+                                    )
                                 )
-                            ) / 1e9
+                                / 1e9
+                            )
                         else:
-                            train_metrics_np["Tokens Seen (B)"] = num_host * (
-                                cfg.training.batch_size
-                                * cfg.training.gradient_accumulation_steps
-                                * absolute_step
-                                * cfg.data.max_context
-                            ) / 1e9
+                            train_metrics_np["Tokens Seen (B)"] = (
+                                num_host
+                                * (
+                                    cfg.training.batch_size
+                                    * cfg.training.gradient_accumulation_steps
+                                    * absolute_step
+                                    * cfg.data.max_context
+                                )
+                                / 1e9
+                            )
 
                         train_metrics_np.pop("Train Batch Time")
                         wandb.log(train_metrics_np)
@@ -363,7 +371,7 @@ def main():
                         if save_to_bucket:
                             save_checkpoint(
                                 state,
-                                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}"
+                                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
                             )
                         else:
                             save_checkpoint(
@@ -456,5 +464,4 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        print(f'Error encountered: {e}')
-
+        print(f"Error encountered: {e}")
