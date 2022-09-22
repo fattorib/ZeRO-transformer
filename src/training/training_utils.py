@@ -33,7 +33,7 @@ def initialized(key: random.PRNGKey, model: nn.Module, dtype: jnp.dtype):
         minval=0,
     )
 
-    @jax.jit
+    @jax.jit(backend="cpu")
     def init(rng, init_batch):
         return model.init(rng, init_batch, None, False)
 
