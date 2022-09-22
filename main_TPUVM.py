@@ -143,6 +143,14 @@ def main():
         # resume step is ga_steps*global steps
         resume_step = int(state.step)
 
+    else:
+        # clear bucket here
+        client = storage.Client()
+        bucket = client.get_bucket(f"gs://{cfg.data.bucket_path}")
+        blobs = bucket.list_blobs(prefix=f"{cfg.data.checkpoint_directory}")
+        for blob in blobs:
+            blob.delete()
+
     # replicating state across devices
     state = flax.jax_utils.replicate(state)
 
