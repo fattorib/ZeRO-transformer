@@ -384,22 +384,30 @@ def main():
                         ) + (epoch * cfg.data.full_steps_in_batch)
                         if len(cfg.training.staged_sequences) > 0:
                             train_metrics_np["Tokens Seen (B)"] = (
-                                cfg.training.batch_size
-                                * cfg.training.gradient_accumulation_steps
-                                * compute_tokens_seen(
-                                    absolute_step,
-                                    stages=cfg.training.staged_sequences,
-                                    max_steps=cfg.training.staged_warmup_steps,
-                                    max_context=cfg.data.max_context,
+                                num_host
+                                * (
+                                    cfg.training.batch_size
+                                    * cfg.training.gradient_accumulation_steps
+                                    * compute_tokens_seen(
+                                        absolute_step,
+                                        stages=cfg.training.staged_sequences,
+                                        max_steps=cfg.training.staged_warmup_steps,
+                                        max_context=cfg.data.max_context,
+                                    )
                                 )
-                            ) / 1e9
+                                / 1e9
+                            )
                         else:
                             train_metrics_np["Tokens Seen (B)"] = (
-                                cfg.training.batch_size
-                                * cfg.training.gradient_accumulation_steps
-                                * absolute_step
-                                * cfg.data.max_context
-                            ) / 1e9
+                                num_host
+                                * (
+                                    cfg.training.batch_size
+                                    * cfg.training.gradient_accumulation_steps
+                                    * absolute_step
+                                    * cfg.data.max_context
+                                )
+                                / 1e9
+                            )
 
                         train_metrics_np.pop("Train Batch Time")
                         wandb.log(train_metrics_np)
