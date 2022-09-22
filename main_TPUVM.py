@@ -48,12 +48,12 @@ def parse():
     return args
 
 
-def save_checkpoint(state, workdir, run_id):
+def save_checkpoint(state, workdir):
     if jax.process_index() == 0:
         # get train state from the first replica
         state = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], state))
         step = int(state.step)
-        checkpoints.save_checkpoint(workdir, state, step, prefix = run_id, keep=2, overwrite=True)
+        checkpoints.save_checkpoint(workdir, state, step, keep=2, overwrite=True)
 
 
 def restore_checkpoint(state, workdir, run_id):
@@ -361,14 +361,13 @@ def main():
                         wandb.log(train_metrics_np)
 
                         if save_to_bucket:
-                            # save_checkpoint(
-                            #     state,
-                            #     workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}", run_id = id
-                            # )
-                            pass 
+                            save_checkpoint(
+                                state,
+                                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}"
+                            )
                         else:
                             save_checkpoint(
-                                state, workdir=cfg.data.checkpoint_directory, run_id = id
+                                state, workdir=cfg.data.checkpoint_directory
                             )
 
                 else:
