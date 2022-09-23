@@ -147,7 +147,7 @@ def main():
         # clear bucket here
         client = storage.Client()
         if jax.process_index() == 0:
-            bucket =storage.Bucket(client, f"{cfg.data.bucket_path}")
+            bucket = storage.Bucket(client, f"{cfg.data.bucket_path}")
             blobs = bucket.list_blobs(prefix=f"{cfg.data.checkpoint_directory}")
             for blob in blobs:
                 blob.delete()
