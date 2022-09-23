@@ -1,13 +1,13 @@
 training:
   max_epochs: 2
-  batch_size: 16
+  batch_size: 32
   peak_learning_rate: 8e-4
   warmup_steps: 2000
   decay_steps: 24000
   total_steps: 24550
   end_learning_rate: 8e-5
   weight_decay: 0.1
-  gradient_accumulation_steps: 8
+  gradient_accumulation_steps: 4
   evaluation_frequency: 500
   maximum_evaluation_steps: 500
   precision: 'bf16'
