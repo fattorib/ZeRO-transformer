@@ -81,7 +81,7 @@ def split_by_jax_process(src):
 
 Anytime you would use ```wds.split_by_worker``` replace it with the above method! The only thing you need to be aware of when using this fix is that each PyTorch dataloader can only have a single worker attached to it (done by setting ```num_workers = 0``` in your dataloaders).
 
-- Interrupting training sessions with CTRL+C appears to cause an unrecoverable crash on TPU VMs and the VMs will no longer see the TPUs. If you need to cancel a run, one workaround I have found is to run a ```pkill``` on the ```python3``` process running on each host.
+- Interrupting training sessions with CTRL+C appears to cause an unrecoverable crash on TPU VMs and the VMs will no longer see the TPUs. If you need to cancel a run, one workaround I have found is to run a ```pkill``` on the ```python3``` process running on each host:
 
 ```bash 
 gcloud compute tpus tpu-vm ssh my-tpu-name  --worker=all --zone=my-tpu-zone --command="pkill python3"
