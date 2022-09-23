@@ -240,7 +240,7 @@ class TransformerBlock(nn.Module):
 
             else:
                 norm = nn.LayerNorm()
-                return CausalAttention(
+                return x + CausalAttention(
                     self.embedding_dim,
                     self.num_head,
                     self.block_size,
