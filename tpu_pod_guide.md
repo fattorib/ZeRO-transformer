@@ -2,7 +2,13 @@
 
 While TPU VMs are great and easy to use in a single-host case, I found the documentation and provided JAX examples for TPU VM pods to be quite minimal (they pretty much show how to copy over a single file to all hosts and run it).
 
-The following are the steps I've used to train the models used in this repo (tested on TPU V3-32 pod):
+The commands detailed below were used on a TPU v3-32 VM with the following Jax versions:
+
+```text
+jax==0.3.17
+jaxlib==0.3.15
+libtpu-nightly==0.1.dev20220723
+```
 
 ## Background
 
