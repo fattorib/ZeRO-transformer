@@ -56,7 +56,7 @@ def save_checkpoint(state, workdir):
         checkpoints.save_checkpoint(workdir, state, step, keep=2, overwrite=True)
 
 
-def restore_checkpoint(state, workdir, run_id):
+def restore_checkpoint(state, workdir):
     return checkpoints.restore_checkpoint(workdir, state)
 
 
