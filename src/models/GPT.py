@@ -240,17 +240,19 @@ class TransformerBlock(nn.Module):
 
             else:
                 norm = nn.LayerNorm()
-                return x + CausalAttention(
-                    self.embedding_dim,
-                    self.num_head,
-                    self.block_size,
-                    self.residual_dropout,
-                    self.N,
-                    self.alibi_attn,
-                )(norm(x), train) + MLPBlock(
-                    self.embedding_dim, dropout=self.residual_dropout, N=self.N
-                )(
-                    norm(x), train
+                return (
+                    x
+                    + CausalAttention(
+                        self.embedding_dim,
+                        self.num_head,
+                        self.block_size,
+                        self.residual_dropout,
+                        self.N,
+                        self.alibi_attn,
+                    )(norm(x), train)
+                    + MLPBlock(
+                        self.embedding_dim, dropout=self.residual_dropout, N=self.N
+                    )(norm(x), train)
                 )
         else:
             x = x + CausalAttention(

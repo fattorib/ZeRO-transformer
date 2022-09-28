@@ -29,30 +29,33 @@ total_training_tokens: 12875940864 #~12B tokens
 - Learning rate decay follows cosine schedule to 10% of the peak over 90% of the remaining steps
 - Final 10% of training steps are conducted at the final learning rate
 - No dropout is used, only regularization comes from a weight decay of 0.1 applied to all non-bias and LN weights. 
-- Initial Experiments are performed with the 'QA' model listed under ```conf/model_config.yaml```. Model is approximaltely 35M params.
+- Initial Experiments are performed with the 'base' model listed under ```conf/model_config.yaml```. Model is approximately 124M params.
 
 ## Staged Sequence Training:
 
 - When using contexts under 1024, all batches are truncated to the target context, keeping the number of sequences within a batch fixed. 
-- Sequence length is increased over the first half of the dataset (~12k steps)
-- For ease of implementation and to avoid retriggering XLA recompilation, sequence lengths were increased at 2 separate stages
-- Shortest context of 128 was used for 6k steps at which it was doubled for 256 for another 6k steps. Once 12k steps were reached, the sequence length was increased to its maximum of 1024.
+- Sequence length is shortened over the first 25% of training (~6k steps)
+- Initial sequence length is set to 128 and is increased to 1024 after the target number of warmup steps has been reached.
 
 ## Experiments Performed:
 
-1. (**Baseline**): One epoch training at maximum context. *Tokens seen during training: 12.9B*
-2. (**Experiment 1**): One epoch training with staged sequence length warmup as described above. *Tokens seen during training: 7.8B*
-3. (**Experiment 2**): Staged sequence length warmup + total training step count adjusted (~+9.5K steps) to hit equal number of training tokens as baseline model. *Tokens seen during training: 12.9B*
+1. (**Baseline**): One epoch training at maximum context. *Tokens seen during training: 12.6B*
+2. (**Experiment 1**): One epoch training with staged sequence length warmup as described above. *Tokens seen during training: 9.9B*
+3. (**Experiment 2**): Staged sequence length warmup + total training step count adjusted (~+5.25K steps) to hit equal number of training tokens as baseline model. *Tokens seen during training: 12.9B*
 
 ## Results:
 
-For initial results, all models were trained on a single TPU V2 provided by Google's TPU Research Cloud (TRC). We compare final validation losses of all models:
+For initial results, all models were trained on a TPU V3-32 provided by Google's TPU Research Cloud (TRC). We compare final validation losses of all models:
 
 | Model/Experiment | Validation PPL | Training Time (hrs) | Tokens Seen (B) |
 |------------------|----------------|---------------------|-----------------|
-| Baseline         | 56.39          | 11.0                | 12.9            |
-| Experiment #1    | 55.89          | 8.5                 | 7.8             |
-| Experiment #2    | 54.36          | 12.2                | 12.9            |
+| Baseline         | 21.599         | 6.75                | 12.6            |
+| Experiment #1    | 21.801         | 6.00                | 9.9             |
+| Experiment #2    | -              | -                   | -               |
+
+Comparing the results between the baseline model and the experiment 1 models, shows that we can exchange a <1% performance decrease for an 11% speedup in overall training. 
+
+
 
 
 # Acknowledgements

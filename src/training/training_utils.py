@@ -145,8 +145,3 @@ def compute_tokens_seen(
     else:
         # end is scaled by BS - This is constant
         return stages[0] * remainder
-
-
-if __name__ == "__main__":
-
-    print(f"{512*compute_tokens_seen(34300, [128, 256], 12000, 1024)/1e9:.2f}")
