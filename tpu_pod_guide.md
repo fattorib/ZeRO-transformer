@@ -1,8 +1,8 @@
 # Running Code on a TPU VM (Pod)
 
-While TPU VMs are great and easy to use in a single-host case, I found the documentation and provided JAX examples for TPU VM pods to be quite minimal (they pretty much show how to copy over a single file to all hosts and run it).
+While TPU VMs are great and easy to use in a single-host case, I found the documentation and provided JAX examples for TPU VM pods to be quite minimal (they pretty much only show how to copy over a single Python script to all hosts and run it). 
 
-The commands detailed below were used on a TPU v3-32 VM with the following Jax versions:
+The commands detailed below were used on a TPU v3-32 VM with the following package versions:
 
 ```text
 jax==0.3.17
@@ -25,7 +25,7 @@ Run the file on all hosts:
 gcloud compute tpus tpu-vm ssh my-tpu-name:  --worker=all --zone= my-tpu-zone --command="bash myscript.sh"
 ```
 
-On (broken) option I found through googling is to paste in code blocks to the ```--command``` prompt. I was unable to get this working on my TPUs. 
+One (broken) option I found through googling is to paste in code blocks to the ```--command``` prompt. I was unable to get this working on any of the TPU pods I had. 
 
 ## What I do 
 
@@ -60,7 +60,7 @@ gcloud compute tpus tpu-vm ssh my-tpu-name  --worker=all --zone=my-tpu-zone --co
 
 Other issues I ran into and my solutions:
 
-- I use [Weights and Biases](https://wandb.ai/) for all my model logging. Despite ensuring only one host interacts with the Weights and Biases run (by specifying ```jax.process_index() == 0```) we still require all hosts to be logged in or the other hosts will complain and the training will crash.
+- I use [Weights and Biases](https://wandb.ai/) for all my model logging. Despite ensuring only one host interacts with the Weights and Biases run (by specifying ```jax.process_index() == 0```) we still require all hosts to be logged in or the other hosts will complain and the training will crash. *I suspect this is because Weights and Biases is still imported on all hosts. You could also just change your code to ensure ```import wandb``` is only called on the main host*
 
 - I use [webdataset](https://github.com/webdataset/webdataset) and a PyTorch dataloader for all my data. To ensure proper splitting when training on multiple hosts, I created a modified ```webdataset.split_by_worker``` method to split the shards by Jax process:
 
