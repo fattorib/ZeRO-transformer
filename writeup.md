@@ -34,18 +34,18 @@ total_training_tokens: 12875940864 #~12B tokens
 ## Staged Sequence Training:
 
 - When using contexts under 1024, all batches are truncated to the target context, keeping the number of sequences within a batch fixed. 
-- Sequence length is shortened over the first 25% of training (~6k steps)
+- Short sequence length is used over the first 25% of training (~6k steps). I experimented with two-stage sequence warmup over the first 50% of training but models performed worse by about 1 PPL.
 - Initial sequence length is set to 128 and is increased to 1024 after the target number of warmup steps has been reached.
 
 ## Experiments Performed:
 
 1. (**Baseline**): One epoch training at maximum context. *Tokens seen during training: 12.6B*
 2. (**Experiment 1**): One epoch training with staged sequence length warmup as described above. *Tokens seen during training: 9.9B*
-3. (**Experiment 2**): Staged sequence length warmup + total training step count adjusted (~+5.25K steps) to hit equal number of training tokens as baseline model. *Tokens seen during training: 12.9B*
+3. (**Experiment 2**): Staged sequence length warmup + total training step count adjusted (~+5.25K steps) to hit equal number of training tokens as baseline model. *Tokens seen during training: 12.6B*
 
 ## Results:
 
-For initial results, all models were trained on a TPU V3-32 provided by Google's TPU Research Cloud (TRC). We compare final validation losses of all models:
+All models were trained on a TPU V3-32 provided by Google's TPU Research Cloud (TRC). We compare final validation losses of all models:
 
 | Model/Experiment | Validation PPL | Training Time (hrs) | Tokens Seen (B) |
 |------------------|----------------|---------------------|-----------------|
@@ -55,6 +55,9 @@ For initial results, all models were trained on a TPU V3-32 provided by Google's
 
 Comparing the results between the baseline model and the experiment 1 models, shows that we can exchange a <1% performance decrease for an 11% speedup in overall training. 
 
+
+Other questions to answer:
+1. Do these results carry over to other tasks too? - Requires implementing greedy decoding for GPT module.
 
 
 
