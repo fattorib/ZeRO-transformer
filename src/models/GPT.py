@@ -5,6 +5,7 @@ import math
 from functools import partial
 from typing import Any, List
 
+import flax
 import flax.linen as nn
 import jax
 import jax.nn.initializers as initializers
@@ -286,12 +287,59 @@ class Transformer(nn.Module):
     head_qk_trick: bool = False
     use_static_sgu: bool = False
 
-    def greedy_generate(
-        self, context: jnp.array, max_length: int = 50, sample: bool = False
+    def generate(
+        self,
+        variables: flax.core.frozen_dict.FrozenDict,
+        context: jnp.array,
+        max_length: int = 30,
+        temperature: float = 1.0,
+        sample: bool = False,
+        sample_rng: jax.random.PRNGKey = None,
     ) -> jnp.array:
-        raise NotImplementedError(
-                    "Generation support is WIP and currently being handled outside of this module."
-                )
+        """Performs basic text generation. Supports temperature-based sampling
+
+        Args:
+            context (list): tokenized text to continue
+            max_length (int): The maximum length of tokens to generate (sum of context tokens + *generated tokens*)
+            sample (bool): Boolean whether to sample from logits distribution
+            model (flax.linen.Module): Flax module structure
+            variables (flax.core.frozen_dict.FrozenDict): Serialized model variables
+            sample_rng (jax.random.PRNGKey): RNG key used if sampling from distribution
+
+        Returns:
+            jnp.array: Generated text, must be detokenized
+        """
+
+        context = jnp.array(context, dtype=jnp.int32)
+
+        x = context.reshape(1, -1)
+
+        num_generation_steps = max_length - x.shape[1]
+
+        for _ in range(num_generation_steps):
+            if sample_rng is not None:
+                sample_rng, rng = jax.random.split(sample_rng, 2)
+            if x.shape[1] > self.block_size:
+                x_cond = x[:, -self.block_size :]
+            else:
+                x_cond = x
+
+            logits = self.apply(variables, x_cond)[:, -1, :] / temperature
+
+            probs = jax.nn.softmax(logits, axis=-1)
+
+            if not sample:
+                out = jnp.array(jnp.argmax(probs), dtype=jnp.int32).reshape(1, -1)
+                x = jnp.concatenate((x, out), axis=1)
+            else:
+                assert (
+                    sample_rng is not None
+                ), "Must provide rng key when sampling from logit distribution"
+                sample = jax.random.categorical(rng, logits=logits)
+                out = jnp.array(sample, dtype=jnp.int32).reshape(1, -1)
+                x = jnp.concatenate((x, out), axis=1)
+
+        return jnp.squeeze(x)
 
     @nn.compact
     def __call__(
