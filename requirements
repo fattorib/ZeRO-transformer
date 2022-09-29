@@ -10,5 +10,3 @@ google-cloud-storage
 torch 
 tqdm 
 einops==0.3.0
-jax==0.3.17
-jaxlib==0.3.15
