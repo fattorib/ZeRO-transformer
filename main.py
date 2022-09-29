@@ -219,7 +219,7 @@ def main():
         wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23)),
         wds.decode(),
         wds.map(preprocess),
-    )
+    ).repeat(nepochs=cfg.training.max_epochs)
 
     validation_dataset = wds.DataPipeline(
         wds.SimpleShardList(validation_shards),
@@ -259,167 +259,168 @@ def main():
     else:
         step_to_seq = lambda x: cfg.data.max_context
 
-    for epoch in range(cfg.training.max_epochs):
-        for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
+    epoch = 0
+    for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
-            # TODO: This may be problematic when crossing epoch boundary.
-            if (i // cfg.training.gradient_accumulation_steps) + (
-                epoch * cfg.data.full_steps_in_batch
-            ) > cfg.training.total_steps:
-                if jax.process_index() == 0:
-                    logger.debug(f"Training has completed.")
+        if i > cfg.data.full_steps_in_batch:
+            epoch += 1
 
-                return True
+        # TODO: This may be problematic when crossing epoch boundary.
+        if (i // cfg.training.gradient_accumulation_steps) + (
+            epoch * cfg.data.full_steps_in_batch
+        ) > cfg.training.total_steps:
+            if jax.process_index() == 0:
+                logger.debug(f"Training has completed.")
 
-            if resume_step != None and i <= resume_step and epoch == 0:
-                continue
+            return True
 
-            seq_len = step_to_seq(
-                i
-                + (
-                    epoch
-                    * cfg.data.full_steps_in_batch
-                    * cfg.training.gradient_accumulation_steps
-                )
+        if resume_step != None and i <= resume_step and epoch == 0:
+            continue
+
+        seq_len = step_to_seq(
+            i
+            + (
+                epoch
+                * cfg.data.full_steps_in_batch
+                * cfg.training.gradient_accumulation_steps
             )
+        )
 
-            text = text[:, :seq_len]
+        text = text[:, :seq_len]
 
-            # sharding batch
-            sharded_batch = shard(text)
+        # sharding batch
+        sharded_batch = shard(text)
 
-            t0 = time.time()
+        t0 = time.time()
 
-            state, metrics = train_step(
-                state,
-                sharded_batch,
-            )
+        state, metrics = train_step(
+            state,
+            sharded_batch,
+        )
 
-            metrics["Train Batch Time"] = time.time() - t0
-            metrics["Train Sequence Length"] = seq_len
+        metrics["Train Batch Time"] = time.time() - t0
+        metrics["Train Sequence Length"] = seq_len
 
-            running_metrics.append(metrics)
+        running_metrics.append(metrics)
 
-            if (i) % cfg.training.gradient_accumulation_steps == 0:
-                # we've completed a full batch of data, log the metrics
+        if (i) % cfg.training.gradient_accumulation_steps == 0:
+            # we've completed a full batch of data, log the metrics
 
-                train_metrics_np = {
-                    k: np.mean([metrics[k] for metrics in running_metrics])
-                    for k in running_metrics[0]
+            train_metrics_np = {
+                k: np.mean([metrics[k] for metrics in running_metrics])
+                for k in running_metrics[0]
+            }
+
+            running_metrics = []
+
+            validation_metrics = []
+
+            if (i) % (
+                cfg.training.evaluation_frequency
+                * cfg.training.gradient_accumulation_steps
+            ) == 0:
+                for val_it, val_text in enumerate(
+                    tqdm(vl, disable=not jax.process_index() == 0)
+                ):
+                    if val_it < cfg.training.maximum_evaluation_steps:
+                        sharded_batch = shard(val_text)
+                        metrics = eval_step(state, sharded_batch)
+                        validation_metrics.append(metrics)
+                    else:
+                        break
+
+                validation_metrics_np = {
+                    k: np.mean([metrics[k] for metrics in validation_metrics])
+                    for k in validation_metrics[0]
                 }
 
-                running_metrics = []
+                if jax.process_index() == 0:
+                    train_metrics_np.update(validation_metrics_np)
+                    train_metrics_np["Train Step Time"] = (
+                        cfg.training.gradient_accumulation_steps
+                        * train_metrics_np["Train Batch Time"]
+                    )
 
-                validation_metrics = []
-
-                if (i) % (
-                    cfg.training.evaluation_frequency
-                    * cfg.training.gradient_accumulation_steps
-                ) == 0:
-                    for val_it, val_text in enumerate(
-                        tqdm(vl, disable=not jax.process_index() == 0)
-                    ):
-                        if val_it < cfg.training.maximum_evaluation_steps:
-                            sharded_batch = shard(val_text)
-                            metrics = eval_step(state, sharded_batch)
-                            validation_metrics.append(metrics)
-                        else:
-                            break
-
-                    validation_metrics_np = {
-                        k: np.mean([metrics[k] for metrics in validation_metrics])
-                        for k in validation_metrics[0]
-                    }
-
-                    if jax.process_index() == 0:
-                        train_metrics_np.update(validation_metrics_np)
-                        train_metrics_np["Train Step Time"] = (
-                            cfg.training.gradient_accumulation_steps
-                            * train_metrics_np["Train Batch Time"]
+                    absolute_step = (i // cfg.training.gradient_accumulation_steps) + (
+                        epoch * cfg.data.full_steps_in_batch
+                    )
+                    if len(cfg.training.staged_sequences) > 0:
+                        train_metrics_np["Tokens Seen (B)"] = (
+                            num_host
+                            * (
+                                cfg.training.batch_size
+                                * cfg.training.gradient_accumulation_steps
+                                * compute_tokens_seen(
+                                    absolute_step,
+                                    stages=cfg.training.staged_sequences,
+                                    max_steps=cfg.training.staged_warmup_steps,
+                                    max_context=cfg.data.max_context,
+                                )
+                            )
+                            / 1e9
+                        )
+                    else:
+                        train_metrics_np["Tokens Seen (B)"] = (
+                            num_host
+                            * (
+                                cfg.training.batch_size
+                                * cfg.training.gradient_accumulation_steps
+                                * absolute_step
+                                * cfg.data.max_context
+                            )
+                            / 1e9
                         )
 
-                        absolute_step = (
-                            i // cfg.training.gradient_accumulation_steps
-                        ) + (epoch * cfg.data.full_steps_in_batch)
-                        if len(cfg.training.staged_sequences) > 0:
-                            train_metrics_np["Tokens Seen (B)"] = (
-                                num_host
-                                * (
-                                    cfg.training.batch_size
-                                    * cfg.training.gradient_accumulation_steps
-                                    * compute_tokens_seen(
-                                        absolute_step,
-                                        stages=cfg.training.staged_sequences,
-                                        max_steps=cfg.training.staged_warmup_steps,
-                                        max_context=cfg.data.max_context,
-                                    )
+                    train_metrics_np.pop("Train Batch Time")
+                    wandb.log(train_metrics_np)
+
+                    if save_to_bucket:
+                        save_checkpoint(
+                            state,
+                            workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                        )
+                    else:
+                        save_checkpoint(state, workdir=cfg.data.checkpoint_directory)
+
+            else:
+                if jax.process_index() == 0:
+                    train_metrics_np["Train Step Time"] = (
+                        cfg.training.gradient_accumulation_steps
+                        * train_metrics_np["Train Batch Time"]
+                    )
+
+                    absolute_step = (i // cfg.training.gradient_accumulation_steps) + (
+                        epoch * cfg.data.full_steps_in_batch
+                    )
+                    if len(cfg.training.staged_sequences) > 0:
+                        train_metrics_np["Tokens Seen (B)"] = (
+                            num_host
+                            * (
+                                cfg.training.batch_size
+                                * cfg.training.gradient_accumulation_steps
+                                * compute_tokens_seen(
+                                    absolute_step,
+                                    stages=cfg.training.staged_sequences,
+                                    max_steps=cfg.training.staged_warmup_steps,
+                                    max_context=cfg.data.max_context,
                                 )
-                                / 1e9
                             )
-                        else:
-                            train_metrics_np["Tokens Seen (B)"] = (
-                                num_host
-                                * (
-                                    cfg.training.batch_size
-                                    * cfg.training.gradient_accumulation_steps
-                                    * absolute_step
-                                    * cfg.data.max_context
-                                )
-                                / 1e9
+                            / 1e9
+                        )
+                    else:
+                        train_metrics_np["Tokens Seen (B)"] = (
+                            num_host
+                            * (
+                                cfg.training.batch_size
+                                * cfg.training.gradient_accumulation_steps
+                                * absolute_step
+                                * cfg.data.max_context
                             )
-
-                        train_metrics_np.pop("Train Batch Time")
-                        wandb.log(train_metrics_np)
-
-                        if save_to_bucket:
-                            save_checkpoint(
-                                state,
-                                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                            )
-                        else:
-                            save_checkpoint(
-                                state, workdir=cfg.data.checkpoint_directory
-                            )
-
-                else:
-                    if jax.process_index() == 0:
-                        train_metrics_np["Train Step Time"] = (
-                            cfg.training.gradient_accumulation_steps
-                            * train_metrics_np["Train Batch Time"]
+                            / 1e9
                         )
 
-                        absolute_step = (
-                            i // cfg.training.gradient_accumulation_steps
-                        ) + (epoch * cfg.data.full_steps_in_batch)
-                        if len(cfg.training.staged_sequences) > 0:
-                            train_metrics_np["Tokens Seen (B)"] = (
-                                num_host
-                                * (
-                                    cfg.training.batch_size
-                                    * cfg.training.gradient_accumulation_steps
-                                    * compute_tokens_seen(
-                                        absolute_step,
-                                        stages=cfg.training.staged_sequences,
-                                        max_steps=cfg.training.staged_warmup_steps,
-                                        max_context=cfg.data.max_context,
-                                    )
-                                )
-                                / 1e9
-                            )
-                        else:
-                            train_metrics_np["Tokens Seen (B)"] = (
-                                num_host
-                                * (
-                                    cfg.training.batch_size
-                                    * cfg.training.gradient_accumulation_steps
-                                    * absolute_step
-                                    * cfg.data.max_context
-                                )
-                                / 1e9
-                            )
-
-                        train_metrics_np.pop("Train Batch Time")
-                        wandb.log(train_metrics_np)
+                    train_metrics_np.pop("Train Batch Time")
+                    wandb.log(train_metrics_np)
 
 
 @partial(jax.pmap, axis_name="batch")
