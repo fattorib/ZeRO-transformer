@@ -264,13 +264,11 @@ def main():
 
         if (
             i // cfg.training.gradient_accumulation_steps
-        ) > cfg.data.full_steps_in_batch:
+        ) == cfg.data.full_steps_in_batch:
             epoch += 1
 
         # TODO: This may be problematic when crossing epoch boundary.
-        if (i // cfg.training.gradient_accumulation_steps) + (
-            epoch * cfg.data.full_steps_in_batch
-        ) > cfg.training.total_steps:
+        if (i // cfg.training.gradient_accumulation_steps) > cfg.training.total_steps:
             if jax.process_index() == 0:
                 logger.debug(f"Training has completed.")
 
