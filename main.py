@@ -262,7 +262,9 @@ def main():
     epoch = 0
     for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
-        if (i // cfg.training.gradient_accumulation_steps) > cfg.data.full_steps_in_batch:
+        if (
+            i // cfg.training.gradient_accumulation_steps
+        ) > cfg.data.full_steps_in_batch:
             epoch += 1
 
         # TODO: This may be problematic when crossing epoch boundary.
