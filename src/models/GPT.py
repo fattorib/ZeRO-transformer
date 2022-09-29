@@ -287,20 +287,11 @@ class Transformer(nn.Module):
     use_static_sgu: bool = False
 
     def greedy_generate(
-        self, input: jnp.array, max_length: int = 50, sample: bool = False
+        self, context: jnp.array, max_length: int = 50, sample: bool = False
     ) -> jnp.array:
-        """Performs greedy text generation
-
-        Args:
-            input (jnp.array): tokenized text to continue
-            max_length (int): The maximum length of tokens to generate (sum of context + *generated tokens*)
-            sample (bool): Boolean whether to sample from logits distribution
-
-        Returns:
-            jnp.array: Generated text, must be detokenized
-        """
-
-        raise NotImplementedError
+        raise NotImplementedError(
+                    "Generation support is WIP and currently being handled outside of this module."
+                )
 
     @nn.compact
     def __call__(
