@@ -16,7 +16,7 @@ unittest:
   num_head: 12
   block_size: 512
   dropout: 0.0
-  N: 6
+  N: 12
   fused_residuals: True
   alibi_attn: True
   head_qk_trick: False

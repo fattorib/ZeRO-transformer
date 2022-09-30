@@ -78,7 +78,6 @@ tokenized_text_out = tokenizer.decode(out)
 ```
 
 # Testing
-
 ```bash 
 python -m pytest
 ```
