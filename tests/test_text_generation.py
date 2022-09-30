@@ -12,7 +12,7 @@ from src.models.GPT import model_getter
 
 class TestBasicGeneration(unittest.TestCase):
     def setUp(self) -> None:
-        self.model = model_getter("base", return_cfg=False)
+        self.model = model_getter("unittest", return_cfg=False)
 
         checkpoint_files = os.listdir("checkpoints")
         if "GPT_unittest_params.pkl" not in checkpoint_files:

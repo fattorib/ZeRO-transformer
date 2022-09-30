@@ -10,6 +10,18 @@ QA:
   head_qk_trick: False
   use_static_sgu: False
 
+unittest:
+  embedding_dim: 768
+  vocab_size: 50257
+  num_head: 12
+  block_size: 512
+  dropout: 0.0
+  N: 6
+  fused_residuals: True
+  alibi_attn: True
+  head_qk_trick: False
+  use_static_sgu: False
+
 small:
   embedding_dim: 768
   vocab_size: 50257
@@ -19,8 +31,8 @@ small:
   N: 6
   fused_residuals: True
   alibi_attn: True
-  head_qk_trick: True
-  use_static_sgu: True
+  head_qk_trick: False
+  use_static_sgu: False
   
 base:
   embedding_dim: 768
