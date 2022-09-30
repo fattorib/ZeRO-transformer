@@ -278,11 +278,6 @@ def main():
 
         seq_len = step_to_seq(
             i
-            + (
-                epoch
-                * cfg.data.full_steps_in_batch
-                * cfg.training.gradient_accumulation_steps
-            )
         )
 
         text = text[:, :seq_len]
@@ -340,9 +335,7 @@ def main():
                         * train_metrics_np["Train Batch Time"]
                     )
 
-                    absolute_step = (i // cfg.training.gradient_accumulation_steps) + (
-                        epoch * cfg.data.full_steps_in_batch
-                    )
+                    absolute_step = (i // cfg.training.gradient_accumulation_steps)
                     if len(cfg.training.staged_sequences) > 0:
                         train_metrics_np["Tokens Seen (B)"] = (
                             num_host
