@@ -31,7 +31,7 @@ base:
   N: 12
   fused_residuals: True
   alibi_attn: True
-  head_qk_trick: False
+  head_qk_trick: True
   use_static_sgu: False
 
 medium:
@@ -43,6 +43,8 @@ medium:
   N: 24
   fused_residuals: True
   alibi_attn: True
+  head_qk_trick: False
+  use_static_sgu: False
 
 large:
   embedding_dim: 1536
