@@ -51,13 +51,14 @@ TODO
 
 # TODOS:
 1. Ability to port weights from [Little-GPT](https://github.com/fattorib/Little-GPT)
+2. Caching previously generated states for faster sequence decoding
 
 # Acknowledgements
 TPU Development and training supported with Cloud TPUs from Google's TPU Research Cloud (TRC)
 
 # Text Generation
 
-For now, we only support greedy decoding, and temperature-based sampling. To sample from a trained model:
+For now, we only support greedy decoding, and temperature-based sampling. Generation is very slow as I haven't implemented caching of past states yet. To sample from a trained model:
 
 ```python 
 # load model and state
@@ -65,7 +66,6 @@ tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 sample_text = "This is a sample text sentence that"
 tokenized_text = tokenizer.encode(sample_text)
 generation_rng = jax.random.PRNGKey(23)
-# painfully slow on 1050ti
 out = model.generate(
     state_params,
     tokenized_text,
