@@ -30,6 +30,8 @@ total_training_tokens: 12875940864 #~12.6B tokens
 - Final 10% of training steps are conducted at the final learning rate
 - No dropout is used, only regularization comes from a weight decay of 0.1 applied to all non-bias and LN weights. 
 - Initial Experiments are performed with the 'base' model listed under ```conf/model_config.yaml```. Model is approximately 124M params.
+- Due to the use of ALiBi, *all* validation is performed at the maximum sequence length of 1024 tokens.  
+- All models weights are initialized with the same seed and dataset is shuffled with a fixed seed too. 
 
 ## Staged Sequence Training:
 
@@ -40,7 +42,7 @@ total_training_tokens: 12875940864 #~12.6B tokens
 ## Experiments Performed:
 
 1. (**Baseline**): One epoch training at maximum context. *Tokens seen during training: 12.6B*
-2. (**Experiment 1**): One epoch training with staged sequence length warmup as described above. *Tokens seen during training: 9.9B*
+2. (**Experiment 1**): One epoch training with staged sequence length warmup strategy as described above. *Tokens seen during training: 9.9B*
 3. (**Experiment 2**): Staged sequence length warmup + total training step count adjusted (~+5.25K steps) to hit equal number of training tokens as baseline model. *Tokens seen during training: 12.6B*
 
 ## Results:
@@ -54,13 +56,17 @@ We compare final validation losses of all models:
 |------------------|----------------|---------------------|-----------------|
 | Baseline         | 21.599         | 6.75                | 12.6            |
 | Experiment #1    | 21.801         | 6.00                | 9.9             |
-| Experiment #2    | 21.156         | 7.50                | 12.6               |
+| Experiment #2    | 21.156         | 7.50                | 12.6            |
 
 Comparing the results between the baseline model and the experiment 1 models, shows that we can exchange a <1% performance decrease for an 11% speedup in overall training. In addition, we can extract extra performance at the cost of increased training time by training the models for additional steps to match the baseline number of training tokens. 
 
 **Validation Losses versus Tokens Seen (B):**
 ![](analysis/imgs/124MComparison.png)
 
+Other model sizes:
+
+1. 345M model training is in progress -> Total estimates are ~54 hours of total compute for the 3 experiments.
+2. Could also try experiments with like 60M model too so we have results across 3 scales -> Maybe do if we have extra compute
 
 
 Other questions to answer:
@@ -71,4 +77,4 @@ Other questions to answer:
 
 
 # Acknowledgements
-TPU Development and training supported with Cloud TPUs from Google's TPU Research Cloud (TRC)
+TPU Development and training supported with Cloud TPUs from Google's TPU Research Cloud (TRC).
