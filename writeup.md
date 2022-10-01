@@ -5,11 +5,11 @@ Staged Sequence training involves initially training models with much shorter co
 1. Do we still see the same benefits?
 2. Can we reuse some of 'warmed' up sequences to further increase performance?
 
-For question 2, during the warmup stage of training, we truncate the batches to reach the desired sequence length. In the case shown below, by utilizing a sequence warmup for 50% of the total training steps, we 'truncate out' almost 5.1B tokens! Could we retrain on these sequences at their full context and see further performance improvements?
+For question 2, during the warmup stage of training, we truncate the batches to reach the desired sequence length. In the case shown below, by utilizing a sequence warmup for 25% of the total training steps, we 'truncate out' almost 2.8B tokens! Could we retrain on these sequences at their full context and see further performance improvements?
 
 ## Background
 
-We use the original OpenWebText (OWT) corpus and add in all components of the OpenWebText2 corpus that were scraped after the creation of OWT. Dataset is encoded with GPT2's tokenizer. Final dataset statistics are:
+We use the original OpenWebText (OWT) corpus and add in all components of the OpenWebText2 corpus that were scraped after the creation of OWT. Dataset is tokenized with GPT2's tokenizer. Final dataset statistics are:
 
 ```yaml
 corpus: "openwebtext1+2"
@@ -34,7 +34,7 @@ total_training_tokens: 12875940864 #~12.6B tokens
 ## Staged Sequence Training:
 
 - When using contexts under 1024, all batches are truncated to the target context, keeping the number of sequences within a batch fixed. 
-- Short sequence length is used over the first 25% of training (~6k steps). I experimented with two-stage sequence warmup over the first 50% of training but models performed worse by about 1 PPL.
+- Short sequence length is used over the first 25% of training (~6k steps). I experimented with a two-stage sequence warmup (128 -> 256) over the first 50% of training but models performed worse by about 1 PPL.
 - Initial sequence length is set to 128 and is increased to 1024 after the target number of warmup steps has been reached.
 
 ## Experiments Performed:
@@ -56,7 +56,11 @@ We compare final validation losses of all models:
 | Experiment #1    | 21.801         | 6.00                | 9.9             |
 | Experiment #2    | 21.156         | 7.50                | 12.6               |
 
-Comparing the results between the baseline model and the experiment 1 models, shows that we can exchange a <1% performance decrease for an 11% speedup in overall training. In addition, we can extract extra performance at the cost of increased training time by training the models for additional steps to match the additional number of training tokens. 
+Comparing the results between the baseline model and the experiment 1 models, shows that we can exchange a <1% performance decrease for an 11% speedup in overall training. In addition, we can extract extra performance at the cost of increased training time by training the models for additional steps to match the baseline number of training tokens. 
+
+**Validation Losses versus Tokens Seen (B):**
+![](analysis/imgs/124MComparison.png)
+
 
 
 Other questions to answer:
