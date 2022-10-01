@@ -26,4 +26,4 @@ cmds.md
 
 .gitignore
 
-run_visualization/processed_runs/*
+analysis/processed/*

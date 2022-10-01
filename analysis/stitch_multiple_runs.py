@@ -1,18 +1,18 @@
-import matplotlib.pyplot as plt
+import numpy as np 
 import pandas as pd
-import seaborn as sns
+from typing import List
 
 import wandb
 
 api = wandb.Api()
 
 
-def grab_run_data(run_query: str) -> pd.DataFrame:
+def grab_run_data(run_querys: List[str]) -> pd.DataFrame:
     """
     Grabs complete run data given a query and returns formatted dataframe
 
     Example::
-    >>> run_df = grab_run_data("/bfattori/LJX/runs/wzltcjjb")
+    >>> run_df = grab_run_data(["/bfattori/LJX/runs/wzltcjjb","/bfattori/LJX/runs/hgndkjh"])
     >>> run_df.head(5)
             Tokens Seen (B)  Validation LM Loss  Train LM Loss
         0         0.000000           10.922203      10.919440
@@ -22,37 +22,39 @@ def grab_run_data(run_query: str) -> pd.DataFrame:
         4         1.048576            4.728181       4.750701
 
     """
-    run = api.run(run_query)
-    history = run.scan_history(
-        keys=[
-            "_step",
-            "Tokens Seen (B)",
-            "Train Step Time",
-            "_runtime",
-            "Train LM PPL",
-            "Train LM Loss",
-            "Train Sequence Length",
-            "_timestamp",
-            "Validation LM Loss",
-        ]
-    )
+    full_runs_df = pd.DataFrame()
 
-    run_df = pd.DataFrame(
-        {
-            "Tokens Seen (B)": [row["Tokens Seen (B)"] for row in history],
-            "Validation LM Loss": [row["Validation LM Loss"] for row in history],
-            "Train LM Loss": [row["Train LM Loss"] for row in history],
-        }
-    )
+    for run_query in run_querys:
 
-    return run_df
+        run = api.run(run_query)
+        history = run.scan_history(
+            keys=[
+                "_step",
+                "Tokens Seen (B)",
+                "Train Step Time",
+                "_runtime",
+                "Train LM PPL",
+                "Train LM Loss",
+                "Train Sequence Length",
+                "_timestamp",
+                "Validation LM Loss",
+            ]
+        )
+
+        
+        run_df = pd.DataFrame(
+            {
+                "Tokens Seen (B)": [row["Tokens Seen (B)"] for row in history],
+                "Validation LM Loss": [row["Validation LM Loss"] for row in history],
+                "Train LM Loss": [row["Train LM Loss"] for row in history],
+            }
+        )
+
+        full_runs_df = full_runs_df.append(run_df)
+
+    return full_runs_df.sort_values(by = "Tokens Seen (B)", ascending=True)
 
 
 if __name__ == "__main__":
-
-    # finishes at 7.76
-    run_part1 = grab_run_data("/bfattori/LJX/runs/i00ewqs9")
-    run_part2 = grab_run_data("/bfattori/LJX/runs/3o8ktcnn")
-
-    run_df_full = run_part1.append(run_part2)
-    run_df_full.to_csv("run_visualization/processed_runs/staged_multi_epoch.csv")
+    run_df_full = grab_run_data(["/bfattori/LJX/runs/1b3f90mz","/bfattori/LJX/runs/799j3xyb"])
+    run_df_full.to_csv("analysis/processed/staged_multi_epoch.csv")
