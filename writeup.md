@@ -17,7 +17,7 @@ tokenizer: "GPT2"
 n_ctx: 1024
 num_train_samples: 12574161
 num_validation_samples: 806093
-total_training_tokens: 12875940864 #~12B tokens
+total_training_tokens: 12875940864 #~12.6B tokens
 ```
 
 
@@ -45,19 +45,24 @@ total_training_tokens: 12875940864 #~12B tokens
 
 ## Results:
 
-All models were trained on a TPU V3-32 provided by Google's TPU Research Cloud (TRC). We compare final validation losses of all models:
+## Baseline Model (124M Params)
+All models were trained on a TPU V3-32 provided by Google's TPU Research Cloud (TRC). 
+
+We compare final validation losses of all models:
 
 | Model/Experiment | Validation PPL | Training Time (hrs) | Tokens Seen (B) |
 |------------------|----------------|---------------------|-----------------|
 | Baseline         | 21.599         | 6.75                | 12.6            |
 | Experiment #1    | 21.801         | 6.00                | 9.9             |
-| Experiment #2    | -              | -                   | -               |
+| Experiment #2    | 21.156         | 7.50                | 12.6               |
 
-Comparing the results between the baseline model and the experiment 1 models, shows that we can exchange a <1% performance decrease for an 11% speedup in overall training. 
+Comparing the results between the baseline model and the experiment 1 models, shows that we can exchange a <1% performance decrease for an 11% speedup in overall training. In addition, we can extract extra performance at the cost of increased training time by training the models for additional steps to match the additional number of training tokens. 
 
 
 Other questions to answer:
 1. Do these results carry over to other tasks too? - Requires implementing greedy decoding for GPT module.
+
+
 
 
 
