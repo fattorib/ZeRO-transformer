@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-
 import wandb
 
 api = wandb.Api()
@@ -49,20 +48,20 @@ def grab_run_data(run_query: str) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    
-    run_df_full_ctx = pd.read_csv("analysis/processed/full_context.csv")
-    
-    run_staged_1_epoch = pd.read_csv(
-        "analysis/processed/staged_single_epoch.csv"
-    )
 
-    run_staged_multi_epoch = pd.read_csv(
-        "analysis/processed/staged_multi_epoch.csv"
-    )
+    run_df_full_ctx = pd.read_csv("analysis/processed/full_context.csv")
+
+    run_staged_1_epoch = pd.read_csv("analysis/processed/staged_single_epoch.csv")
+
+    run_staged_multi_epoch = pd.read_csv("analysis/processed/staged_multi_epoch.csv")
 
     run_df_full_ctx = run_df_full_ctx.loc[run_df_full_ctx["Tokens Seen (B)"] <= 12.6]
-    run_staged_1_epoch = run_staged_1_epoch.loc[run_staged_1_epoch["Tokens Seen (B)"] <= 12.6]
-    run_staged_multi_epoch = run_staged_multi_epoch.loc[run_staged_multi_epoch["Tokens Seen (B)"] <= 12.6]
+    run_staged_1_epoch = run_staged_1_epoch.loc[
+        run_staged_1_epoch["Tokens Seen (B)"] <= 12.6
+    ]
+    run_staged_multi_epoch = run_staged_multi_epoch.loc[
+        run_staged_multi_epoch["Tokens Seen (B)"] <= 12.6
+    ]
 
     sns.set_theme()
     sns.lineplot(

@@ -1,7 +1,7 @@
-import numpy as np 
-import pandas as pd
 from typing import List
 
+import numpy as np
+import pandas as pd
 import wandb
 
 api = wandb.Api()
@@ -41,7 +41,6 @@ def grab_run_data(run_querys: List[str]) -> pd.DataFrame:
             ]
         )
 
-        
         run_df = pd.DataFrame(
             {
                 "Tokens Seen (B)": [row["Tokens Seen (B)"] for row in history],
@@ -52,9 +51,11 @@ def grab_run_data(run_querys: List[str]) -> pd.DataFrame:
 
         full_runs_df = full_runs_df.append(run_df)
 
-    return full_runs_df.sort_values(by = "Tokens Seen (B)", ascending=True)
+    return full_runs_df.sort_values(by="Tokens Seen (B)", ascending=True)
 
 
 if __name__ == "__main__":
-    run_df_full = grab_run_data(["/bfattori/LJX/runs/1b3f90mz","/bfattori/LJX/runs/799j3xyb"])
+    run_df_full = grab_run_data(
+        ["/bfattori/LJX/runs/1b3f90mz", "/bfattori/LJX/runs/799j3xyb"]
+    )
     run_df_full.to_csv("analysis/processed/staged_multi_epoch.csv")

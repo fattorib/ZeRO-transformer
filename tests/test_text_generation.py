@@ -29,9 +29,9 @@ class TestBasicGeneration(unittest.TestCase):
                     for chunk in r.iter_content(chunk_size=chunk_size):
                         f.write(chunk)
                         pbar.update(chunk_size)
-                        
+
         with open("checkpoints/GPT_unittest_params.pkl", "rb") as f:
-                self.state = pickle.load(f)
+            self.state = pickle.load(f)
 
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 
