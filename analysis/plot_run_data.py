@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import seaborn as sns
 import wandb
@@ -63,25 +64,35 @@ if __name__ == "__main__":
         run_staged_multi_epoch["Tokens Seen (B)"] <= 12.6
     ]
 
+    run_df_full_ctx["Validation LM PPL"] = np.exp(run_df_full_ctx["Validation LM Loss"])
+    run_staged_1_epoch["Validation LM PPL"] = np.exp(
+        run_staged_1_epoch["Validation LM Loss"]
+    )
+    run_staged_multi_epoch["Validation LM PPL"] = np.exp(
+        run_staged_multi_epoch["Validation LM Loss"]
+    )
+
     sns.set_theme()
     sns.lineplot(
         x="Tokens Seen (B)",
-        y="Validation LM Loss",
+        y="Validation LM PPL",
         data=run_df_full_ctx,
         label="1 Epoch - Full Context",
     )
     sns.lineplot(
         x="Tokens Seen (B)",
-        y="Validation LM Loss",
+        y="Validation LM PPL",
         data=run_staged_1_epoch,
         label="1 Epoch - Context Warmup",
     )
     sns.lineplot(
         x="Tokens Seen (B)",
-        y="Validation LM Loss",
+        y="Validation LM PPL",
         data=run_staged_multi_epoch,
         label="Multi Epoch - Context Warmup",
     )
-    plt.title("Tokens Seen vs. Validation Loss")
+    plt.title("Tokens Seen vs. Validation PPL (124M Param Transformer)")
+    plt.ylim((20, 40))
+    plt.ylabel("Validation PPL")
     plt.legend()
     plt.show()
