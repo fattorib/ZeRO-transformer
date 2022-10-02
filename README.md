@@ -66,6 +66,7 @@ See ```writeup.md```
 
 # TODOS:
 1. Ability to port weights from [Little-GPT](https://github.com/fattorib/Little-GPT)
+2. Extend training to use [```pjit```](https://jax.readthedocs.io/en/latest/jax-101/08-pjit.html?highlight=pjit#introduction-to-pjit)
 
 # Acknowledgements
 TPU Development and training supported with Cloud TPUs from Google's TPU Research Cloud (TRC)
