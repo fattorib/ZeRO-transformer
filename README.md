@@ -41,6 +41,16 @@ data:
     index_path_validation: "data/index/openwebtext.val.index" # list of all shards + GCP urls
 ```
 
+# Supported Features
+
+## ALiBi
+
+## Channel-Split SGU
+
+## Head-QK Trick
+
+
+
 # Experiments:
 
 See ```writeup.md```
