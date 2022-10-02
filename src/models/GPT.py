@@ -3,7 +3,7 @@ Replication of GPT2 transformers in Flax
 """
 import math
 from functools import partial
-from typing import Any, List, Tuple, Union  
+from typing import Any, List, Tuple, Union
 
 import flax
 import flax.linen as nn
@@ -12,6 +12,7 @@ import jax.nn.initializers as initializers
 import jax.numpy as jnp
 from einops import rearrange
 from omegaconf import OmegaConf
+from tqdm import tqdm
 
 from src.utils.losses import cross_entropy_loss
 
@@ -90,7 +91,6 @@ class CausalAttention(nn.Module):
         layer_past: Tuple[jnp.array, jnp.array] = None,
     ) -> Tuple[jnp.array, jnp.array]:
         dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
-
         B, T, C = x.shape[:3]
 
         # Shape is (B, nh, T, h_dim)
@@ -133,11 +133,10 @@ class CausalAttention(nn.Module):
         if use_cache:
             if layer_past is not None:
                 past_keys, past_values = layer_past
-                k = jnp.concatenate((past_keys, key), dim=-2)
-                v = jnp.concatenate((past_values, value), dim=-2)
+                key = jnp.concatenate((past_keys, key), axis=-2)
+                value = jnp.concatenate((past_values, value), axis=-2)
 
-            present = jnp.stack((k, v))
-
+            present = jnp.stack((key, value))
         # get raw attention scores
         attn_full = (query @ key.transpose(0, 1, 3, 2)) / jnp.sqrt(
             key.shape[-1]
@@ -245,7 +244,7 @@ class TransformerBlock(nn.Module):
                     self.residual_dropout,
                     self.N,
                     self.alibi_attn,
-                )(x_attn, train, use_cache, layer_past)
+                )(x_attn, train, None, use_cache, layer_past)
 
                 sgu_out = SGU(
                     self.block_size, self.embedding_dim // 2, kernel_size=128
@@ -271,7 +270,7 @@ class TransformerBlock(nn.Module):
                     self.residual_dropout,
                     self.N,
                     self.alibi_attn,
-                )(norm(x), train, use_cache, layer_past)
+                )(norm(x), train, None, use_cache, layer_past)
                 return (
                     x
                     + attn_out[0]
@@ -342,28 +341,34 @@ class Transformer(nn.Module):
 
         num_generation_steps = max_length - x.shape[1]
 
-        for _ in range(num_generation_steps):
+        if x.shape[1] > self.block_size:
+            x_cond = x[:, -self.block_size :]
+        else:
+            x_cond = x
+
+        layer_past = None
+        for _ in tqdm(range(num_generation_steps)):
+
             if sample_rng is not None:
                 sample_rng, rng = jax.random.split(sample_rng, 2)
-            if x.shape[1] > self.block_size:
-                x_cond = x[:, -self.block_size :]
-            else:
-                x_cond = x
-
-            logits = self.apply(variables, x_cond)[:, -1, :] / temperature
+            logits, layer_past = self.apply(
+                variables, x_cond, use_cache=True, past_states=layer_past
+            )
+            logits = logits[:, -1, :] / temperature
 
             probs = jax.nn.softmax(logits, axis=-1)
 
             if not sample:
-                out = jnp.array(jnp.argmax(probs), dtype=jnp.int32).reshape(1, -1)
-                x = jnp.concatenate((x, out), axis=1)
+                x_cond = jnp.array(jnp.argmax(probs), dtype=jnp.int32).reshape(1, -1)
+                x = jnp.concatenate((x, x_cond), axis=1)
+
             else:
                 assert (
                     sample_rng is not None
                 ), "Must provide rng key when sampling from logit distribution"
                 sample = jax.random.categorical(rng, logits=logits)
-                out = jnp.array(sample, dtype=jnp.int32).reshape(1, -1)
-                x = jnp.concatenate((x, out), axis=1)
+                x_cond = jnp.array(sample, dtype=jnp.int32).reshape(1, -1)
+                x = jnp.concatenate((x, x_cond), axis=1)
 
         return jnp.squeeze(x)
 
