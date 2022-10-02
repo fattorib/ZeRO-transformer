@@ -66,7 +66,6 @@ See ```writeup.md```
 
 # TODOS:
 1. Ability to port weights from [Little-GPT](https://github.com/fattorib/Little-GPT)
-2. Caching previously generated states for faster sequence decoding
 
 # Acknowledgements
 TPU Development and training supported with Cloud TPUs from Google's TPU Research Cloud (TRC)
