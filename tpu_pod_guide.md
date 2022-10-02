@@ -5,9 +5,9 @@ While TPU VMs are great and easy to use in a single-host case, I found the docum
 The commands detailed below were used on a TPU v3-32 VM with the following package versions:
 
 ```text
-jax==0.3.17
-jaxlib==0.3.15
-libtpu-nightly==0.1.dev20220723
+jax==0.3.20
+jaxlib==0.3.20
+libtpu-nightly==0.1.dev20220928
 ```
 
 ## Background
@@ -81,9 +81,9 @@ def split_by_jax_process(src):
 
 Anytime you would use ```wds.split_by_worker``` replace it with the above method! The only thing you need to be aware of when using this fix is that each PyTorch dataloader can only have a single worker attached to it (done by setting ```num_workers = 0``` in your dataloaders).
 
-- When using webdataset, your number of total shards must be divisible by the number of TPU hosts running. If you don't do this (ex: 127 shards on 4 hosts) then training will hang indefinitely. This is especially annoying as this error really only presents itself during the final stages of training.  
+- When using webdataset, your number of total shards must be divisible by the number of TPU hosts running. If you don't do this (ex: 127 shards on 4 hosts) then training will hang indefinitely. This is especially annoying as this error really only presents itself during the final stages of a training epoch.  
 
-- Interrupting training sessions with CTRL+C appears to cause an unrecoverable crash on TPU VMs and the VMs will no longer see the TPUs. If you need to cancel a run, one workaround I have found is to run a ```pkill``` on the ```python3``` process running on each host:
+- Interrupting training sessions with CTRL+C appears to cause an unrecoverable crash on TPU VMs such that the hosts will no longer see the TPUs. If you need to cancel a run, one workaround I have found is to run a ```pkill``` on the ```python3``` process running on each host:
 
 ```bash 
 gcloud compute tpus tpu-vm ssh my-tpu-name  --worker=all --zone=my-tpu-zone --command="pkill python3"
