@@ -227,7 +227,7 @@ class TransformerBlock(nn.Module):
                     self.alibi_attn,
                 )(x_attn, train)
 
-                sgu_out = SGU(self.block_size, self.embedding_dim // 2, 128)(x_sgu)
+                sgu_out = SGU(self.block_size, self.embedding_dim // 2, kernel_size = 128)(x_sgu)
 
                 fused_out = jnp.concatenate((sgu_out, attn_out), axis=-1)
 
