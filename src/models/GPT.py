@@ -3,7 +3,7 @@ Replication of GPT2 transformers in Flax
 """
 import math
 from functools import partial
-from typing import Any, List, Tuple
+from typing import Any, List, Tuple, Union  
 
 import flax
 import flax.linen as nn
@@ -375,7 +375,7 @@ class Transformer(nn.Module):
         train: bool = False,
         use_cache: bool = False,
         past_states: Tuple[jnp.array, jnp.array] = None,
-    ) -> Tuple[jnp.array, jnp.array]:
+    ) -> Union[jnp.array, Tuple[jnp.array, jnp.array]]:
 
         B, T = x.shape[0:2]
 
