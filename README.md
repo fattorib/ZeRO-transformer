@@ -45,11 +45,18 @@ data:
 
 ## ALiBi
 
+ALiBi (Attention with Linear Biases) modifies the attention matrix by adding in a position-dependant bias matrix before the softmax layer. Empirically, this has been shown to allow GPT-style transformer models to *retain* their performance on sequences longer than what they were trained on (usually you will see minimal PPL improvements when increasing the context length, this is still better than other relative position embeddings and it is quite fast). In your ```model_config``` file, set ```alibi_attn``` to ```True```. **Enabled by default**
+
 ## Channel-Split SGU
 
+*I'm unable to find the paper that introduces this idea but I know it exists* Channel split SGU takes each token embedding and splits the total embedding dimensions in two. Half of the embeddings are attented to normally with MHA and the other half of the embeddings are fed through a fixed causal SGU with a relatively small kernel. In theory, the short-range mixing from the SGU kernel should allow the attention part of the embedding to attend to longer-range dependancies as the short range dependances are handled automatically through the SGU. In your ```model_config``` file, set ```use_static_sgu``` to ```True```. **Disabled by default**
+
 ## Head-QK Trick
+See [here](https://github.com/BlinkDL/RWKV-LM#the-head-qk-trick-learning-to-copy-and-avoid-tokens) for an explanation. In your ```model_config``` file, set ```head_qk_trick``` to ```True```. **Disabled by default**
 
+## Parallel Residual Blocks
 
+Introduced in [GPT-J](https://github.com/kingoflolz/mesh-transformer-jax). Training and inference throughput increase at the cost of minor performance degradation. In your ```model_config``` file, set ```fused_residuals``` to ```True```. **Enabled by default**
 
 # Experiments:
 
