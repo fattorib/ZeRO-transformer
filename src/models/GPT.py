@@ -88,7 +88,7 @@ class CausalAttention(nn.Module):
         alibi_mask: jnp.array = None,
         use_cache: bool = False,
         layer_past: Tuple[jnp.array, jnp.array] = None,
-    ) -> jnp.array:
+    ) -> Tuple[jnp.array, jnp.array]:
         dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
 
         B, T, C = x.shape[:3]
@@ -375,7 +375,7 @@ class Transformer(nn.Module):
         train: bool = False,
         use_cache: bool = False,
         past_states: Tuple[jnp.array, jnp.array] = None,
-    ) -> jnp.array:
+    ) -> Tuple[jnp.array, jnp.array]:
 
         B, T = x.shape[0:2]
 
