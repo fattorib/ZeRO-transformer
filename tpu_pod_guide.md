@@ -81,6 +81,8 @@ def split_by_jax_process(src):
 
 Anytime you would use ```wds.split_by_worker``` replace it with the above method! The only thing you need to be aware of when using this fix is that each PyTorch dataloader can only have a single worker attached to it (done by setting ```num_workers = 0``` in your dataloaders).
 
+- When using webdataset, your number of total shards must be divisible by the number of TPU hosts running. If you don't do this (ex: 127 shards on 4 hosts) then training will hang indefinitely. This is especially annoying as this error really only presents itself during the final stages of training.  
+
 - Interrupting training sessions with CTRL+C appears to cause an unrecoverable crash on TPU VMs and the VMs will no longer see the TPUs. If you need to cancel a run, one workaround I have found is to run a ```pkill``` on the ```python3``` process running on each host:
 
 ```bash 
