@@ -3,7 +3,7 @@ Replication of GPT2 transformers in Flax
 """
 import math
 from functools import partial
-from typing import Any, List
+from typing import Any, List, Tuple
 
 import flax
 import flax.linen as nn
@@ -82,7 +82,12 @@ class CausalAttention(nn.Module):
 
     @nn.compact
     def __call__(
-        self, x: jnp.array, train: bool, alibi_mask: jnp.array = None
+        self,
+        x: jnp.array,
+        train: bool,
+        alibi_mask: jnp.array = None,
+        use_cache: bool = False,
+        layer_past: Tuple[jnp.array, jnp.array] = None,
     ) -> jnp.array:
         dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
 
@@ -124,6 +129,15 @@ class CausalAttention(nn.Module):
             .transpose(0, 2, 1, 3)
         )
 
+        present = None
+        if use_cache:
+            if layer_past is not None:
+                past_keys, past_values = layer_past
+                k = jnp.concatenate((past_keys, key), dim=-2)
+                v = jnp.concatenate((past_values, value), dim=-2)
+
+            present = jnp.stack((k, v))
+
         # get raw attention scores
         attn_full = (query @ key.transpose(0, 1, 3, 2)) / jnp.sqrt(
             key.shape[-1]
@@ -164,7 +178,7 @@ class CausalAttention(nn.Module):
             bias_init=initializers.zeros,
         )(attn_out)
 
-        return dropout()(out)
+        return dropout()(out), present
 
 
 class SGU(nn.Module):
@@ -209,7 +223,13 @@ class TransformerBlock(nn.Module):
     use_static_sgu: bool = False
 
     @nn.compact
-    def __call__(self, x: jnp.array, train: bool = False) -> jnp.array:
+    def __call__(
+        self,
+        x: jnp.array,
+        train: bool = False,
+        use_cache: bool = False,
+        layer_past: Tuple[jnp.array, jnp.array] = None,
+    ) -> Tuple[jnp.array, jnp.array]:
 
         if self.fused_residuals:
             if self.use_static_sgu:
@@ -225,49 +245,68 @@ class TransformerBlock(nn.Module):
                     self.residual_dropout,
                     self.N,
                     self.alibi_attn,
-                )(x_attn, train)
+                )(x_attn, train, use_cache, layer_past)
 
-                sgu_out = SGU(self.block_size, self.embedding_dim // 2, kernel_size = 128)(x_sgu)
+                sgu_out = SGU(
+                    self.block_size, self.embedding_dim // 2, kernel_size=128
+                )(x_sgu)
 
-                fused_out = jnp.concatenate((sgu_out, attn_out), axis=-1)
+                fused_out = jnp.concatenate((sgu_out, attn_out[0]), axis=-1)
 
                 return (
                     x
                     + fused_out
                     + MLPBlock(
                         self.embedding_dim, dropout=self.residual_dropout, N=self.N
-                    )(norm(x), train)
+                    )(norm(x), train), attn_out[1]
                 )
 
             else:
                 norm = nn.LayerNorm()
+                # return (
+                #     x
+                #     + CausalAttention(
+                #         self.embedding_dim,
+                #         self.num_head,
+                #         self.block_size,
+                #         self.residual_dropout,
+                #         self.N,
+                #         self.alibi_attn,
+                #     )(norm(x), train, use_cache, layer_past)
+                #     + MLPBlock(
+                #         self.embedding_dim, dropout=self.residual_dropout, N=self.N
+                #     )(norm(x), train)
+                # )
+                attn_out = CausalAttention(
+                    self.embedding_dim,
+                    self.num_head,
+                    self.block_size,
+                    self.residual_dropout,
+                    self.N,
+                    self.alibi_attn,
+                )(norm(x), train, use_cache, layer_past)
                 return (
                     x
-                    + CausalAttention(
-                        self.embedding_dim,
-                        self.num_head,
-                        self.block_size,
-                        self.residual_dropout,
-                        self.N,
-                        self.alibi_attn,
-                    )(norm(x), train)
+                    + attn_out[0]
                     + MLPBlock(
                         self.embedding_dim, dropout=self.residual_dropout, N=self.N
-                    )(norm(x), train)
+                    )(norm(x), train),
+                    attn_out[1],
                 )
         else:
-            x = x + CausalAttention(
+            attn_out = CausalAttention(
                 self.embedding_dim,
                 self.num_head,
                 self.block_size,
                 self.residual_dropout,
                 self.N,
                 self.alibi_attn,
-            )(nn.LayerNorm()(x), train)
+            )(nn.LayerNorm()(x), train, use_cache, layer_past)
+            x = x + attn_out[0]
             x = x + MLPBlock(
                 self.embedding_dim, dropout=self.residual_dropout, N=self.N
             )(nn.LayerNorm()(x), train)
-            return x
+            return x, attn_out[1]
 
 
 class Transformer(nn.Module):
@@ -343,7 +382,12 @@ class Transformer(nn.Module):
 
     @nn.compact
     def __call__(
-        self, x: jnp.array, labels: jnp.array = None, train: bool = False
+        self,
+        x: jnp.array,
+        labels: jnp.array = None,
+        train: bool = False,
+        use_cache: bool = False,
+        past_states: Tuple[jnp.array, jnp.array] = None,
     ) -> jnp.array:
 
         B, T = x.shape[0:2]
@@ -368,9 +412,16 @@ class Transformer(nn.Module):
 
             out += wpe
 
-        for _ in range(self.N):
+        present_states = []
+        if not use_cache:
+            past_states = [None] * self.N
 
-            out = TransformerBlock(
+        if past_states is None:
+            past_states = [None] * self.N
+
+        for _, past_state in zip(range(self.N), past_states):
+
+            out, layer_past = TransformerBlock(
                 self.embedding_dim,
                 self.num_head,
                 self.block_size,
@@ -379,7 +430,9 @@ class Transformer(nn.Module):
                 self.fused_residuals,
                 self.alibi_attn,
                 self.use_static_sgu,
-            )(out, train)
+            )(out, train, use_cache, past_state)
+
+            present_states.append(layer_past)
 
         out = nn.LayerNorm()(out)
 
@@ -411,7 +464,10 @@ class Transformer(nn.Module):
             logits = logits + c
 
         if labels is None:
-            return logits
+            if use_cache:
+                return logits, present_states
+            else:
+                return logits
         else:
             labels_shifted = labels[..., 1:].reshape(-1)
             logits_shifted = logits[..., :-1, :].reshape(-1, logits.shape[-1])
