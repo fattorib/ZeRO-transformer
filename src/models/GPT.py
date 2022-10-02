@@ -258,7 +258,8 @@ class TransformerBlock(nn.Module):
                     + fused_out
                     + MLPBlock(
                         self.embedding_dim, dropout=self.residual_dropout, N=self.N
-                    )(norm(x), train), attn_out[1]
+                    )(norm(x), train),
+                    attn_out[1],
                 )
 
             else:
