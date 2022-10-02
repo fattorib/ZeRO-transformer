@@ -64,8 +64,6 @@ See ```writeup.md```
 
 # Training 
 
-TODO 
-
 # TODOS:
 1. Ability to port weights from [Little-GPT](https://github.com/fattorib/Little-GPT)
 2. Caching previously generated states for faster sequence decoding
