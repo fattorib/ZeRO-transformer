@@ -2,6 +2,7 @@ from typing import List
 
 import numpy as np
 import pandas as pd
+
 import wandb
 
 api = wandb.Api()

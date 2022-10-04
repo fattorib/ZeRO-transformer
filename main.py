@@ -11,7 +11,6 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 import torch
-import wandb
 import webdataset as wds
 from flax.training import checkpoints
 from flax.training.common_utils import shard
@@ -20,6 +19,7 @@ from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+import wandb
 from src.models.GPT import model_getter
 from src.training.training_utils import (compute_tokens_seen,
                                          create_train_state, step_to_seq_len)
@@ -373,7 +373,7 @@ def main():
                         * train_metrics_np["Train Batch Time"]
                     )
 
-                    absolute_step = (i // cfg.training.gradient_accumulation_steps)
+                    absolute_step = i // cfg.training.gradient_accumulation_steps
                     if len(cfg.training.staged_sequences) > 0:
                         train_metrics_np["Tokens Seen (B)"] = (
                             num_host
