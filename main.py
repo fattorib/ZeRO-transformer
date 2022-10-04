@@ -259,13 +259,7 @@ def main():
     else:
         step_to_seq = lambda x: cfg.data.max_context
 
-    epoch = 0
     for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
-
-        if (
-            i // cfg.training.gradient_accumulation_steps
-        ) == cfg.data.full_steps_in_batch:
-            epoch += 1
 
         if (i // cfg.training.gradient_accumulation_steps) > cfg.training.total_steps:
             if jax.process_index() == 0:
@@ -273,7 +267,7 @@ def main():
 
             return True
 
-        if resume_step != None and i <= resume_step and epoch == 0:
+        if resume_step != None and i <= resume_step:
             continue
 
         seq_len = step_to_seq(i)
@@ -379,9 +373,7 @@ def main():
                         * train_metrics_np["Train Batch Time"]
                     )
 
-                    absolute_step = (i // cfg.training.gradient_accumulation_steps) + (
-                        epoch * cfg.data.full_steps_in_batch
-                    )
+                    absolute_step = (i // cfg.training.gradient_accumulation_steps)
                     if len(cfg.training.staged_sequences) > 0:
                         train_metrics_np["Tokens Seen (B)"] = (
                             num_host
