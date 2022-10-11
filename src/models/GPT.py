@@ -53,7 +53,7 @@ class MLPBlock(nn.Module):
         out = nn.Dense(
             features=self.embedding_dim,
             name="fc_residual",
-            kernel_init=initializers.normal(stddev=(0.02 / jnp.sqrt(self.N))),
+            kernel_init=initializers.normal(stddev=(0.02 / jnp.sqrt(2*self.N))),
             bias_init=initializers.zeros,
         )(x)
         return dropout()(out)
@@ -189,7 +189,7 @@ class CausalAttention(nn.Module):
         out = nn.Dense(
             name="residual_out",
             features=self.embedding_dim,
-            kernel_init=jax.nn.initializers.normal(stddev=(0.02 / jnp.sqrt(self.N))),
+            kernel_init=jax.nn.initializers.normal(stddev=(0.02 / jnp.sqrt(2*self.N))),
             bias_init=initializers.zeros,
         )(attn_out)
 
