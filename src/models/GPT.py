@@ -474,57 +474,57 @@ class Transformer(nn.Module):
         sample: bool = False,
         sample_rng: jax.random.PRNGKey = None,
     ) -> jnp.array:
-    """Performs basic text generation. Supports temperature-based sampling
+        """Performs basic text generation. Supports temperature-based sampling
 
-    Args:
-        context (list): tokenized text to continue
-        max_length (int): The maximum length of tokens to generate (sum of context tokens + *generated tokens*)
-        sample (bool): Boolean whether to sample from logits distribution
-        model (flax.linen.Module): Flax module structure
-        variables (flax.core.frozen_dict.FrozenDict): Serialized model variables
-        sample_rng (jax.random.PRNGKey): RNG key used if sampling from distribution
+        Args:
+            context (list): tokenized text to continue
+            max_length (int): The maximum length of tokens to generate (sum of context tokens + *generated tokens*)
+            sample (bool): Boolean whether to sample from logits distribution
+            model (flax.linen.Module): Flax module structure
+            variables (flax.core.frozen_dict.FrozenDict): Serialized model variables
+            sample_rng (jax.random.PRNGKey): RNG key used if sampling from distribution
 
-    Returns:
-        jnp.array: Generated text, must be detokenized
-    """
+        Returns:
+            jnp.array: Generated text, must be detokenized
+        """
 
-    context = jnp.array(context, dtype=jnp.int32)
+        context = jnp.array(context, dtype=jnp.int32)
 
-    x = context.reshape(1, -1)
+        x = context.reshape(1, -1)
 
-    num_generation_steps = max_length - x.shape[1]
+        num_generation_steps = max_length - x.shape[1]
 
-    if x.shape[1] > self.block_size:
-        x_cond = x[:, -self.block_size :]
-    else:
-        x_cond = x
-
-    layer_past = None
-    # naive - not using scan
-    for _ in range(num_generation_steps):
-
-        if sample_rng is not None:
-            sample_rng, rng = jax.random.split(sample_rng, 2)
-        logits, layer_past = self.apply(
-            variables, x_cond, use_cache=True, past_states=layer_past
-        )
-        logits = logits[:, -1, :] / temperature
-
-        probs = jax.nn.softmax(logits, axis=-1)
-
-        if not sample:
-            x_cond = jnp.array(jnp.argmax(probs), dtype=jnp.int32).reshape(1, -1)
-            x = jnp.concatenate((x, x_cond), axis=1)
-
+        if x.shape[1] > self.block_size:
+            x_cond = x[:, -self.block_size :]
         else:
-            assert (
-                sample_rng is not None
-            ), "Must provide rng key when sampling from logit distribution"
-            sample = jax.random.categorical(rng, logits=logits)
-            x_cond = jnp.array(sample, dtype=jnp.int32).reshape(1, -1)
-            x = jnp.concatenate((x, x_cond), axis=1)
+            x_cond = x
 
-    return jnp.squeeze(x)
+        layer_past = None
+        # naive - not using scan
+        for _ in range(num_generation_steps):
+
+            if sample_rng is not None:
+                sample_rng, rng = jax.random.split(sample_rng, 2)
+            logits, layer_past = self.apply(
+                variables, x_cond, use_cache=True, past_states=layer_past
+            )
+            logits = logits[:, -1, :] / temperature
+
+            probs = jax.nn.softmax(logits, axis=-1)
+
+            if not sample:
+                x_cond = jnp.array(jnp.argmax(probs), dtype=jnp.int32).reshape(1, -1)
+                x = jnp.concatenate((x, x_cond), axis=1)
+
+            else:
+                assert (
+                    sample_rng is not None
+                ), "Must provide rng key when sampling from logit distribution"
+                sample = jax.random.categorical(rng, logits=logits)
+                x_cond = jnp.array(sample, dtype=jnp.int32).reshape(1, -1)
+                x = jnp.concatenate((x, x_cond), axis=1)
+
+        return jnp.squeeze(x)
 
     @nn.compact
     def __call__(
