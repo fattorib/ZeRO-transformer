@@ -23,6 +23,7 @@ logs/*
 
 keys.py
 cmds.md
+pjit_notes.md
 
 .gitignore
 
