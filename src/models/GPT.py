@@ -88,7 +88,7 @@ class CausalAttention(nn.Module):
         alibi_mask: jnp.array = None,
         use_cache: bool = False,
         layer_past: Tuple[jnp.array, jnp.array] = None,
-        pad_mask: jnp.array = None 
+        pad_mask: jnp.array = None,
     ) -> Tuple[jnp.array, jnp.array]:
         dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
         B, T, C = x.shape[:3]
@@ -172,7 +172,7 @@ class CausalAttention(nn.Module):
             masked_attn = jnp.where(mask, attn_full, jnp.finfo(self.dtype).min)
 
         else:
-            combined_mask = mask*pad_mask
+            combined_mask = mask * pad_mask
             # print(combined_mask[:,0,-1,-20:])
             # print(mask[:,0,-1,-20:])
 
@@ -244,7 +244,7 @@ class TransformerBlock(nn.Module):
         train: bool = False,
         use_cache: bool = False,
         layer_past: Tuple[jnp.array, jnp.array] = None,
-        pad_mask: jnp.array = None
+        pad_mask: jnp.array = None,
     ) -> Tuple[jnp.array, jnp.array]:
 
         if self.fused_residuals:
@@ -353,19 +353,18 @@ class Transformer(nn.Module):
     #     Returns:
     #         Tuple[jnp.array, List[jnp.array]]: Generated token, Cached Key/Value states
     #     """
-        
+
     #     pad_amount = self.block_size - len(context)
     #     context = jnp.array(context, dtype=jnp.int32)
     #     context = jnp.pad(context, ((pad_amount, 0),), constant_values=50256).astype(
     #         jnp.uint32
     #     )
     #     x = context.reshape(1, -1)
-        
+
     #     initial_pad_mask = jnp.array(jnp.broadcast_to(
     #         jnp.arange(self.block_size) >= pad_amount,
     #         (1, 1, 1, self.block_size)),dtype = jnp.uint8
     #     )
-
 
     #     #TODO: This will need to be moved around
     #     if x.shape[1] > self.block_size:
@@ -426,7 +425,7 @@ class Transformer(nn.Module):
     #         def generate_scan_fn(carry, aux):
     #             x_cond, layer_past, sample_rng, pad_amount = carry
     #             sample = aux
-                
+
     #             pad_amount = pad_amount - 1
 
     #             if sample_rng is not None:
@@ -453,7 +452,6 @@ class Transformer(nn.Module):
     #         context = jnp.array(context, dtype=jnp.int32)
     #         num_generation_steps = max_length
 
-            
     #         final_state = jax.lax.scan(
     #             generate_scan_fn,
     #             initial_state,
@@ -534,7 +532,7 @@ class Transformer(nn.Module):
         train: bool = False,
         use_cache: bool = False,
         past_states: Tuple[jnp.array, jnp.array] = None,
-        pad_mask: jnp.array = None
+        pad_mask: jnp.array = None,
     ) -> Union[jnp.array, Tuple[jnp.array, jnp.array]]:
 
         B, T = x.shape[0:2]
