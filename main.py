@@ -306,8 +306,8 @@ def main():
             # this actually sends a lot of data, to avoid hangs on slow connection,
             # only take one minibatch of the total activations
             out_chunk = get_intermediates(running_intermediates[0]["Activation PyTree"])
-            for j in range(len(out_chunk)):
-                intermediates_dict[f"Layer_{j}_Activation"] += out_chunk[j]
+            for key in out_chunk.keys():
+                intermediates_dict[key] += out_chunk[key]
 
             # TODO: Gradients
 

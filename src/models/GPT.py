@@ -368,7 +368,6 @@ class Transformer(nn.Module):
         if past_states is None:
             past_states = [None] * self.N
 
-        intermediate_states = []
         for i, past_state in zip(range(self.N), past_states):
 
             out, layer_past = TransformerBlock(
@@ -380,8 +379,6 @@ class Transformer(nn.Module):
                 self.fused_residuals,
                 self.alibi_attn,
             )(out, train, use_cache, past_state, pad_mask)
-
-            # self.sow("intermediates", f"block_activations_{i}", out)
 
             present_states.append(layer_past)
 
