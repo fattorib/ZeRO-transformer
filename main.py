@@ -1,4 +1,5 @@
 import argparse
+import collections
 import logging
 import random as pyrandom
 import time
@@ -23,6 +24,7 @@ import wandb
 from src.models.GPT import model_getter
 from src.training.training_utils import (compute_tokens_seen,
                                          create_train_state, step_to_seq_len)
+from src.training.inspector_utils import get_intermediates
 from src.utils.configs import flatten_dict
 from src.utils.dataloader import numpy_collate
 
@@ -58,6 +60,8 @@ def save_checkpoint(state, workdir):
 
 def restore_checkpoint(state, workdir):
     return checkpoints.restore_checkpoint(workdir, state)
+
+
 
 
 def main():
@@ -144,13 +148,14 @@ def main():
         resume_step = int(state.step)
 
     else:
-        # clear bucket here
-        client = storage.Client()
-        if jax.process_index() == 0:
-            bucket = storage.Bucket(client, f"{cfg.data.bucket_path}")
-            blobs = bucket.list_blobs(prefix=f"{cfg.data.checkpoint_directory}")
-            for blob in blobs:
-                blob.delete()
+        if cfg.data.bucket_path is not None:
+            # clear bucket here
+            client = storage.Client()
+            if jax.process_index() == 0:
+                bucket = storage.Bucket(client, f"{cfg.data.bucket_path}")
+                blobs = bucket.list_blobs(prefix=f"{cfg.data.checkpoint_directory}")
+                for blob in blobs:
+                    blob.delete()
 
     # replicating state across devices
     state = flax.jax_utils.replicate(state)
@@ -179,7 +184,7 @@ def main():
 
     if jax.process_index() == 0:
         id = wandb.util.generate_id()
-        wandb.init(id=id, resume="allow", project="LJX")
+        wandb.init(id=id, resume="allow", project="transformer-inspector")
         flat_dict = flatten_dict(cfg)
 
         for key in model_config.keys():
@@ -245,6 +250,7 @@ def main():
     )
 
     running_metrics = []
+    running_intermediates = []
 
     if len(cfg.training.staged_sequences) > 0:
 
@@ -279,7 +285,7 @@ def main():
 
         t0 = time.time()
 
-        state, metrics = train_step(
+        state, metrics, inspector_statistics = train_step(
             state,
             sharded_batch,
         )
@@ -288,6 +294,7 @@ def main():
         metrics["Train Sequence Length"] = seq_len
 
         running_metrics.append(metrics)
+        running_intermediates.append(inspector_statistics)
 
         if (i) % cfg.training.gradient_accumulation_steps == 0:
             # we've completed a full batch of data, log the metrics
@@ -297,9 +304,25 @@ def main():
                 for k in running_metrics[0]
             }
 
-            running_metrics = []
+            intermediates_dict = collections.defaultdict(list)
+            # this actually sends a lot of data, to avoid hangs on slow connection, 
+            # only take one minibatch of the total activations
+            out_chunk = get_intermediates(running_intermediates[0]["Activation PyTree"])
+            for j in range(len(out_chunk)):
+                intermediates_dict[f"Layer_{j}_Activation"] += out_chunk[j]
 
+        
+            # TODO: Gradients
+
+            running_metrics = []
+            running_intermediates = []
             validation_metrics = []
+
+            intermediates_hist = {}
+            for key in intermediates_dict.keys():
+                intermediates_hist[key] = wandb.Histogram(intermediates_dict[key])
+
+            train_metrics_np.update(intermediates_hist)
 
             if (i) % (
                 cfg.training.evaluation_frequency
@@ -356,6 +379,7 @@ def main():
                         )
 
                     train_metrics_np.pop("Train Batch Time")
+
                     wandb.log(train_metrics_np)
 
                     if save_to_bucket:
@@ -410,31 +434,36 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
     """Train on a single batch"""
 
     def loss_fn(params):
-        _, loss = state.apply_fn(
+        (_, loss), intermediates = state.apply_fn(
             {"params": params["params"]},
             x=batch,
             labels=batch,
             train=False,
+            mutable="intermediates",
         )
 
-        return loss
+        return loss, intermediates
 
-    grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
-    loss, grads = grad_fn(state.params)
+    grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
+    (loss, intermediates), grads = grad_fn(state.params)
 
     # compute all-reduce mean for gradients and loss
     # Ex: If we have 8 devices, each device takes the gradients from the other 7 and averages them all together
     # that way, all device replicas have the same gradients and optimization step can occur in parallel
     loss = jax.lax.pmean(loss, axis_name="batch")
     grads = jax.lax.pmean(grads, axis_name="batch")
-
     state = state.apply_gradients(
         grads=grads,
     )
 
     metrics = {"Train LM Loss": loss, "Train LM PPL": jnp.exp(loss)}
 
-    return state, metrics
+    inspector_statistics = {
+        "Activation PyTree": intermediates,
+        "Gradient PyTree": grads,
+    }
+
+    return state, metrics, inspector_statistics
 
 
 @partial(jax.pmap, axis_name="batch")
@@ -455,7 +484,8 @@ def eval_step(state: Any, batch: jnp.array):
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        print(f"Error encountered: {e}")
+    # try:
+    #     main()
+    # except Exception as e:
+    #     print(f"Error encountered: {e}")
+    main()
