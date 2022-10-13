@@ -7,6 +7,7 @@ import flax.linen as nn
 import jax
 import jax.numpy as jnp
 import jax.random as random
+import pytest
 
 from src.models.GPT import (CausalAttention, MLPBlock, Transformer,
                             TransformerBlock)
@@ -21,6 +22,7 @@ class TestTransformerBlock(unittest.TestCase):
     def tearDown(self) -> None:
         pass
 
+    @pytest.mark.skip(reason="Not using SGU for now")
     def test_block_fwd_sgu(self):
 
         block = TransformerBlock(
@@ -76,6 +78,7 @@ class TestGPT(unittest.TestCase):
     def tearDown(self) -> None:
         pass
 
+    @pytest.mark.skip(reason="Not using SGU for now")
     def test_gpt_fwd_static_sgu(self):
         # Ensure the QK trick shapes are correct
 
@@ -125,6 +128,7 @@ class TestGPT(unittest.TestCase):
         )
         self.assertEqual((1, self.block_size, self.vocab_size), out.shape)
 
+    @pytest.mark.skip(reason="Not using QK for now")
     def test_gpt_fwd_qk_trick(self):
         # Ensure the QK trick shapes are correct
 
