@@ -1,7 +1,7 @@
 """ 
 Helper methods used during training setup. 
 """
-from typing import Callable, List, Union
+from typing import Any, Callable, List, Union
 
 import flax.linen as nn
 import jax

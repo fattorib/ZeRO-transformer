@@ -53,9 +53,10 @@ class MLPBlock(nn.Module):
         out = nn.Dense(
             features=self.embedding_dim,
             name="fc_residual",
-            kernel_init=initializers.normal(stddev=(0.02 / jnp.sqrt(2*self.N))),
+            kernel_init=initializers.normal(stddev=(0.02 / jnp.sqrt(2 * self.N))),
             bias_init=initializers.zeros,
         )(x)
+        self.sow("intermediates", "mlp_out", x)
         return dropout()(out)
 
 
@@ -173,12 +174,7 @@ class CausalAttention(nn.Module):
 
         else:
             combined_mask = mask * pad_mask
-            # print(combined_mask[:,0,-1,-20:])
-            # print(mask[:,0,-1,-20:])
-
             masked_attn = jnp.where(combined_mask, attn_full, jnp.finfo(self.dtype).min)
-            # print(masked_attn[:,0,-1,-20:])
-        #     print()
 
         attn_scores = nn.softmax(masked_attn, axis=-1)
         attn_out = (attn_scores @ value).transpose(
@@ -189,39 +185,15 @@ class CausalAttention(nn.Module):
         out = nn.Dense(
             name="residual_out",
             features=self.embedding_dim,
-            kernel_init=jax.nn.initializers.normal(stddev=(0.02 / jnp.sqrt(2*self.N))),
+            kernel_init=jax.nn.initializers.normal(
+                stddev=(0.02 / jnp.sqrt(2 * self.N))
+            ),
             bias_init=initializers.zeros,
         )(attn_out)
 
+        self.sow("intermediates", "attn_out", out)
+
         return dropout()(out), present
-
-
-class SGU(nn.Module):
-    """Static SGU module"""
-
-    block_size: int
-    embedding_dim: int
-    kernel_size: int
-
-    def setup(self):
-        k = jnp.triu(
-            jnp.tril(
-                jnp.ones((self.block_size, self.block_size)), -1 * self.kernel_size
-            )
-        )
-        k = k / (k.cumsum(-2) + 1)
-        self.kernel = k
-
-    @nn.compact
-    def __call__(self, x: jnp.array) -> jnp.array:
-
-        x = jax.lax.stop_gradient(x)
-
-        x = rearrange(x, "b n d -> b d n")
-        x = x @ (self.kernel.T)
-        x = rearrange(x, "b d n -> b n d")
-
-        return x
 
 
 class TransformerBlock(nn.Module):
@@ -248,54 +220,23 @@ class TransformerBlock(nn.Module):
     ) -> Tuple[jnp.array, jnp.array]:
 
         if self.fused_residuals:
-            if self.use_static_sgu:
-                norm = nn.LayerNorm()
-                split_dim = x.shape[-1] // 2
-                split_arr = jnp.split(norm(x), indices_or_sections=2, axis=-1)
-                x_sgu, x_attn = split_arr[0], split_arr[1]
-
-                attn_out = CausalAttention(
-                    self.embedding_dim // 2,
-                    self.num_head,
-                    self.block_size,
-                    self.residual_dropout,
-                    self.N,
-                    self.alibi_attn,
-                )(x_attn, train, None, use_cache, layer_past, pad_mask)
-
-                sgu_out = SGU(
-                    self.block_size, self.embedding_dim // 2, kernel_size=128
-                )(x_sgu)
-
-                fused_out = jnp.concatenate((sgu_out, attn_out[0]), axis=-1)
-
-                return (
-                    x
-                    + fused_out
-                    + MLPBlock(
-                        self.embedding_dim, dropout=self.residual_dropout, N=self.N
-                    )(norm(x), train),
-                    attn_out[1],
-                )
-
-            else:
-                norm = nn.LayerNorm()
-                attn_out = CausalAttention(
-                    self.embedding_dim,
-                    self.num_head,
-                    self.block_size,
-                    self.residual_dropout,
-                    self.N,
-                    self.alibi_attn,
-                )(norm(x), train, None, use_cache, layer_past, pad_mask)
-                return (
-                    x
-                    + attn_out[0]
-                    + MLPBlock(
-                        self.embedding_dim, dropout=self.residual_dropout, N=self.N
-                    )(norm(x), train),
-                    attn_out[1],
-                )
+            norm = nn.LayerNorm()
+            attn_out = CausalAttention(
+                self.embedding_dim,
+                self.num_head,
+                self.block_size,
+                self.residual_dropout,
+                self.N,
+                self.alibi_attn,
+            )(norm(x), train, None, use_cache, layer_past, pad_mask)
+            return (
+                x
+                + attn_out[0]
+                + MLPBlock(self.embedding_dim, dropout=self.residual_dropout, N=self.N)(
+                    norm(x), train
+                ),
+                attn_out[1],
+            )
         else:
             attn_out = CausalAttention(
                 self.embedding_dim,
@@ -326,142 +267,6 @@ class Transformer(nn.Module):
     dtype: Any = jnp.float32
     fused_residuals: bool = False
     alibi_attn: bool = False
-    head_qk_trick: bool = False
-    use_static_sgu: bool = False
-
-    # def generate_token_from_context(
-    #     self,
-    #     variables: flax.core.frozen_dict.FrozenDict,
-    #     context: jnp.array,
-    #     temperature: float = 1.0,
-    #     sample: bool = False,
-    #     sample_rng: jax.random.PRNGKey = None,
-    # ) -> Tuple[jnp.array, List[jnp.array]]:
-    #     """
-    #     From an initial token context, generates the next token completion once and returns it.
-
-    #     During decoding, this function is called *once* at the beginning at subsequent generations are
-    #     handled by generate_from_cache()
-
-    #     Args:
-    #         context (list): tokenized text to continue
-    #         sample (bool): Boolean whether to sample from logits distribution
-    #         model (flax.linen.Module): Flax module structure
-    #         variables (flax.core.frozen_dict.FrozenDict): Serialized model variables
-    #         sample_rng (jax.random.PRNGKey): RNG key used if sampling from distribution
-
-    #     Returns:
-    #         Tuple[jnp.array, List[jnp.array]]: Generated token, Cached Key/Value states
-    #     """
-
-    #     pad_amount = self.block_size - len(context)
-    #     context = jnp.array(context, dtype=jnp.int32)
-    #     context = jnp.pad(context, ((pad_amount, 0),), constant_values=50256).astype(
-    #         jnp.uint32
-    #     )
-    #     x = context.reshape(1, -1)
-
-    #     initial_pad_mask = jnp.array(jnp.broadcast_to(
-    #         jnp.arange(self.block_size) >= pad_amount,
-    #         (1, 1, 1, self.block_size)),dtype = jnp.uint8
-    #     )
-
-    #     #TODO: This will need to be moved around
-    #     if x.shape[1] > self.block_size:
-    #         x_cond = x[:, -self.block_size :]
-    #     else:
-    #         x_cond = x
-
-    #     layer_past = None
-    #     if sample_rng is not None:
-    #         sample_rng, rng = jax.random.split(sample_rng, 2)
-    #     logits, layer_past = self.apply(
-    #         variables, x_cond, use_cache=True, past_states=layer_past, pad_mask = initial_pad_mask
-    #     )
-    #     logits = logits[:, -1, :] / temperature
-
-    #     assert (
-    #         sample_rng is not None
-    #     ), "Must provide rng key when sampling from logit distribution"
-    #     sample = jax.random.categorical(rng, logits=logits)
-    #     x_cond = jnp.array(sample, dtype=jnp.int32).reshape(1, -1)
-
-    #     return (x_cond, layer_past, sample_rng,pad_amount)
-
-    # def generate_with_cache(
-    #     self,
-    #     variables: flax.core.frozen_dict.FrozenDict,
-    #     context: jnp.array,
-    #     max_length: int = 30,
-    #     temperature: float = 1.0,
-    #     sample: bool = False,
-    #     sample_rng: jax.random.PRNGKey = None,
-    # ):
-    #     """
-    #     Handles token decoding from a cache of an initial context.
-
-    #     Args:
-    #         context (list): tokenized text to continue
-    #         num_generation_steps (int): The maximum length of tokens to generate
-    #         sample (bool): Boolean whether to sample from logits distribution
-    #         model (flax.linen.Module): Flax module structure
-    #         variables (flax.core.frozen_dict.FrozenDict): Serialized model variables
-    #         sample_rng (jax.random.PRNGKey): RNG key used if sampling from distribution
-
-    #     Returns:
-    #         Tuple[jnp.array, List[jnp.array]]: Generated token, Cached Key/Value states
-    #     """
-
-    #     def generate_sample(context, sample):
-
-    #         initial_state = self.generate_token_from_context(
-    #             variables,
-    #             context,
-    #             temperature,
-    #             sample,
-    #             sample_rng,
-    #         )
-
-    #         def generate_scan_fn(carry, aux):
-    #             x_cond, layer_past, sample_rng, pad_amount = carry
-    #             sample = aux
-
-    #             pad_amount = pad_amount - 1
-
-    #             if sample_rng is not None:
-    #                 sample_rng, rng = jax.random.split(sample_rng, 2)
-
-    #             pad_mask = jnp.array(jnp.broadcast_to(
-    #                 jnp.arange(self.block_size) >= pad_amount,
-    #                 (1, 1, 1, self.block_size)),dtype = jnp.uint8
-    #             )
-
-    #             logits, layer_past = self.apply(
-    #                 variables, x_cond, use_cache=True, past_states=layer_past, pad_mask = pad_mask
-    #             )
-    #             logits = logits[:, -1, :] / temperature
-
-    #             assert (
-    #                 sample_rng is not None
-    #             ), "Must provide rng key when sampling from logit distribution"
-    #             sample = jax.random.categorical(rng, logits=logits)
-    #             x_cond = jnp.array(sample, dtype=jnp.int32).reshape(1, -1)
-
-    #             return (x_cond, layer_past, sample_rng, pad_amount), x_cond
-
-    #         context = jnp.array(context, dtype=jnp.int32)
-    #         num_generation_steps = max_length
-
-    #         final_state = jax.lax.scan(
-    #             generate_scan_fn,
-    #             initial_state,
-    #             jnp.array([sample] * num_generation_steps),
-    #             length=num_generation_steps,
-    #         )
-    #         return final_state
-
-    #     with jax.disable_jit():
-    #         return generate_sample(context, sample)
 
     def generate(
         self,
@@ -498,7 +303,6 @@ class Transformer(nn.Module):
             x_cond = x
 
         layer_past = None
-        # naive - not using scan
         for _ in range(num_generation_steps):
 
             if sample_rng is not None:
@@ -564,7 +368,8 @@ class Transformer(nn.Module):
         if past_states is None:
             past_states = [None] * self.N
 
-        for _, past_state in zip(range(self.N), past_states):
+        intermediate_states = []
+        for i, past_state in zip(range(self.N), past_states):
 
             out, layer_past = TransformerBlock(
                 self.embedding_dim,
@@ -574,39 +379,15 @@ class Transformer(nn.Module):
                 self.N,
                 self.fused_residuals,
                 self.alibi_attn,
-                self.use_static_sgu,
             )(out, train, use_cache, past_state, pad_mask)
+
+            # self.sow("intermediates", f"block_activations_{i}", out)
 
             present_states.append(layer_past)
 
         out = nn.LayerNorm()(out)
 
         logits = embed.attend(out)
-
-        if self.head_qk_trick:
-            # from: https://github.com/BlinkDL/RWKV-LM#the-head-qk-trick-learning-to-copy-and-avoid-tokens
-            q_head = nn.Dense(
-                name="head_q",
-                features=256,
-                kernel_init=initializers.zeros,
-                use_bias=False,
-            )(out)
-
-            k_head = nn.Dense(
-                name="head_k",
-                features=256,
-                kernel_init=initializers.orthogonal(scale=0.1),
-                use_bias=False,
-            )(out)
-
-            c = (q_head @ k_head.transpose(0, 2, 1)) / (k_head.shape[-1])
-
-            mask = jnp.tril(jnp.ones((T, T), dtype=jnp.int8)).reshape(1, T, T)
-            c = jnp.where(mask, c, 0)
-
-            c = c @ jax.nn.one_hot(x, num_classes=self.vocab_size)
-
-            logits = logits + c
 
         if labels is None:
             if use_cache:
