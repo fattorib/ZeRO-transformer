@@ -1,8 +1,9 @@
-import jax
-import jax.numpy as jnp 
-import numpy as np 
 from typing import List
+
 import flax
+import jax
+import jax.numpy as jnp
+import numpy as np
 
 
 def to_list(arr: jnp.array) -> List:
@@ -22,11 +23,11 @@ def get_intermediates(intermediates) -> List:
     features = {}
     for key in reshaped["intermediates"].keys():
         for activation in reshaped["intermediates"][key].keys():
-            if 'CausalAttention' in activation:
-                act = reshaped["intermediates"][key][activation]['attn_out']
+            if "CausalAttention" in activation:
+                act = reshaped["intermediates"][key][activation]["attn_out"]
             else:
-                act = reshaped["intermediates"][key][activation]['mlp_out']
-            features[f'{key}_{activation}'] = list(np.array(act).squeeze())
+                act = reshaped["intermediates"][key][activation]["mlp_out"]
+            features[f"{key}_{activation}"] = list(np.array(act).squeeze())
     return features
 
 

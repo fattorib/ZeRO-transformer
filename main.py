@@ -22,9 +22,9 @@ from tqdm import tqdm
 
 import wandb
 from src.models.GPT import model_getter
+from src.training.inspector_utils import get_intermediates
 from src.training.training_utils import (compute_tokens_seen,
                                          create_train_state, step_to_seq_len)
-from src.training.inspector_utils import get_intermediates
 from src.utils.configs import flatten_dict
 from src.utils.dataloader import numpy_collate
 
@@ -60,8 +60,6 @@ def save_checkpoint(state, workdir):
 
 def restore_checkpoint(state, workdir):
     return checkpoints.restore_checkpoint(workdir, state)
-
-
 
 
 def main():
@@ -305,13 +303,12 @@ def main():
             }
 
             intermediates_dict = collections.defaultdict(list)
-            # this actually sends a lot of data, to avoid hangs on slow connection, 
+            # this actually sends a lot of data, to avoid hangs on slow connection,
             # only take one minibatch of the total activations
             out_chunk = get_intermediates(running_intermediates[0]["Activation PyTree"])
             for j in range(len(out_chunk)):
                 intermediates_dict[f"Layer_{j}_Activation"] += out_chunk[j]
 
-        
             # TODO: Gradients
 
             running_metrics = []
