@@ -31,11 +31,13 @@ def get_intermediates(intermediates) -> List:
             features[f"{key}_{activation}"] = list(np.array(act).squeeze())
     return features
 
-def get_num_components_PCA(params, explained_variance = 0.9) -> int:
-    embedding_weight = np.array(params['params']['wte']['embedding'])
+
+def get_num_components_PCA(params, explained_variance=0.9) -> int:
+    embedding_weight = np.array(params["params"]["wte"]["embedding"]).squeeze()
     pca_cls = PCA(n_components=explained_variance)
     _ = pca_cls.fit_transform(embedding_weight)
     return pca_cls.components_.shape
+
 
 def get_weights_gradients(params) -> List:
     weight_params = flax.traverse_util.ModelParamTraversal(

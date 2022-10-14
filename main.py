@@ -22,7 +22,8 @@ from tqdm import tqdm
 
 import wandb
 from src.models.GPT import model_getter
-from src.training.inspector_utils import get_intermediates, get_num_components_PCA
+from src.training.inspector_utils import (get_intermediates,
+                                          get_num_components_PCA)
 from src.training.training_utils import (compute_tokens_seen,
                                          create_train_state, step_to_seq_len)
 from src.utils.configs import flatten_dict
@@ -311,9 +312,11 @@ def main():
 
             # TODO: Gradients
 
-            num_pca_components = get_num_components_PCA(state.params, explained_variance = 0.9)
+            num_pca_components = get_num_components_PCA(
+                state.params, explained_variance=0.9
+            )
 
-            train_metrics_np.update({'PCA Components': num_pca_components})
+            train_metrics_np.update({"PCA Components": num_pca_components})
 
             running_metrics = []
             running_intermediates = []
