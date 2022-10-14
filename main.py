@@ -23,7 +23,7 @@ from tqdm import tqdm
 import wandb
 from src.models.GPT import model_getter
 from src.training.inspector_utils import (get_intermediates,
-                                          get_num_components_PCA)
+                                          get_num_components_pca)
 from src.training.training_utils import (compute_tokens_seen,
                                          create_train_state, step_to_seq_len)
 from src.utils.configs import flatten_dict
@@ -312,7 +312,7 @@ def main():
 
             # TODO: Gradients
 
-            num_pca_components = get_num_components_PCA(
+            num_pca_components = get_num_components_pca(
                 state.params, explained_variance=0.9
             )
 
