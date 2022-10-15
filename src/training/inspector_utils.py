@@ -4,14 +4,32 @@ import flax
 import jax
 import jax.numpy as jnp
 import numpy as np
+from flax.core.frozen_dict import FrozenDict
 from sklearn.decomposition import PCA
 
 
+# Utility functions for working with jax arrays and pytrees
 def to_list(arr: jnp.array) -> List:
     """
     Helper function for conversion of jnp.array to a list
     """
     return list(np.array(arr, dtype=np.float32).squeeze())
+
+
+def pytree_devices(pytree: FrozenDict) -> FrozenDict:
+    """
+    Get device for all arrays in a FrozenDict
+    """
+    device_pytree = jax.tree_util.tree_map(lambda xs: xs.device(), pytree)
+    return device_pytree
+
+
+def pytree_to_cpu(pytree: FrozenDict) -> FrozenDict:
+    """
+    Send all arrays in a FrozenDict to host device
+    """
+    cpu_pytree = jax.tree_util.tree_map(lambda xs: jax.device_get(xs), pytree)
+    return cpu_pytree
 
 
 def get_intermediates(intermediates) -> List:

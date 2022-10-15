@@ -23,7 +23,8 @@ from tqdm import tqdm
 import wandb
 from src.models.GPT import model_getter
 from src.training.inspector_utils import (get_intermediates,
-                                          get_num_components_pca)
+                                          get_num_components_pca,
+                                          pytree_to_cpu)
 from src.training.training_utils import (compute_tokens_seen,
                                          create_train_state, step_to_seq_len)
 from src.utils.configs import flatten_dict
