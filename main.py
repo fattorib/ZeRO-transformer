@@ -311,7 +311,7 @@ def main():
             for key in out_chunk.keys():
                 intermediates_dict[key] += out_chunk[key]
 
-            # TODO: Gradients
+            # TODO: Log Gradients
 
             num_pca_components = get_num_components_pca(
                 state.params, explained_variance=0.9
@@ -452,7 +452,7 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
     grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
     (loss, intermediates), grads = grad_fn(state.params)
 
-    # compute all-reduce mean for gradients and loss
+    # NOTE: compute all-reduce mean for gradients and loss
     # Ex: If we have 8 devices, each device takes the gradients from the other 7 and averages them all together
     # that way, all device replicas have the same gradients and optimization step can occur in parallel
     loss = jax.lax.pmean(loss, axis_name="batch")
@@ -463,7 +463,7 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
 
     metrics = {"Train LM Loss": loss, "Train LM PPL": jnp.exp(loss)}
 
-    # by default all PyTrees will stay on default device which can eat up a lot of memory 
+    # NOTE: by default all PyTrees will stay on default device which can eat up a lot of memory 
     # so we transfer them to CPU to prevent them accumulating on device memory 
     inspector_statistics = {
         "Activation PyTree": pytree_to_cpu(intermediates),
