@@ -463,9 +463,10 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
 
     metrics = {"Train LM Loss": loss, "Train LM PPL": jnp.exp(loss)}
 
+    # by default all PyTrees will stay on default device which can eat up a lot of memory 
+    # so we transfer them to CPU to prevent them accumulating on device memory 
     inspector_statistics = {
-        "Activation PyTree": intermediates,
-        "Gradient PyTree": grads,
+        "Activation PyTree": pytree_to_cpu(intermediates),
     }
 
     return state, metrics, inspector_statistics
