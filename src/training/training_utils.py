@@ -45,7 +45,7 @@ def initialized(key: random.PRNGKey, model: nn.Module, dtype: jnp.dtype):
 
 
 class TrainState(train_state.TrainState):
-    dynamic_scale: flax.optim.DynamicScale = None
+    dynamic_scale: Any = None
 
 
 def create_train_state(

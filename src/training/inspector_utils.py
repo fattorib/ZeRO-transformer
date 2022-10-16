@@ -60,6 +60,7 @@ def get_num_components_pca(params, explained_variance=0.95) -> int:
 
 def get_embedding_spectrum(params) -> int:
     embedding_weight = np.array(params["params"]["wte"]["embedding"]).squeeze()
+    print(embedding_weight, embedding_weight.dtype)
     out = svdvals(embedding_weight)
     out = out[out > 0].shape
     return out[0]

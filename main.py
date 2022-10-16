@@ -314,12 +314,6 @@ def main():
 
             # TODO: Log Gradients
 
-            # num_pca_components = get_num_components_pca(
-            #     state.params, explained_variance=0.9
-            # )
-
-            # train_metrics_np.update({"PCA Components": num_pca_components})
-
             embedding_rank = get_embedding_spectrum(state.params)
             train_metrics_np.update({"Rank(Emb)": embedding_rank})
 
@@ -470,7 +464,7 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
         loss = jax.lax.pmean(loss, axis_name="batch")
         grads = jax.lax.pmean(grads, axis_name="batch")
 
-    state = state.apply_gradients(
+    new_state = state.apply_gradients(
         grads=grads,
     )
 
@@ -495,7 +489,7 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
         "Activation PyTree": pytree_to_cpu(intermediates),
     }
 
-    return state, metrics, inspector_statistics
+    return new_state, metrics, inspector_statistics
 
 
 @partial(jax.pmap, axis_name="batch")
@@ -516,7 +510,8 @@ def eval_step(state: Any, batch: jnp.array):
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        print(f"Error encountered: {e}")
+    # try:
+    #     main()
+    # except Exception as e:
+    #     print(f"Error encountered: {e}")
+    main()
