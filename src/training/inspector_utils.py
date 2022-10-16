@@ -5,8 +5,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from flax.core.frozen_dict import FrozenDict
-from sklearn.decomposition import PCA
 from scipy.linalg import svdvals
+from sklearn.decomposition import PCA
 
 
 # Utility functions for working with jax arrays and pytrees
@@ -56,6 +56,7 @@ def get_num_components_pca(params, explained_variance=0.95) -> int:
     pca_cls = PCA(n_components=explained_variance)
     _ = pca_cls.fit_transform(embedding_weight)
     return pca_cls.components_.shape[0]
+
 
 def get_embedding_spectrum(params) -> int:
     embedding_weight = np.array(params["params"]["wte"]["embedding"]).squeeze()

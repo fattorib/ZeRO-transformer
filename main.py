@@ -22,9 +22,10 @@ from tqdm import tqdm
 
 import wandb
 from src.models.GPT import model_getter
-from src.training.inspector_utils import (get_intermediates,
+from src.training.inspector_utils import (get_embedding_spectrum,
+                                          get_intermediates,
                                           get_num_components_pca,
-                                          pytree_to_cpu, get_embedding_spectrum)
+                                          pytree_to_cpu)
 from src.training.training_utils import (compute_tokens_seen,
                                          create_train_state, step_to_seq_len)
 from src.utils.configs import flatten_dict
@@ -452,22 +453,44 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
 
         return loss, intermediates
 
-    grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
-    (loss, intermediates), grads = grad_fn(state.params)
+    dynamic_scale = state.dynamic_scale
+    if dynamic_scale:
+        grad_fn = dynamic_scale.value_and_grad(
+            loss_fn,
+            has_aux=True,
+        )
+        dynamic_scale, is_fin, (loss, intermediates), grads = grad_fn(state.params)
+        # dynamic loss takes care of averaging gradients across replicas
+    else:
+        grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
+        (loss, intermediates), grads = grad_fn(state.params)
+        # NOTE: compute all-reduce mean for gradients and loss
+        # Ex: If we have 8 devices, each device takes the gradients from the other 7 and averages them all together
+        # that way, all device replicas have the same gradients and optimization step can occur in parallel
+        loss = jax.lax.pmean(loss, axis_name="batch")
+        grads = jax.lax.pmean(grads, axis_name="batch")
 
-    # NOTE: compute all-reduce mean for gradients and loss
-    # Ex: If we have 8 devices, each device takes the gradients from the other 7 and averages them all together
-    # that way, all device replicas have the same gradients and optimization step can occur in parallel
-    loss = jax.lax.pmean(loss, axis_name="batch")
-    grads = jax.lax.pmean(grads, axis_name="batch")
     state = state.apply_gradients(
         grads=grads,
     )
 
+    if dynamic_scale:
+        # if is_fin == False the gradients contain Inf/NaNs and optimizer state and
+        # params should be restored (= skip this step).
+        new_state = new_state.replace(
+            opt_state=jax.tree_util.tree_map(
+                partial(jnp.where, is_fin), new_state.opt_state, state.opt_state
+            ),
+            params=jax.tree_util.tree_map(
+                partial(jnp.where, is_fin), new_state.params, state.params
+            ),
+            dynamic_scale=dynamic_scale,
+        )
+
     metrics = {"Train LM Loss": loss, "Train LM PPL": jnp.exp(loss)}
 
-    # NOTE: by default all PyTrees will stay on default device which can eat up a lot of memory 
-    # so we transfer them to CPU to prevent them accumulating on device memory 
+    # NOTE: by default all PyTrees will stay on default device which can eat up a lot of memory
+    # so we transfer them to CPU to prevent them accumulating on device memory
     inspector_statistics = {
         "Activation PyTree": pytree_to_cpu(intermediates),
     }
@@ -493,8 +516,7 @@ def eval_step(state: Any, batch: jnp.array):
 
 
 if __name__ == "__main__":
-    # try:
-    #     main()
-    # except Exception as e:
-    #     print(f"Error encountered: {e}")
-    main()
+    try:
+        main()
+    except Exception as e:
+        print(f"Error encountered: {e}")

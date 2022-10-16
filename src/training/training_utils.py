@@ -3,15 +3,19 @@ Helper methods used during training setup.
 """
 from typing import Any, Callable, List, Union
 
+import flax
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
 import optax
+from flax.training import dynamic_scale as dynamic_scale_lib
 from flax.training import train_state
 from jax import random
 
+
 def to_precision(t, dtype: jnp.dtype):
     return jax.tree_map(lambda x: x.astype(dtype) if x.dtype != dtype else x, t)
+
 
 def initialized(key: random.PRNGKey, model: nn.Module, dtype: jnp.dtype):
     """Initializes param dict for a model
@@ -38,6 +42,10 @@ def initialized(key: random.PRNGKey, model: nn.Module, dtype: jnp.dtype):
     variables = jit_apply(rng=rng_init, init_batch=init_batch)
     variables = to_precision(variables, dtype)
     return variables
+
+
+class TrainState(train_state.TrainState):
+    dynamic_scale: flax.optim.DynamicScale = None
 
 
 def create_train_state(
@@ -70,10 +78,13 @@ def create_train_state(
     if grad_accum_steps > 1:
         tx = optax.MultiSteps(tx, every_k_schedule=grad_accum_steps)
 
-    state = train_state.TrainState.create(
+    state = TrainState.create(
         apply_fn=model.apply,
         params=params,
         tx=tx,
+        dynamic_scale=dynamic_scale_lib.DynamicScale()
+        if model.dtype == jnp.float16
+        else None,
     )
     return state
 
