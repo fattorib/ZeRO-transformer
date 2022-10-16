@@ -14,7 +14,7 @@ from jax import random
 
 
 def to_precision(t, dtype: jnp.dtype):
-    return jax.tree_map(lambda x: x.astype(dtype) if x.dtype != dtype else x, t)
+    return jax.tree_map(lambda x: x.astype(dtype) if x.dtype != dtype and x.ndim > 1 else x, t)
 
 
 def initialized(key: random.PRNGKey, model: nn.Module, dtype: jnp.dtype):
@@ -76,14 +76,14 @@ def create_train_state(
     )
 
     if grad_accum_steps > 1:
-        tx = optax.MultiSteps(tx, every_k_schedule=grad_accum_steps)
+        tx = optax.MultiSteps(tx, every_k_schedule=grad_accum_steps, should_skip_update_fn=optax.skip_not_finite)
 
     state = TrainState.create(
         apply_fn=model.apply,
         params=params,
         tx=tx,
         dynamic_scale=dynamic_scale_lib.DynamicScale()
-        if model.dtype == jnp.float16
+        if dtype == jnp.float16
         else None,
     )
     return state

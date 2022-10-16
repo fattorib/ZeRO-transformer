@@ -452,8 +452,10 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
         grad_fn = dynamic_scale.value_and_grad(
             loss_fn,
             has_aux=True,
+            axis_name='batch'
         )
         dynamic_scale, is_fin, (loss, intermediates), grads = grad_fn(state.params)
+        state = state.replace(dynamic_scale=dynamic_scale)
         # dynamic loss takes care of averaging gradients across replicas
     else:
         grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
@@ -481,7 +483,7 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
             dynamic_scale=dynamic_scale,
         )
 
-    metrics = {"Train LM Loss": loss, "Train LM PPL": jnp.exp(loss)}
+    metrics = {"Train LM Loss": loss, "Train LM PPL": jnp.exp(loss), "Loss Scale": dynamic_scale.scale}
 
     # NOTE: by default all PyTrees will stay on default device which can eat up a lot of memory
     # so we transfer them to CPU to prevent them accumulating on device memory
