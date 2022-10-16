@@ -10,10 +10,8 @@ import optax
 from flax.training import train_state
 from jax import random
 
-
 def to_precision(t, dtype: jnp.dtype):
-    return jax.tree_map(lambda x: x.astype(dtype) if x.dtype == dtype else x, t)
-
+    return jax.tree_map(lambda x: x.astype(dtype) if x.dtype != dtype else x, t)
 
 def initialized(key: random.PRNGKey, model: nn.Module, dtype: jnp.dtype):
     """Initializes param dict for a model
