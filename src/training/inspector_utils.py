@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 from flax.core.frozen_dict import FrozenDict
 from sklearn.decomposition import PCA
+from scipy.linalg import svdvals
 
 
 # Utility functions for working with jax arrays and pytrees
@@ -50,11 +51,17 @@ def get_intermediates(intermediates) -> List:
     return features
 
 
-def get_num_components_pca(params, explained_variance=0.9) -> int:
+def get_num_components_pca(params, explained_variance=0.95) -> int:
     embedding_weight = np.array(params["params"]["wte"]["embedding"]).squeeze()
     pca_cls = PCA(n_components=explained_variance)
     _ = pca_cls.fit_transform(embedding_weight)
     return pca_cls.components_.shape[0]
+
+def get_embedding_spectrum(params) -> int:
+    embedding_weight = np.array(params["params"]["wte"]["embedding"]).squeeze()
+    out = np.abs(svdvals(embedding_weight))
+    out = out[out > 0].shape
+    return out[0]
 
 
 def get_weights_gradients(params) -> List:
