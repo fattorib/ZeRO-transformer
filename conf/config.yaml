@@ -1,30 +1,31 @@
 training:
   max_epochs: 2
-  batch_size: 32
-  peak_learning_rate: 8e-4
+  batch_size: 16
+  peak_learning_rate: 4e-4
   warmup_steps: 2000
-  decay_steps: 29070
-  total_steps: 34300
-  end_learning_rate: 8e-5
+  decay_steps: 29000
+  total_steps: 29800
+  end_learning_rate: 4e-5
   weight_decay: 0.1
-  gradient_accumulation_steps: 16
+  gradient_accumulation_steps: 8
   evaluation_frequency: 500
   maximum_evaluation_steps: 500
   precision: 'bf16'
-  staged_sequences: [128,256]
-  staged_warmup_steps: 12000
+  staged_sequences: [128]
+  # staged_sequences: []
+  staged_warmup_steps: 6000
 
 model:
-  size: "QA"
+  size: "medium"
 
 data:
   corpus: "openwebtext"
-  train_shard_urls: "data/processed/books_train-{000000..000013}.tar.gz"
-  validation_shard_urls: "data/processed/bookcorpus_val-{000000..000002}.tar.gz"
+  train_shard_urls: "N/A"
+  validation_shard_urls: "N/A"
   max_context: 1024
   full_steps_in_batch: 24558
-  workers: 1
+  workers: 0
   checkpoint_directory: "checkpoints"
-  bucket_path: "bfattoribooks2"
-  index_path_train: "data/index/openwebtext.train.index"
-  index_path_validation: "data/index/openwebtext.val.index"
+  bucket_path: "bfattoriwebtext2"
+  index_path_train: "data/index/openwebtext_useast.train.index"
+  index_path_validation: "data/index/openwebtext_useast.val.index"

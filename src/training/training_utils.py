@@ -33,11 +33,11 @@ def initialized(key: random.PRNGKey, model: nn.Module, dtype: jnp.dtype):
         minval=0,
     )
 
-    @jax.jit
     def init(rng, init_batch):
         return model.init(rng, init_batch, None, False)
 
-    variables = init(rng=rng_init, init_batch=init_batch)
+    jit_apply = jax.jit(init, backend="cpu")
+    variables = jit_apply(rng=rng_init, init_batch=init_batch)
     variables = to_precision(variables, dtype)
     return variables
 
@@ -145,8 +145,3 @@ def compute_tokens_seen(
     else:
         # end is scaled by BS - This is constant
         return stages[0] * remainder
-
-
-if __name__ == "__main__":
-
-    print(f"{512*compute_tokens_seen(34300, [128, 256], 12000, 1024)/1e9:.2f}")

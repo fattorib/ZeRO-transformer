@@ -41,7 +41,7 @@ class TestTransformerBlock(unittest.TestCase):
             batch_cts,
             train=True,
             rngs={"dropout": self.rng},
-        )
+        )[0]
         self.assertEqual(out.shape, batch_cts.shape)
 
         block = TransformerBlock(
@@ -63,7 +63,7 @@ class TestTransformerBlock(unittest.TestCase):
             batch_cts,
             train=True,
             rngs={"dropout": self.rng},
-        )
+        )[0]
         self.assertEqual(out.shape, batch_cts.shape)
 
 
