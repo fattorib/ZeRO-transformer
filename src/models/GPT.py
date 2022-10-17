@@ -63,6 +63,35 @@ class MLPBlock(nn.Module):
         self.sow("intermediates", "mlp_out", x)
         return dropout()(out)
 
+class SGU(nn.Module):
+    """Static SGU module"""
+
+    block_size: int
+    embedding_dim: int
+    kernel_size: int
+
+    def setup(self):
+        k = jnp.triu(
+            jnp.tril(
+                jnp.ones((self.block_size, self.block_size)), -1 * self.kernel_size
+            )
+        )
+        k = k / (k.cumsum(-2) + 1)
+        self.kernel = k
+
+    @nn.compact
+    def __call__(self, x: jnp.array) -> jnp.array:
+
+        B, T, C = x.shape[:3]
+
+        x = jax.lax.stop_gradient(x)
+
+        x = rearrange(x, "b n d -> b d n")
+        x = x @ (self.kernel.T[:T, :T])
+        x = rearrange(x, "b d n -> b n d")
+
+        return x
+
 
 class CausalAttention(nn.Module):
     """Standard causal multi-headed attention
@@ -228,27 +257,62 @@ class TransformerBlock(nn.Module):
     ) -> Tuple[jnp.array, jnp.array]:
 
         if self.fused_residuals:
-            norm = nn.LayerNorm(dtype=self.dtype)
-            attn_out = CausalAttention(
-                self.embedding_dim,
-                self.num_head,
-                self.block_size,
-                self.residual_dropout,
-                self.N,
-                self.alibi_attn,
-                self.dtype,
-            )(norm(x), train, None, use_cache, layer_past, pad_mask)
-            return (
-                x
-                + attn_out[0]
-                + MLPBlock(
+            if self.use_static_sgu:
+                norm = nn.LayerNorm(dtype=self.dtype)
+
+                split_arr = jnp.split(norm(x), indices_or_sections=2, axis=-1)
+                x_sgu, x_attn = split_arr[0], split_arr[1]
+
+                attn_out = CausalAttention(
+                    self.embedding_dim//2,
+                    self.num_head,
+                    self.block_size,
+                    self.residual_dropout,
+                    self.N,
+                    self.alibi_attn,
+                    self.dtype,
+                )(x_attn, train, None, use_cache, layer_past, pad_mask)
+                
+                sgu_out = SGU(
+                    self.block_size, self.embedding_dim // 2, kernel_size=128
+                )(x_sgu)
+                
+                fused_out = jnp.concatenate((sgu_out, attn_out[0]), axis=-1)
+
+                return (
+                    x
+                    + fused_out
+                    + MLPBlock(
+                        self.embedding_dim,
+                        dropout=self.residual_dropout,
+                        N=self.N,
+                        dtype=self.dtype,
+                    )(norm(x), train),
+                    attn_out[1],
+                )
+
+            else:
+                norm = nn.LayerNorm(dtype=self.dtype)
+                attn_out = CausalAttention(
                     self.embedding_dim,
-                    dropout=self.residual_dropout,
-                    N=self.N,
-                    dtype=self.dtype,
-                )(norm(x), train),
-                attn_out[1],
-            )
+                    self.num_head,
+                    self.block_size,
+                    self.residual_dropout,
+                    self.N,
+                    self.alibi_attn,
+                    self.dtype,
+                )(norm(x), train, None, use_cache, layer_past, pad_mask)
+                return (
+                    x
+                    + attn_out[0]
+                    + MLPBlock(
+                        self.embedding_dim,
+                        dropout=self.residual_dropout,
+                        N=self.N,
+                        dtype=self.dtype,
+                    )(norm(x), train),
+                    attn_out[1],
+                )
         else:
             attn_out = CausalAttention(
                 self.embedding_dim,
@@ -283,6 +347,7 @@ class Transformer(nn.Module):
     dtype: Any = jnp.float32
     fused_residuals: bool = False
     alibi_attn: bool = False
+    use_static_sgu: bool = False
 
     def generate(
         self,
@@ -397,6 +462,7 @@ class Transformer(nn.Module):
                 self.dtype,
                 self.fused_residuals,
                 self.alibi_attn,
+                self.use_static_sgu
             )(out, train, use_cache, past_state, pad_mask)
 
             present_states.append(layer_past)
