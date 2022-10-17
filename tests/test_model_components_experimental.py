@@ -9,7 +9,6 @@ import pytest
 
 from src.models.GPT import (Transformer,
                             TransformerBlock)
-from src.utils.losses import cross_entropy_loss
 
 
 class TestTransformerBlock(unittest.TestCase):
