@@ -1,10 +1,20 @@
 QA:
   embedding_dim: 128
   vocab_size: 50257
-  num_head: 4
-  block_size: 512
+  num_head: 32
+  block_size: 1024
   dropout: 0.0
-  N: 3
+  N: 2
+  fused_residuals: True
+  alibi_attn: True
+
+wide:
+  embedding_dim: 1024
+  vocab_size: 50257
+  num_head: 16
+  block_size: 1024
+  dropout: 0.0
+  N: 2
   fused_residuals: True
   alibi_attn: True
 
@@ -12,7 +22,7 @@ unittest:
   embedding_dim: 768
   vocab_size: 50257
   num_head: 12
-  block_size: 512
+  block_size: 1024
   dropout: 0.0
   N: 12
   fused_residuals: True
