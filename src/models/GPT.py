@@ -423,7 +423,10 @@ class Transformer(nn.Module):
 
 
 def model_getter(
-    model_size, config_path="conf/model_config.yaml", return_cfg=False
+    model_size,
+    config_path="conf/model_config.yaml",
+    return_cfg=False,
+    dtype=jnp.float32,
 ) -> nn.Module:
     """Loads model configuration from YAML files
     and returns models
@@ -436,8 +439,8 @@ def model_getter(
 
     configs = OmegaConf.load(config_path)
     assert model_size in list(configs.keys()), "Invalid model name provided"
-
+    assert dtype in [jnp.float16, jnp.bfloat16, jnp.float32], "Invalid dtype provided"
     if return_cfg:
-        return Transformer(**configs[model_size]), configs[model_size]
+        return Transformer(**configs[model_size], dtype = dtype), configs[model_size]
     else:
-        return Transformer(**configs[model_size])
+        return Transformer(**configs[model_size], dtype = dtype)

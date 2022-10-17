@@ -374,7 +374,7 @@ class TestGPT(unittest.TestCase):
             rngs={"dropout": self.rng},
         )
         self.assertEqual((1, self.block_size, self.vocab_size), out.shape)
-    
+
     def test_gpt_fwd_fp16(self):
 
         block = Transformer(
