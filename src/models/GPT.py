@@ -40,6 +40,8 @@ class MLPBlock(nn.Module):
     dropout: float = 0.0
     N: int = None
 
+    dtype: Any = jnp.float32
+
     @nn.compact
     def __call__(self, x: jnp.array, train: bool) -> jnp.array:
         dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
@@ -48,6 +50,7 @@ class MLPBlock(nn.Module):
             name="fc_in",
             kernel_init=initializers.normal(stddev=0.02),
             bias_init=initializers.zeros,
+            dtype=self.dtype,
         )(x)
         x = nn.gelu(x)
         out = nn.Dense(
@@ -55,6 +58,7 @@ class MLPBlock(nn.Module):
             name="fc_residual",
             kernel_init=initializers.normal(stddev=(0.02 / jnp.sqrt(2 * self.N))),
             bias_init=initializers.zeros,
+            dtype=self.dtype,
         )(x)
         self.sow("intermediates", "mlp_out", x)
         return dropout()(out)
@@ -76,7 +80,7 @@ class CausalAttention(nn.Module):
     N: int = None
     alibi_attn: bool = False
 
-    dtype = None
+    dtype: Any = jnp.float32
 
     def setup(self):
         self.slopes = jnp.array(get_slopes(self.num_head))
@@ -101,6 +105,7 @@ class CausalAttention(nn.Module):
                 features=self.embedding_dim,
                 kernel_init=initializers.normal(stddev=0.02),
                 bias_init=initializers.zeros,
+                dtype=self.dtype,
             )(x)
             .reshape(B, T, self.num_head, self.embedding_dim // self.num_head)
             .transpose(0, 2, 1, 3)
@@ -113,6 +118,7 @@ class CausalAttention(nn.Module):
                 features=self.embedding_dim,
                 kernel_init=initializers.normal(stddev=0.02),
                 bias_init=initializers.zeros,
+                dtype=self.dtype,
             )(x)
             .reshape(B, T, self.num_head, self.embedding_dim // self.num_head)
             .transpose(0, 2, 1, 3)
@@ -125,6 +131,7 @@ class CausalAttention(nn.Module):
                 features=self.embedding_dim,
                 kernel_init=initializers.normal(stddev=0.02),
                 bias_init=initializers.zeros,
+                dtype=self.dtype,
             )(x)
             .reshape(B, T, self.num_head, self.embedding_dim // self.num_head)
             .transpose(0, 2, 1, 3)
@@ -189,6 +196,7 @@ class CausalAttention(nn.Module):
                 stddev=(0.02 / jnp.sqrt(2 * self.N))
             ),
             bias_init=initializers.zeros,
+            dtype=self.dtype,
         )(attn_out)
 
         self.sow("intermediates", "attn_out", out)
@@ -220,7 +228,7 @@ class TransformerBlock(nn.Module):
     ) -> Tuple[jnp.array, jnp.array]:
 
         if self.fused_residuals:
-            norm = nn.LayerNorm()
+            norm = nn.LayerNorm(dtype=self.dtype)
             attn_out = CausalAttention(
                 self.embedding_dim,
                 self.num_head,
@@ -228,13 +236,17 @@ class TransformerBlock(nn.Module):
                 self.residual_dropout,
                 self.N,
                 self.alibi_attn,
+                self.dtype,
             )(norm(x), train, None, use_cache, layer_past, pad_mask)
             return (
                 x
                 + attn_out[0]
-                + MLPBlock(self.embedding_dim, dropout=self.residual_dropout, N=self.N)(
-                    norm(x), train
-                ),
+                + MLPBlock(
+                    self.embedding_dim,
+                    dropout=self.residual_dropout,
+                    N=self.N,
+                    dtype=self.dtype,
+                )(norm(x), train),
                 attn_out[1],
             )
         else:
@@ -245,11 +257,15 @@ class TransformerBlock(nn.Module):
                 self.residual_dropout,
                 self.N,
                 self.alibi_attn,
-            )(nn.LayerNorm()(x), train, use_cache, layer_past, pad_mask)
+                self.dtype,
+            )(nn.LayerNorm(dtype=self.dtype)(x), train, use_cache, layer_past, pad_mask)
             x = x + attn_out[0]
             x = x + MLPBlock(
-                self.embedding_dim, dropout=self.residual_dropout, N=self.N
-            )(nn.LayerNorm()(x), train)
+                self.embedding_dim,
+                dropout=self.residual_dropout,
+                N=self.N,
+                dtype=self.dtype,
+            )(nn.LayerNorm(dtype=self.dtype)(x), train)
             return x, attn_out[1]
 
 
@@ -346,6 +362,7 @@ class Transformer(nn.Module):
             num_embeddings=self.vocab_size,
             features=self.embedding_dim,
             embedding_init=initializers.normal(stddev=0.02),
+            dtype=self.dtype,
         )
 
         wte = embed(x)
@@ -357,6 +374,7 @@ class Transformer(nn.Module):
                 num_embeddings=self.block_size,
                 features=self.embedding_dim,
                 embedding_init=initializers.normal(stddev=0.02),
+                dtype=self.dtype,
             )(jnp.ones((B, T), dtype=jnp.uint8))
 
             out += wpe
@@ -376,13 +394,14 @@ class Transformer(nn.Module):
                 self.block_size,
                 self.dropout,
                 self.N,
+                self.dtype,
                 self.fused_residuals,
                 self.alibi_attn,
             )(out, train, use_cache, past_state, pad_mask)
 
             present_states.append(layer_past)
 
-        out = nn.LayerNorm()(out)
+        out = nn.LayerNorm(dtype=self.dtype)(out)
 
         logits = embed.attend(out)
 
