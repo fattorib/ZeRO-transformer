@@ -75,8 +75,15 @@ def main():
     num_host = num_devices // num_local_devices
     platform = jax.local_devices()[0].platform
 
+    if cfg.training.precision == "fp16":
+        model_dtype = jnp.float16
+    elif cfg.training.precision == "bf16":
+        model_dtype = jnp.bfloat16
+    else:
+        model_dtype = jnp.float32
+
     model, model_config = model_getter(
-        cfg.model.size, config_path=args.model_cfg, return_cfg=True
+        cfg.model.size, config_path=args.model_cfg, return_cfg=True, dtype=model_dtype
     )
 
     learning_rate_fn = optax.warmup_cosine_decay_schedule(
@@ -90,20 +97,12 @@ def main():
     rng = jax.random.PRNGKey(0)
     rng, init_rng = jax.random.split(rng)
 
-    if cfg.training.precision == "fp16":
-        model_dtype = jnp.float16
-    elif cfg.training.precision == "bf16":
-        model_dtype = jnp.bfloat16
-    else:
-        model_dtype = jnp.float32
-
     state = create_train_state(
         init_rng,
         learning_rate_fn,
         weight_decay=cfg.training.weight_decay,
         model=model,
         grad_accum_steps=cfg.training.gradient_accumulation_steps,
-        dtype=model_dtype,
     )
 
     if jax.process_index() == 0:
@@ -317,15 +316,15 @@ def main():
             embedding_rank = get_embedding_spectrum(state.params)
             train_metrics_np.update({"Rank(Emb)": embedding_rank})
 
-            running_metrics = []
-            running_intermediates = []
-            validation_metrics = []
-
             intermediates_hist = {}
             for key in intermediates_dict.keys():
                 intermediates_hist[key] = wandb.Histogram(intermediates_dict[key])
 
             train_metrics_np.update(intermediates_hist)
+
+            running_metrics = []
+            running_intermediates = []
+            validation_metrics = []
 
             if (i) % (
                 cfg.training.evaluation_frequency
@@ -449,14 +448,11 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
 
     dynamic_scale = state.dynamic_scale
     if dynamic_scale:
-        grad_fn = dynamic_scale.value_and_grad(
-            loss_fn,
-            has_aux=True,
-            axis_name='batch'
-        )
+        grad_fn = dynamic_scale.value_and_grad(loss_fn, has_aux=True, axis_name="batch")
         dynamic_scale, is_fin, (loss, intermediates), grads = grad_fn(state.params)
         state = state.replace(dynamic_scale=dynamic_scale)
-        # dynamic loss takes care of averaging gradients across replicas
+
+
     else:
         grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
         (loss, intermediates), grads = grad_fn(state.params)
@@ -483,10 +479,14 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
             dynamic_scale=dynamic_scale,
         )
 
-    metrics = {"Train LM Loss": loss, "Train LM PPL": jnp.exp(loss), "Loss Scale": dynamic_scale.scale}
+    metrics = {
+        "Train LM Loss": loss,
+        "Train LM PPL": jnp.exp(loss),
+        "Loss Scale": dynamic_scale.scale,
+    }
 
-    # NOTE: by default all PyTrees will stay on default device which can eat up a lot of memory
-    # so we transfer them to CPU to prevent them accumulating on device memory
+    # NOTE: by default all PyTrees will stay on default device (not your CPU) which can eat up a lot of memory
+    # so we transfer them to CPU immediately to prevent them accumulating on device memory
     inspector_statistics = {
         "Activation PyTree": pytree_to_cpu(intermediates),
     }
