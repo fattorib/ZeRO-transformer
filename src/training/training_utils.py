@@ -19,7 +19,7 @@ def to_precision(t, dtype: jnp.dtype):
     )
 
 
-def initialized(key: random.PRNGKey, model: nn.Module, dtype: jnp.dtype):
+def initialized(key: random.PRNGKey, model: nn.Module):
     """Initializes param dict for a model
     Args:
         key (_type_): _description_
@@ -42,7 +42,7 @@ def initialized(key: random.PRNGKey, model: nn.Module, dtype: jnp.dtype):
 
     jit_apply = jax.jit(init, backend="cpu")
     variables = jit_apply(rng=rng_init, init_batch=init_batch)
-    variables = to_precision(variables, dtype)
+    # variables = to_precision(variables, dtype)
     return variables
 
 
@@ -56,10 +56,9 @@ def create_train_state(
     weight_decay: float,
     model: nn.Module,
     grad_accum_steps: int,
-    dtype: jnp.dtype = jnp.float32,
 ):
     """Creates initial `TrainState` for model."""
-    params = initialized(rng, model, dtype)
+    params = initialized(rng, model)
 
     # This mask turns off weight decay for bias terms, LN terms and position embeddings
     mask = jax.tree_map(
@@ -89,7 +88,7 @@ def create_train_state(
         params=params,
         tx=tx,
         dynamic_scale=dynamic_scale_lib.DynamicScale()
-        if dtype == jnp.float16
+        if model.dtype == jnp.float16
         else None,
     )
     return state
