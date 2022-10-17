@@ -22,7 +22,6 @@ class TestTransformerBlock(unittest.TestCase):
     def tearDown(self) -> None:
         pass
 
-    @pytest.mark.skip(reason="Not using SGU for now")
     def test_block_fwd_sgu(self):
 
         block = TransformerBlock(
@@ -31,7 +30,7 @@ class TestTransformerBlock(unittest.TestCase):
             block_size=512,
             residual_dropout=0.1,
             N=6,
-            dtype=None,
+            dtype=jnp.float32,
             fused_residuals=True,
             use_static_sgu=True,
         )
@@ -52,7 +51,7 @@ class TestTransformerBlock(unittest.TestCase):
             block_size=512,
             residual_dropout=0.1,
             N=6,
-            dtype=None,
+            dtype=jnp.float32,
             fused_residuals=True,
             alibi_attn=True,
             use_static_sgu=True,
@@ -78,7 +77,6 @@ class TestGPT(unittest.TestCase):
     def tearDown(self) -> None:
         pass
 
-    @pytest.mark.skip(reason="Not using SGU for now")
     def test_gpt_fwd_static_sgu(self):
         # Ensure the QK trick shapes are correct
 
@@ -89,7 +87,7 @@ class TestGPT(unittest.TestCase):
             block_size=512,
             dropout=0.1,
             N=6,
-            dtype=None,
+            dtype=jnp.float32,
             fused_residuals=True,
             head_qk_trick=False,
             use_static_sgu=True,
@@ -112,7 +110,7 @@ class TestGPT(unittest.TestCase):
             block_size=512,
             dropout=0.1,
             N=6,
-            dtype=None,
+            dtype=jnp.float32,
             fused_residuals=True,
             alibi_attn=True,
             use_static_sgu=True,

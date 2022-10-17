@@ -7,7 +7,7 @@ QA:
   N: 2
   fused_residuals: True
   alibi_attn: True
-  use_static_sgu: False
+  use_static_sgu: True
 
 wide:
   embedding_dim: 1024
