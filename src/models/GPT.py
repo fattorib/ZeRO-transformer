@@ -441,6 +441,6 @@ def model_getter(
     assert model_size in list(configs.keys()), "Invalid model name provided"
     assert dtype in [jnp.float16, jnp.bfloat16, jnp.float32], "Invalid dtype provided"
     if return_cfg:
-        return Transformer(**configs[model_size], dtype = dtype), configs[model_size]
+        return Transformer(**configs[model_size], dtype=dtype), configs[model_size]
     else:
-        return Transformer(**configs[model_size], dtype = dtype)
+        return Transformer(**configs[model_size], dtype=dtype)
