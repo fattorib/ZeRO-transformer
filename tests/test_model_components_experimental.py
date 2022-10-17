@@ -3,13 +3,11 @@ Unittests for all experimental features: QK trick, SGU splitting, etc
 """
 import unittest
 
-import flax.linen as nn
-import jax
 import jax.numpy as jnp
 import jax.random as random
 import pytest
 
-from src.models.GPT import (CausalAttention, MLPBlock, Transformer,
+from src.models.GPT import (Transformer,
                             TransformerBlock)
 from src.utils.losses import cross_entropy_loss
 
