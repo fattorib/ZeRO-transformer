@@ -51,13 +51,13 @@ def get_intermediates(intermediates) -> List:
     return features
 
 
-def get_num_components_pca(params, explained_variance=0.95) -> int:
+def get_num_components_pca(params, explained_variance=0.90) -> int:
     embedding_weight = np.array(
         params["params"]["wte"]["embedding"], dtype=np.float32
     ).squeeze()
     pca_cls = PCA(n_components=explained_variance)
     _ = pca_cls.fit_transform(embedding_weight)
-    return pca_cls.components_.shape[0]
+    return (pca_cls.components_.shape[0]/embedding_weight.shape[1])
 
 
 def get_embedding_spectrum(params) -> int:
