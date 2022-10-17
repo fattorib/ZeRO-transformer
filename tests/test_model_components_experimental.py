@@ -86,7 +86,6 @@ class TestGPT(unittest.TestCase):
             N=6,
             dtype=jnp.float32,
             fused_residuals=True,
-            head_qk_trick=False,
             use_static_sgu=True,
         )
         batch_tok = random.randint(self.rng, shape=(1, 512), maxval=256, minval=0)
