@@ -1,4 +1,5 @@
 import argparse
+import collections
 import logging
 import random as pyrandom
 import time
@@ -21,6 +22,10 @@ from tqdm import tqdm
 
 import wandb
 from src.models.GPT import model_getter
+from src.training.inspector_utils import (get_embedding_spectrum,
+                                          get_intermediates,
+                                          get_num_components_pca,
+                                          pytree_to_cpu)
 from src.training.training_utils import (compute_tokens_seen,
                                          create_train_state, step_to_seq_len)
 from src.utils.configs import flatten_dict
@@ -70,8 +75,15 @@ def main():
     num_host = num_devices // num_local_devices
     platform = jax.local_devices()[0].platform
 
+    if cfg.training.precision == "fp16":
+        model_dtype = jnp.float16
+    elif cfg.training.precision == "bf16":
+        model_dtype = jnp.bfloat16
+    else:
+        model_dtype = jnp.float32
+
     model, model_config = model_getter(
-        cfg.model.size, config_path=args.model_cfg, return_cfg=True
+        cfg.model.size, config_path=args.model_cfg, return_cfg=True, dtype=model_dtype
     )
 
     learning_rate_fn = optax.warmup_cosine_decay_schedule(
@@ -85,20 +97,12 @@ def main():
     rng = jax.random.PRNGKey(0)
     rng, init_rng = jax.random.split(rng)
 
-    if cfg.training.precision == "fp16":
-        model_dtype = jnp.float16
-    elif cfg.training.precision == "bf16":
-        model_dtype = jnp.bfloat16
-    else:
-        model_dtype = jnp.float32
-
     state = create_train_state(
         init_rng,
         learning_rate_fn,
         weight_decay=cfg.training.weight_decay,
         model=model,
         grad_accum_steps=cfg.training.gradient_accumulation_steps,
-        dtype=model_dtype,
     )
 
     if jax.process_index() == 0:
@@ -144,13 +148,14 @@ def main():
         resume_step = int(state.step)
 
     else:
-        # clear bucket here
-        client = storage.Client()
-        if jax.process_index() == 0:
-            bucket = storage.Bucket(client, f"{cfg.data.bucket_path}")
-            blobs = bucket.list_blobs(prefix=f"{cfg.data.checkpoint_directory}")
-            for blob in blobs:
-                blob.delete()
+        if cfg.data.bucket_path is not None:
+            # clear bucket here
+            client = storage.Client()
+            if jax.process_index() == 0:
+                bucket = storage.Bucket(client, f"{cfg.data.bucket_path}")
+                blobs = bucket.list_blobs(prefix=f"{cfg.data.checkpoint_directory}")
+                for blob in blobs:
+                    blob.delete()
 
     # replicating state across devices
     state = flax.jax_utils.replicate(state)
@@ -179,7 +184,7 @@ def main():
 
     if jax.process_index() == 0:
         id = wandb.util.generate_id()
-        wandb.init(id=id, resume="allow", project="LJX")
+        wandb.init(id=id, resume="allow", project="transformer-inspector")
         flat_dict = flatten_dict(cfg)
 
         for key in model_config.keys():
@@ -245,6 +250,7 @@ def main():
     )
 
     running_metrics = []
+    running_intermediates = []
 
     if len(cfg.training.staged_sequences) > 0:
 
@@ -279,7 +285,7 @@ def main():
 
         t0 = time.time()
 
-        state, metrics = train_step(
+        state, metrics, inspector_statistics = train_step(
             state,
             sharded_batch,
         )
@@ -288,6 +294,7 @@ def main():
         metrics["Train Sequence Length"] = seq_len
 
         running_metrics.append(metrics)
+        running_intermediates.append(inspector_statistics)
 
         if (i) % cfg.training.gradient_accumulation_steps == 0:
             # we've completed a full batch of data, log the metrics
@@ -297,8 +304,29 @@ def main():
                 for k in running_metrics[0]
             }
 
-            running_metrics = []
+            intermediates_dict = collections.defaultdict(list)
+            # this actually sends a lot of data, to avoid hangs on slow connection,
+            # only take one minibatch of the total activations
+            out_chunk = get_intermediates(running_intermediates[0]["Activation PyTree"])
+            for key in out_chunk.keys():
+                intermediates_dict[key] += out_chunk[key]
 
+            # TODO: Log Gradients
+
+            # embedding_rank = get_embedding_spectrum(state.params)
+            # train_metrics_np.update({"Rank(Emb)": embedding_rank})
+
+            embedding_pca = get_num_components_pca(state.params)
+            train_metrics_np.update({"Fraction of Dims to explain 90 percent of Embedding Variance": embedding_pca})            
+
+            intermediates_hist = {}
+            for key in intermediates_dict.keys():
+                intermediates_hist[key] = wandb.Histogram(intermediates_dict[key])
+
+            train_metrics_np.update(intermediates_hist)
+
+            running_metrics = []
+            running_intermediates = []
             validation_metrics = []
 
             if (i) % (
@@ -356,6 +384,7 @@ def main():
                         )
 
                     train_metrics_np.pop("Train Batch Time")
+
                     wandb.log(train_metrics_np)
 
                     if save_to_bucket:
@@ -410,31 +439,62 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
     """Train on a single batch"""
 
     def loss_fn(params):
-        _, loss = state.apply_fn(
+        (_, loss), intermediates = state.apply_fn(
             {"params": params["params"]},
             x=batch,
             labels=batch,
             train=False,
+            mutable="intermediates",
         )
 
-        return loss
+        return loss, intermediates
 
-    grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
-    loss, grads = grad_fn(state.params)
+    dynamic_scale = state.dynamic_scale
+    if dynamic_scale:
+        grad_fn = dynamic_scale.value_and_grad(loss_fn, has_aux=True, axis_name="batch")
+        dynamic_scale, is_fin, (loss, intermediates), grads = grad_fn(state.params)
+        state = state.replace(dynamic_scale=dynamic_scale)
 
-    # compute all-reduce mean for gradients and loss
-    # Ex: If we have 8 devices, each device takes the gradients from the other 7 and averages them all together
-    # that way, all device replicas have the same gradients and optimization step can occur in parallel
-    loss = jax.lax.pmean(loss, axis_name="batch")
-    grads = jax.lax.pmean(grads, axis_name="batch")
 
-    state = state.apply_gradients(
+    else:
+        grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
+        (loss, intermediates), grads = grad_fn(state.params)
+        # NOTE: compute all-reduce mean for gradients and loss
+        # Ex: If we have 8 devices, each device takes the gradients from the other 7 and averages them all together
+        # that way, all device replicas have the same gradients and optimization step can occur in parallel
+        loss = jax.lax.pmean(loss, axis_name="batch")
+        grads = jax.lax.pmean(grads, axis_name="batch")
+
+    new_state = state.apply_gradients(
         grads=grads,
     )
 
-    metrics = {"Train LM Loss": loss, "Train LM PPL": jnp.exp(loss)}
+    if dynamic_scale:
+        # if is_fin == False the gradients contain Inf/NaNs and optimizer state and
+        # params should be restored (= skip this step).
+        new_state = new_state.replace(
+            opt_state=jax.tree_util.tree_map(
+                partial(jnp.where, is_fin), new_state.opt_state, state.opt_state
+            ),
+            params=jax.tree_util.tree_map(
+                partial(jnp.where, is_fin), new_state.params, state.params
+            ),
+            dynamic_scale=dynamic_scale,
+        )
 
-    return state, metrics
+    metrics = {
+        "Train LM Loss": loss,
+        "Train LM PPL": jnp.exp(loss),
+        "Loss Scale": dynamic_scale.scale,
+    }
+
+    # NOTE: by default all PyTrees will stay on default device (not your CPU) which can eat up a lot of memory
+    # so we transfer them to CPU immediately to prevent them accumulating on device memory
+    inspector_statistics = {
+        "Activation PyTree": pytree_to_cpu(intermediates),
+    }
+
+    return new_state, metrics, inspector_statistics
 
 
 @partial(jax.pmap, axis_name="batch")
@@ -455,7 +515,8 @@ def eval_step(state: Any, batch: jnp.array):
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        print(f"Error encountered: {e}")
+    # try:
+    #     main()
+    # except Exception as e:
+    #     print(f"Error encountered: {e}")
+    main()

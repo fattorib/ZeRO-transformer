@@ -1,26 +1,32 @@
 QA:
-  embedding_dim: 512
+  embedding_dim: 128
   vocab_size: 50257
-  num_head: 8
-  block_size: 512
+  num_head: 16
+  block_size: 1024
   dropout: 0.0
-  N: 3
+  N: 2
   fused_residuals: True
   alibi_attn: True
-  head_qk_trick: False
-  use_static_sgu: False
+
+wide:
+  embedding_dim: 1024
+  vocab_size: 50257
+  num_head: 16
+  block_size: 1024
+  dropout: 0.0
+  N: 2
+  fused_residuals: True
+  alibi_attn: True
 
 unittest:
   embedding_dim: 768
   vocab_size: 50257
   num_head: 12
-  block_size: 512
+  block_size: 1024
   dropout: 0.0
   N: 12
   fused_residuals: True
   alibi_attn: True
-  head_qk_trick: False
-  use_static_sgu: False
 
 small:
   embedding_dim: 768
@@ -31,8 +37,7 @@ small:
   N: 6
   fused_residuals: True
   alibi_attn: True
-  head_qk_trick: False
-  use_static_sgu: False
+
   
 base:
   embedding_dim: 768
@@ -43,8 +48,6 @@ base:
   N: 12
   fused_residuals: True
   alibi_attn: True
-  head_qk_trick: True
-  use_static_sgu: False
 
 medium:
   embedding_dim: 1024
@@ -55,8 +58,7 @@ medium:
   N: 24
   fused_residuals: True
   alibi_attn: True
-  head_qk_trick: False
-  use_static_sgu: False
+
 
 large:
   embedding_dim: 1536

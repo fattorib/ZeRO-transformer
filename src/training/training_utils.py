@@ -1,21 +1,25 @@
 """ 
 Helper methods used during training setup. 
 """
-from typing import Callable, List, Union
+from typing import Any, Callable, List, Union
 
+import flax
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
 import optax
+from flax.training import dynamic_scale as dynamic_scale_lib
 from flax.training import train_state
 from jax import random
 
 
 def to_precision(t, dtype: jnp.dtype):
-    return jax.tree_map(lambda x: x.astype(dtype) if x.dtype == dtype else x, t)
+    return jax.tree_map(
+        lambda x: x.astype(dtype) if x.dtype != dtype and x.ndim > 1 else x, t
+    )
 
 
-def initialized(key: random.PRNGKey, model: nn.Module, dtype: jnp.dtype):
+def initialized(key: random.PRNGKey, model: nn.Module):
     """Initializes param dict for a model
     Args:
         key (_type_): _description_
@@ -38,8 +42,12 @@ def initialized(key: random.PRNGKey, model: nn.Module, dtype: jnp.dtype):
 
     jit_apply = jax.jit(init, backend="cpu")
     variables = jit_apply(rng=rng_init, init_batch=init_batch)
-    variables = to_precision(variables, dtype)
+    # variables = to_precision(variables, dtype)
     return variables
+
+
+class TrainState(train_state.TrainState):
+    dynamic_scale: Any = None
 
 
 def create_train_state(
@@ -48,10 +56,9 @@ def create_train_state(
     weight_decay: float,
     model: nn.Module,
     grad_accum_steps: int,
-    dtype: jnp.dtype = jnp.float32,
 ):
     """Creates initial `TrainState` for model."""
-    params = initialized(rng, model, dtype)
+    params = initialized(rng, model)
 
     # This mask turns off weight decay for bias terms, LN terms and position embeddings
     mask = jax.tree_map(
@@ -70,12 +77,19 @@ def create_train_state(
     )
 
     if grad_accum_steps > 1:
-        tx = optax.MultiSteps(tx, every_k_schedule=grad_accum_steps)
+        tx = optax.MultiSteps(
+            tx,
+            every_k_schedule=grad_accum_steps,
+            should_skip_update_fn=optax.skip_not_finite,
+        )
 
-    state = train_state.TrainState.create(
+    state = TrainState.create(
         apply_fn=model.apply,
         params=params,
         tx=tx,
+        dynamic_scale=dynamic_scale_lib.DynamicScale()
+        if model.dtype == jnp.float16
+        else None,
     )
     return state
 

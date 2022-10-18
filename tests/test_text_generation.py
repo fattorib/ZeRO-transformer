@@ -3,11 +3,14 @@ import pickle
 import unittest
 
 import jax
+import pytest
 import requests
 from tqdm import tqdm
 from transformers import GPT2Tokenizer
 
 from src.models.GPT import model_getter
+
+pytest.skip("Skipping generation tests, not relevant for now", allow_module_level=True)
 
 
 class TestBasicGeneration(unittest.TestCase):

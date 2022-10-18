@@ -1,6 +1,5 @@
 import unittest
 
-import flax.linen as nn
 import jax
 import jax.numpy as jnp
 import jax.random as random
@@ -375,6 +374,51 @@ class TestGPT(unittest.TestCase):
         )
         self.assertEqual((1, self.block_size, self.vocab_size), out.shape)
 
+    def test_gpt_fwd_fp16(self):
+
+        block = Transformer(
+            embedding_dim=128,
+            vocab_size=self.vocab_size,
+            num_head=8,
+            block_size=512,
+            dropout=0.1,
+            N=6,
+            dtype=jnp.float16,
+            fused_residuals=False,
+        )
+        batch_tok = random.randint(self.rng, shape=(1, 512), maxval=256, minval=0)
+        params = block.init(self.init_rng, batch_tok, None, False)
+
+        out = block.apply(
+            {"params": params["params"]},
+            batch_tok,
+            train=True,
+            rngs={"dropout": self.rng},
+        )
+        self.assertEqual((1, self.block_size, self.vocab_size), out.shape)
+
+        block = Transformer(
+            embedding_dim=128,
+            vocab_size=self.vocab_size,
+            num_head=8,
+            block_size=512,
+            dropout=0.1,
+            N=6,
+            dtype=jnp.float16,
+            fused_residuals=False,
+            alibi_attn=True,
+        )
+        batch_tok = random.randint(self.rng, shape=(1, 512), maxval=256, minval=0)
+        params = block.init(self.init_rng, batch_tok, None, False)
+
+        out = block.apply(
+            {"params": params["params"]},
+            batch_tok,
+            train=True,
+            rngs={"dropout": self.rng},
+        )
+        self.assertEqual((1, self.block_size, self.vocab_size), out.shape)
+
     def test_gpt_loss_standard(self):
 
         block = Transformer(
@@ -386,7 +430,6 @@ class TestGPT(unittest.TestCase):
             N=6,
             dtype=None,
             fused_residuals=False,
-            head_qk_trick=True,
         )
         batch_tok = random.randint(self.rng, shape=(1, 512), maxval=256, minval=0)
         params = block.init(self.init_rng, batch_tok, None, False)

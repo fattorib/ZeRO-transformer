@@ -3,14 +3,12 @@ Unittests for all experimental features: QK trick, SGU splitting, etc
 """
 import unittest
 
-import flax.linen as nn
-import jax
 import jax.numpy as jnp
 import jax.random as random
+import pytest
 
-from src.models.GPT import (CausalAttention, MLPBlock, Transformer,
+from src.models.GPT import (Transformer,
                             TransformerBlock)
-from src.utils.losses import cross_entropy_loss
 
 
 class TestTransformerBlock(unittest.TestCase):
@@ -29,7 +27,7 @@ class TestTransformerBlock(unittest.TestCase):
             block_size=512,
             residual_dropout=0.1,
             N=6,
-            dtype=None,
+            dtype=jnp.float32,
             fused_residuals=True,
             use_static_sgu=True,
         )
@@ -50,7 +48,7 @@ class TestTransformerBlock(unittest.TestCase):
             block_size=512,
             residual_dropout=0.1,
             N=6,
-            dtype=None,
+            dtype=jnp.float32,
             fused_residuals=True,
             alibi_attn=True,
             use_static_sgu=True,
@@ -86,9 +84,8 @@ class TestGPT(unittest.TestCase):
             block_size=512,
             dropout=0.1,
             N=6,
-            dtype=None,
+            dtype=jnp.float32,
             fused_residuals=True,
-            head_qk_trick=False,
             use_static_sgu=True,
         )
         batch_tok = random.randint(self.rng, shape=(1, 512), maxval=256, minval=0)
@@ -109,7 +106,7 @@ class TestGPT(unittest.TestCase):
             block_size=512,
             dropout=0.1,
             N=6,
-            dtype=None,
+            dtype=jnp.float32,
             fused_residuals=True,
             alibi_attn=True,
             use_static_sgu=True,
@@ -125,6 +122,7 @@ class TestGPT(unittest.TestCase):
         )
         self.assertEqual((1, self.block_size, self.vocab_size), out.shape)
 
+    @pytest.mark.skip(reason="Not using QK for now")
     def test_gpt_fwd_qk_trick(self):
         # Ensure the QK trick shapes are correct
 
