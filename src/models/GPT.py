@@ -165,8 +165,11 @@ class CausalAttention(nn.Module):
             present = jnp.stack((key, value))
 
         if self.qk_norm:
-            query /= jnp.linalg.norm(query, ord=2, axis=-1)
-            key /= jnp.linalg.norm(key, ord=2, axis=-1)
+            query /= jnp.linalg.norm(query, ord=2, axis=-1, keepdims=True)
+            key /= jnp.linalg.norm(key, ord=2, axis=-1, keepdims=True)
+
+            scale_factor = self.scale.reshape(1, -1, 1, 1)
+            attn_full = scale_factor * (query @ key.transpose(0, 1, 3, 2))
 
         else:
             # get raw attention scores
