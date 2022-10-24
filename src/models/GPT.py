@@ -84,9 +84,8 @@ class CausalAttention(nn.Module):
     dropout: float = 0.0
     N: int = None
     alibi_attn: bool = False
-    qk_norm: bool = False
-
     dtype: Any = jnp.float32
+    qk_norm: bool = False
 
     def setup(self):
         self.slopes = jnp.array(get_slopes(self.num_head))
@@ -166,8 +165,8 @@ class CausalAttention(nn.Module):
             present = jnp.stack((key, value))
 
         if self.qk_norm:
-            query /= jnp.linalg.norm(query, order=2, axis=-1)
-            key /= jnp.linalg.norm(key, order=2, axis=-1)
+            query /= jnp.linalg.norm(query, ord=2, axis=-1)
+            key /= jnp.linalg.norm(key, ord=2, axis=-1)
 
         else:
             # get raw attention scores

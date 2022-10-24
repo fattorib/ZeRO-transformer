@@ -19,7 +19,7 @@ class TestGPT(unittest.TestCase):
     def tearDown(self) -> None:
         pass
 
-    @pytest.mark.skip(reason="Not using SGU Trick")
+    @pytest.mark.skip(reason="Not using SGU")
     def test_gpt_fwd_static_sgu(self):
         block = Transformer(
             embedding_dim=128,
