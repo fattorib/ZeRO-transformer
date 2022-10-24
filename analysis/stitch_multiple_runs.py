@@ -57,6 +57,11 @@ def grab_run_data(run_querys: List[str]) -> pd.DataFrame:
 
 if __name__ == "__main__":
     run_df_full = grab_run_data(
-        ["/bfattori/LJX/runs/1b3f90mz", "/bfattori/LJX/runs/799j3xyb"]
+        ["/bfattori/LJX/runs/2oxipdvz", "/bfattori/LJX/runs/p9tggcgm"]
     )
-    run_df_full.to_csv("analysis/processed/staged_multi_epoch.csv")
+    run_df_full.to_csv("analysis/processed/354_no_warmup.csv")
+
+    run_df_full = grab_run_data(
+        ["/bfattori/LJX/runs/3k02zt7j", "/bfattori/LJX/runs/1nilq90k"]
+    )
+    run_df_full.to_csv("analysis/processed/354_ctx_warmup.csv")
