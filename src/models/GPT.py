@@ -20,7 +20,7 @@ def get_slopes(n: int) -> List:
     def get_slopes_power_of_2(n):
         start = 2 ** (-(2 ** -(math.log2(n) - 3)))
         ratio = start
-        return [start * ratio**i for i in range(n)]
+        return [start * ratio ** i for i in range(n)]
 
     if math.log2(n).is_integer():
         return get_slopes_power_of_2(n)
@@ -63,42 +63,18 @@ class MLPBlock(nn.Module):
         self.sow("intermediates", "mlp_out", x)
         return dropout()(out)
 
-class SGU(nn.Module):
-    """Static SGU module"""
-
-    block_size: int
-    embedding_dim: int
-    kernel_size: int
-
-    def setup(self):
-        k = jnp.triu(
-            jnp.tril(
-                jnp.ones((self.block_size, self.block_size)), -1 * self.kernel_size
-            )
-        )
-        k = k / (k.cumsum(-2) + 1)
-        self.kernel = k
-
-    @nn.compact
-    def __call__(self, x: jnp.array) -> jnp.array:
-
-        B, T, C = x.shape[:3]
-
-        x = jax.lax.stop_gradient(x)
-
-        x = rearrange(x, "b n d -> b d n")
-        x = x @ (self.kernel.T[:T, :T])
-        x = rearrange(x, "b d n -> b n d")
-
-        return x
-
 
 class CausalAttention(nn.Module):
     """Standard causal multi-headed attention
 
-    Supports ALiBi attention biasing from
+    Supports:
+    - ALiBi attention biasing from
     `Train Short, Test Long: Attention with Linear Biases Enables Input
     Length Extrapolation <https://ofir.io/train_short_test_long.pdf>`
+
+    - QKNorm from
+    `Query-Key Normalization for Transformers`
+    <https://arxiv.org/abs/2010.04245>
 
     """
 
@@ -108,11 +84,20 @@ class CausalAttention(nn.Module):
     dropout: float = 0.0
     N: int = None
     alibi_attn: bool = False
+    qk_norm: bool = False
 
     dtype: Any = jnp.float32
 
     def setup(self):
         self.slopes = jnp.array(get_slopes(self.num_head))
+
+        if self.qk_norm:
+            self.scale = self.param(
+                "attention_scale",
+                jax.nn.initializers.ones,
+                (self.num_head,),
+                jnp.float32,
+            )
 
     @nn.compact
     def __call__(
@@ -180,10 +165,15 @@ class CausalAttention(nn.Module):
 
             present = jnp.stack((key, value))
 
-        # get raw attention scores
-        attn_full = (query @ key.transpose(0, 1, 3, 2)) / jnp.sqrt(
-            key.shape[-1]
-        )  # Shape is (B, nh, sq, sk)
+        if self.qk_norm:
+            query /= jnp.linalg.norm(query, order=2, axis=-1)
+            key /= jnp.linalg.norm(key, order=2, axis=-1)
+
+        else:
+            # get raw attention scores
+            attn_full = (query @ key.transpose(0, 1, 3, 2)) / jnp.sqrt(
+                key.shape[-1]
+            )  # Shape is (B, nh, sq, sk)
 
         if self.alibi_attn:
 
@@ -244,7 +234,7 @@ class TransformerBlock(nn.Module):
     dtype: Any = jnp.float32
     fused_residuals: bool = False
     alibi_attn: bool = False
-    use_static_sgu: bool = False
+    qk_norm: bool = False
 
     @nn.compact
     def __call__(
@@ -257,62 +247,28 @@ class TransformerBlock(nn.Module):
     ) -> Tuple[jnp.array, jnp.array]:
 
         if self.fused_residuals:
-            if self.use_static_sgu:
-                norm = nn.LayerNorm(dtype=self.dtype)
-
-                split_arr = jnp.split(norm(x), indices_or_sections=2, axis=-1)
-                x_sgu, x_attn = split_arr[0], split_arr[1]
-
-                attn_out = CausalAttention(
-                    self.embedding_dim//2,
-                    self.num_head,
-                    self.block_size,
-                    self.residual_dropout,
-                    self.N,
-                    self.alibi_attn,
-                    self.dtype,
-                )(x_attn, train, None, use_cache, layer_past, pad_mask)
-                
-                sgu_out = SGU(
-                    self.block_size, self.embedding_dim // 2, kernel_size=128
-                )(x_sgu)
-                
-                fused_out = jnp.concatenate((sgu_out, attn_out[0]), axis=-1)
-
-                return (
-                    x
-                    + fused_out
-                    + MLPBlock(
-                        self.embedding_dim,
-                        dropout=self.residual_dropout,
-                        N=self.N,
-                        dtype=self.dtype,
-                    )(norm(x), train),
-                    attn_out[1],
-                )
-
-            else:
-                norm = nn.LayerNorm(dtype=self.dtype)
-                attn_out = CausalAttention(
+            norm = nn.LayerNorm(dtype=self.dtype)
+            attn_out = CausalAttention(
+                self.embedding_dim,
+                self.num_head,
+                self.block_size,
+                self.residual_dropout,
+                self.N,
+                self.alibi_attn,
+                self.dtype,
+                self.qk_norm,
+            )(norm(x), train, None, use_cache, layer_past, pad_mask)
+            return (
+                x
+                + attn_out[0]
+                + MLPBlock(
                     self.embedding_dim,
-                    self.num_head,
-                    self.block_size,
-                    self.residual_dropout,
-                    self.N,
-                    self.alibi_attn,
-                    self.dtype,
-                )(norm(x), train, None, use_cache, layer_past, pad_mask)
-                return (
-                    x
-                    + attn_out[0]
-                    + MLPBlock(
-                        self.embedding_dim,
-                        dropout=self.residual_dropout,
-                        N=self.N,
-                        dtype=self.dtype,
-                    )(norm(x), train),
-                    attn_out[1],
-                )
+                    dropout=self.residual_dropout,
+                    N=self.N,
+                    dtype=self.dtype,
+                )(norm(x), train),
+                attn_out[1],
+            )
         else:
             attn_out = CausalAttention(
                 self.embedding_dim,
@@ -322,6 +278,7 @@ class TransformerBlock(nn.Module):
                 self.N,
                 self.alibi_attn,
                 self.dtype,
+                self.qk_norm,
             )(nn.LayerNorm(dtype=self.dtype)(x), train, use_cache, layer_past, pad_mask)
             x = x + attn_out[0]
             x = x + MLPBlock(
@@ -347,7 +304,7 @@ class Transformer(nn.Module):
     dtype: Any = jnp.float32
     fused_residuals: bool = False
     alibi_attn: bool = False
-    use_static_sgu: bool = False
+    qk_norm: bool = False
 
     def generate(
         self,
@@ -462,7 +419,7 @@ class Transformer(nn.Module):
                 self.dtype,
                 self.fused_residuals,
                 self.alibi_attn,
-                self.use_static_sgu
+                self.qk_norm,
             )(out, train, use_cache, past_state, pad_mask)
 
             present_states.append(layer_past)

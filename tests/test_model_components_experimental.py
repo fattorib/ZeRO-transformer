@@ -7,62 +7,7 @@ import jax.numpy as jnp
 import jax.random as random
 import pytest
 
-from src.models.GPT import (Transformer,
-                            TransformerBlock)
-
-
-class TestTransformerBlock(unittest.TestCase):
-    def setUp(self) -> None:
-        self.init_rng, self.rng = random.split(random.PRNGKey(0))
-        self.block_size = 512
-
-    def tearDown(self) -> None:
-        pass
-
-    def test_block_fwd_sgu(self):
-
-        block = TransformerBlock(
-            embedding_dim=128,
-            num_head=8,
-            block_size=512,
-            residual_dropout=0.1,
-            N=6,
-            dtype=jnp.float32,
-            fused_residuals=True,
-            use_static_sgu=True,
-        )
-        batch_cts = random.normal(self.rng, shape=(1, 512, 128))
-        params = block.init(self.init_rng, batch_cts, False)
-
-        out = block.apply(
-            {"params": params["params"]},
-            batch_cts,
-            train=True,
-            rngs={"dropout": self.rng},
-        )[0]
-        self.assertEqual(out.shape, batch_cts.shape)
-
-        block = TransformerBlock(
-            embedding_dim=128,
-            num_head=8,
-            block_size=512,
-            residual_dropout=0.1,
-            N=6,
-            dtype=jnp.float32,
-            fused_residuals=True,
-            alibi_attn=True,
-            use_static_sgu=True,
-        )
-        batch_cts = random.normal(self.rng, shape=(1, 512, 128))
-        params = block.init(self.init_rng, batch_cts, False)
-
-        out = block.apply(
-            {"params": params["params"]},
-            batch_cts,
-            train=True,
-            rngs={"dropout": self.rng},
-        )[0]
-        self.assertEqual(out.shape, batch_cts.shape)
+from src.models.GPT import Transformer, TransformerBlock
 
 
 class TestGPT(unittest.TestCase):
@@ -74,9 +19,8 @@ class TestGPT(unittest.TestCase):
     def tearDown(self) -> None:
         pass
 
+    @pytest.mark.skip(reason="Not using QK Trick")
     def test_gpt_fwd_static_sgu(self):
-        # Ensure the QK trick shapes are correct
-
         block = Transformer(
             embedding_dim=128,
             vocab_size=self.vocab_size,
@@ -122,7 +66,7 @@ class TestGPT(unittest.TestCase):
         )
         self.assertEqual((1, self.block_size, self.vocab_size), out.shape)
 
-    @pytest.mark.skip(reason="Not using QK for now")
+    @pytest.mark.skip(reason="Not using QK Trick")
     def test_gpt_fwd_qk_trick(self):
         # Ensure the QK trick shapes are correct
 
@@ -170,3 +114,102 @@ class TestGPT(unittest.TestCase):
             rngs={"dropout": self.rng},
         )
         self.assertEqual((1, self.block_size, self.vocab_size), out.shape)
+
+
+class TestTransformerBlock(unittest.TestCase):
+    def setUp(self) -> None:
+        self.init_rng, self.rng = random.split(random.PRNGKey(0))
+        self.block_size = 512
+
+    def tearDown(self) -> None:
+        pass
+
+    @pytest.mark.skip(reason="Not using SGU for now")
+    def test_block_fwd_sgu(self):
+        block = TransformerBlock(
+            embedding_dim=128,
+            num_head=8,
+            block_size=512,
+            residual_dropout=0.1,
+            N=6,
+            dtype=jnp.float32,
+            fused_residuals=True,
+            use_static_sgu=True,
+        )
+        batch_cts = random.normal(self.rng, shape=(1, 512, 128))
+        params = block.init(self.init_rng, batch_cts, False)
+
+        out = block.apply(
+            {"params": params["params"]},
+            batch_cts,
+            train=True,
+            rngs={"dropout": self.rng},
+        )[0]
+        self.assertEqual(out.shape, batch_cts.shape)
+
+        block = TransformerBlock(
+            embedding_dim=128,
+            num_head=8,
+            block_size=512,
+            residual_dropout=0.1,
+            N=6,
+            dtype=jnp.float32,
+            fused_residuals=True,
+            alibi_attn=True,
+            use_static_sgu=True,
+        )
+        batch_cts = random.normal(self.rng, shape=(1, 512, 128))
+        params = block.init(self.init_rng, batch_cts, False)
+
+        out = block.apply(
+            {"params": params["params"]},
+            batch_cts,
+            train=True,
+            rngs={"dropout": self.rng},
+        )[0]
+        self.assertEqual(out.shape, batch_cts.shape)
+
+    def test_block_fwd_qknorm(self):
+
+        block = TransformerBlock(
+            embedding_dim=128,
+            num_head=8,
+            block_size=512,
+            residual_dropout=0.1,
+            N=6,
+            dtype=jnp.float32,
+            fused_residuals=True,
+            qk_norm=True,
+        )
+        batch_cts = random.normal(self.rng, shape=(1, 512, 128))
+        params = block.init(self.init_rng, batch_cts, False)
+
+        out = block.apply(
+            {"params": params["params"]},
+            batch_cts,
+            train=True,
+            rngs={"dropout": self.rng},
+        )[0]
+        self.assertEqual(out.shape, batch_cts.shape)
+
+        block = TransformerBlock(
+            embedding_dim=128,
+            num_head=8,
+            block_size=512,
+            residual_dropout=0.1,
+            N=6,
+            dtype=jnp.float32,
+            fused_residuals=True,
+            alibi_attn=True,
+            qk_norm=True,
+        )
+        batch_cts = random.normal(self.rng, shape=(1, 512, 128))
+        params = block.init(self.init_rng, batch_cts, False)
+
+        out = block.apply(
+            {"params": params["params"]},
+            batch_cts,
+            train=True,
+            rngs={"dropout": self.rng},
+        )[0]
+        self.assertEqual(out.shape, batch_cts.shape)

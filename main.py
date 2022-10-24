@@ -317,7 +317,11 @@ def main():
             # train_metrics_np.update({"Rank(Emb)": embedding_rank})
 
             embedding_pca = get_num_components_pca(state.params)
-            train_metrics_np.update({"Fraction of Dims to explain 90 percent of Embedding Variance": embedding_pca})            
+            train_metrics_np.update(
+                {
+                    "Fraction of Dims to explain 90 percent of Embedding Variance": embedding_pca
+                }
+            )
 
             intermediates_hist = {}
             for key in intermediates_dict.keys():
@@ -454,7 +458,6 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
         grad_fn = dynamic_scale.value_and_grad(loss_fn, has_aux=True, axis_name="batch")
         dynamic_scale, is_fin, (loss, intermediates), grads = grad_fn(state.params)
         state = state.replace(dynamic_scale=dynamic_scale)
-
 
     else:
         grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
