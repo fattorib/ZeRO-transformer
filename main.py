@@ -308,7 +308,9 @@ def main():
                 intermediates_dict = collections.defaultdict(list)
                 # this actually sends a lot of data, to avoid hangs on slow connection,
                 # only take one minibatch of the total activations
-                out_chunk = get_intermediates(running_intermediates[0]["Activation PyTree"])
+                out_chunk = get_intermediates(
+                    running_intermediates[0]["Activation PyTree"]
+                )
                 for key in out_chunk.keys():
                     intermediates_dict[key] += out_chunk[key]
 
@@ -449,7 +451,7 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
             x=batch,
             labels=batch,
             train=False,
-            mutable="intermediates" if jax.process_index() == 0 else None
+            mutable="intermediates" if jax.process_index() == 0 else None,
         )
 
         return loss, intermediates
@@ -500,7 +502,7 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
         }
 
         return new_state, metrics, inspector_statistics
-    
+
     return new_state
 
 

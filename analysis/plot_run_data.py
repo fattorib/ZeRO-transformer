@@ -51,7 +51,7 @@ def grab_run_data(run_query: str) -> pd.DataFrame:
 
 if __name__ == "__main__":
 
-    #124 M
+    # 124 M
     # run_df_full_ctx = pd.read_csv("analysis/processed/full_context.csv")
 
     # run_staged_1_epoch = pd.read_csv("analysis/processed/staged_single_epoch.csv")
