@@ -68,6 +68,14 @@ Other model sizes:
 1. 345M model training is in progress -> Total estimates are ~54 hours of total compute for the 3 experiments.
 2. Could also try experiments with like 60M model too so we have results across 3 scales -> Maybe do if we have extra compute
 
+## Medium Model (354M Params)
+
+| Model/Experiment | Validation PPL | Training Time (hrs) | Tokens Seen (B) |
+|------------------|----------------|---------------------|-----------------|
+| Baseline         | 16.89         | Xx                | 12.6            |
+| Experiment #1    | 17.29         | xx                | 10.12             |
+| Experiment #2    | xxx         | xxx                | 12.6            |
+
 
 Other questions to answer:
 1. Do these results carry over to other tasks too? - Requires implementing greedy decoding for GPT module.
