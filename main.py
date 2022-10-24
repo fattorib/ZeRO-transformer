@@ -304,30 +304,31 @@ def main():
                 for k in running_metrics[0]
             }
 
-            intermediates_dict = collections.defaultdict(list)
-            # this actually sends a lot of data, to avoid hangs on slow connection,
-            # only take one minibatch of the total activations
-            out_chunk = get_intermediates(running_intermediates[0]["Activation PyTree"])
-            for key in out_chunk.keys():
-                intermediates_dict[key] += out_chunk[key]
+            if jax.process_index() == 0:
+                intermediates_dict = collections.defaultdict(list)
+                # this actually sends a lot of data, to avoid hangs on slow connection,
+                # only take one minibatch of the total activations
+                out_chunk = get_intermediates(running_intermediates[0]["Activation PyTree"])
+                for key in out_chunk.keys():
+                    intermediates_dict[key] += out_chunk[key]
 
-            # TODO: Log Gradients
+                # TODO: Log Gradients
 
-            # embedding_rank = get_embedding_spectrum(state.params)
-            # train_metrics_np.update({"Rank(Emb)": embedding_rank})
+                # embedding_rank = get_embedding_spectrum(state.params)
+                # train_metrics_np.update({"Rank(Emb)": embedding_rank})
 
-            embedding_pca = get_num_components_pca(state.params)
-            train_metrics_np.update(
-                {
-                    "Fraction of Dims to explain 90 percent of Embedding Variance": embedding_pca
-                }
-            )
+                embedding_pca = get_num_components_pca(state.params)
+                train_metrics_np.update(
+                    {
+                        "Fraction of Dims to explain 90 percent of Embedding Variance": embedding_pca
+                    }
+                )
 
-            intermediates_hist = {}
-            for key in intermediates_dict.keys():
-                intermediates_hist[key] = wandb.Histogram(intermediates_dict[key])
+                intermediates_hist = {}
+                for key in intermediates_dict.keys():
+                    intermediates_hist[key] = wandb.Histogram(intermediates_dict[key])
 
-            train_metrics_np.update(intermediates_hist)
+                train_metrics_np.update(intermediates_hist)
 
             running_metrics = []
             running_intermediates = []
@@ -448,7 +449,7 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
             x=batch,
             labels=batch,
             train=False,
-            mutable="intermediates",
+            mutable="intermediates" if jax.process_index() == 0 else None
         )
 
         return loss, intermediates
@@ -491,13 +492,16 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
         "Loss Scale": dynamic_scale.scale,
     }
 
-    # NOTE: by default all PyTrees will stay on default device (not your CPU) which can eat up a lot of memory
-    # so we transfer them to CPU immediately to prevent them accumulating on device memory
-    inspector_statistics = {
-        "Activation PyTree": pytree_to_cpu(intermediates),
-    }
+    if jax.process_index() == 0:
+        # NOTE: by default all PyTrees will stay on default device (not your CPU) which can eat up a lot of memory
+        # so we transfer them to CPU immediately to prevent them accumulating on device memory
+        inspector_statistics = {
+            "Activation PyTree": pytree_to_cpu(intermediates),
+        }
 
-    return new_state, metrics, inspector_statistics
+        return new_state, metrics, inspector_statistics
+    
+    return new_state
 
 
 @partial(jax.pmap, axis_name="batch")
