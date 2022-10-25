@@ -7,7 +7,8 @@ import jax.numpy as jnp
 import jax.random as random
 import pytest
 
-from src.models.GPT import Transformer, TransformerBlock
+from src.models.GPT import Transformer
+from src.models.layers import TransformerBlock
 
 
 class TestGPT(unittest.TestCase):
