@@ -317,13 +317,6 @@ def main():
 
                 # TODO: Log Gradients
 
-                # embedding_pca = get_num_components_pca(state.params)
-                # train_metrics_np.update(
-                #     {
-                #         "Fraction of Dims to explain 90 percent of Embedding Variance": embedding_pca
-                #     }
-                # )
-
                 intermediates_hist = {}
                 for key in intermediates_dict.keys():
                     intermediates_hist[key] = wandb.Histogram(intermediates_dict[key])
@@ -494,16 +487,23 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
     if dynamic_scale:
         metrics["Loss Scale"] = dynamic_scale.scale 
 
-    if jax.process_index() == 0:
-        # NOTE: by default all PyTrees will stay on default device (not your CPU) which can eat up a lot of memory
-        # so we transfer them to CPU immediately to prevent them accumulating on device memory
-        inspector_statistics = {
-            "Activation PyTree": pytree_to_cpu(intermediates),
-        }
+    # if jax.process_index() == 0:
+    #     # NOTE: by default all PyTrees will stay on default device (not your CPU) which can eat up a lot of memory
+    #     # so we transfer them to CPU immediately to prevent them accumulating on device memory
+    #     inspector_statistics = {
+    #         "Activation PyTree": pytree_to_cpu(intermediates),
+    #     }
 
-        return new_state, metrics, inspector_statistics
+    #     return new_state, metrics, inspector_statistics
 
-    return new_state
+    inspector_statistics = {
+        "Activation PyTree": pytree_to_cpu(intermediates),
+    }
+# 
+    return new_state, metrics, inspector_statistics
+    
+
+    # return new_state, metrics
 
 
 @partial(jax.pmap, axis_name="batch")
