@@ -56,6 +56,7 @@ def create_train_state(
     weight_decay: float,
     model: nn.Module,
     grad_accum_steps: int,
+    optim_name: str 
 ):
     """Creates initial `TrainState` for model."""
     params = initialized(rng, model)
@@ -66,14 +67,17 @@ def create_train_state(
         params,
     )
 
-    tx = optax.chain(
-        optax.clip(1.0),
-        optax.adamw(
+    optim = optax.adamw(
             learning_rate=learning_rate_fn,
             weight_decay=weight_decay,
             mask=mask,
             b2=0.95,
-        ),
+        ) if optim_name == 'adamw' else optax.adafactor(momentum = 0.9, weight_decay_rate = weight_decay, weight_decay_mask = mask)
+
+
+    tx = optax.chain(
+        optax.clip(1.0),
+        optim
     )
 
     if grad_accum_steps > 1:
