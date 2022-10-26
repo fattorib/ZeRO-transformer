@@ -1,4 +1,5 @@
 import argparse
+from calendar import day_abbr
 import collections
 import logging
 import random as pyrandom
@@ -487,9 +488,11 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
 
     metrics = {
         "Train LM Loss": loss,
-        "Train LM PPL": jnp.exp(loss),
-        "Loss Scale": dynamic_scale.scale,
+        "Train LM PPL": jnp.exp(loss), 
     }
+
+    if dynamic_scale:
+        metrics["Loss Scale"] = dynamic_scale.scale 
 
     if jax.process_index() == 0:
         # NOTE: by default all PyTrees will stay on default device (not your CPU) which can eat up a lot of memory
