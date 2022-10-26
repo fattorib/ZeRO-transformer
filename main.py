@@ -295,7 +295,8 @@ def main():
         metrics["Train Sequence Length"] = seq_len
 
         running_metrics.append(metrics)
-        running_intermediates.append(inspector_statistics)
+        if jax.process_index() == 0:
+            running_intermediates.append(inspector_statistics)
 
         if (i) % cfg.training.gradient_accumulation_steps == 0:
             # we've completed a full batch of data, log the metrics
@@ -442,7 +443,7 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
             x=batch,
             labels=batch,
             train=False,
-            mutable="intermediates"
+            mutable="intermediates" if jax.process_index() == 0 else None
         )
 
         return loss, intermediates
@@ -487,23 +488,16 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
     if dynamic_scale:
         metrics["Loss Scale"] = dynamic_scale.scale 
 
-    # if jax.process_index() == 0:
-    #     # NOTE: by default all PyTrees will stay on default device (not your CPU) which can eat up a lot of memory
-    #     # so we transfer them to CPU immediately to prevent them accumulating on device memory
-    #     inspector_statistics = {
-    #         "Activation PyTree": pytree_to_cpu(intermediates),
-    #     }
+    if jax.process_index() == 0:
+        # NOTE: by default all PyTrees will stay on default device (not your CPU) which can eat up a lot of memory
+        # so we transfer them to CPU immediately to prevent them accumulating on device memory
+        inspector_statistics = {
+            "Activation PyTree": pytree_to_cpu(intermediates),
+        }
 
-    #     return new_state, metrics, inspector_statistics
+        return new_state, metrics, inspector_statistics
 
-    inspector_statistics = {
-        "Activation PyTree": pytree_to_cpu(intermediates),
-    }
-# 
-    return new_state, metrics, inspector_statistics
-    
-
-    # return new_state, metrics
+    return new_state, metrics, None
 
 
 @partial(jax.pmap, axis_name="batch")
@@ -524,8 +518,7 @@ def eval_step(state: Any, batch: jnp.array):
 
 
 if __name__ == "__main__":
-    # try:
-    #     main()
-    # except Exception as e:
-    #     print(f"Error encountered: {e}")
-    main()
+    try:
+        main()
+    except Exception as e:
+        print(f"Error encountered: {e}")
