@@ -72,7 +72,7 @@ def create_train_state(
             weight_decay=weight_decay,
             mask=mask,
             b2=0.95,
-        ) if optim_name == 'adamw' else optax.adafactor(momentum = 0.9, weight_decay_rate = weight_decay, weight_decay_mask = mask)
+        ) if optim_name == 'adamw' else optax.adafactor(learning_rate=learning_rate_fn,momentum = 0.9, weight_decay_rate = weight_decay, weight_decay_mask = mask)
 
 
     tx = optax.chain(
