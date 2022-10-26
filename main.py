@@ -319,12 +319,12 @@ def main():
                 # embedding_rank = get_embedding_spectrum(state.params)
                 # train_metrics_np.update({"Rank(Emb)": embedding_rank})
 
-                embedding_pca = get_num_components_pca(state.params)
-                train_metrics_np.update(
-                    {
-                        "Fraction of Dims to explain 90 percent of Embedding Variance": embedding_pca
-                    }
-                )
+                # embedding_pca = get_num_components_pca(state.params)
+                # train_metrics_np.update(
+                #     {
+                #         "Fraction of Dims to explain 90 percent of Embedding Variance": embedding_pca
+                #     }
+                # )
 
                 intermediates_hist = {}
                 for key in intermediates_dict.keys():
