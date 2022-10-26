@@ -442,7 +442,7 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
             x=batch,
             labels=batch,
             train=False,
-            mutable="intermediates" if jax.process_index() == 0 else None,
+            mutable="intermediates"
         )
 
         return loss, intermediates
