@@ -103,6 +103,7 @@ def main():
         weight_decay=cfg.training.weight_decay,
         model=model,
         grad_accum_steps=cfg.training.gradient_accumulation_steps,
+        optim_name = cfg.training.optimizer
     )
 
     if jax.process_index() == 0:
