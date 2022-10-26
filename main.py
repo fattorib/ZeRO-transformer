@@ -316,9 +316,6 @@ def main():
 
                 # TODO: Log Gradients
 
-                # embedding_rank = get_embedding_spectrum(state.params)
-                # train_metrics_np.update({"Rank(Emb)": embedding_rank})
-
                 # embedding_pca = get_num_components_pca(state.params)
                 # train_metrics_np.update(
                 #     {
