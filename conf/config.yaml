@@ -1,22 +1,23 @@
 training:
   max_epochs: 2
-  batch_size: 4
+  batch_size: 16
   peak_learning_rate: 1e-3
   warmup_steps: 2000
   decay_steps: 24000
   total_steps: 24500
   end_learning_rate: 1e-4
   weight_decay: 0.1
-  gradient_accumulation_steps: 128
+  gradient_accumulation_steps: 8
   evaluation_frequency: 500
   maximum_evaluation_steps: 500
-  precision: 'fp16'
+  precision: 'bf16'
   staged_sequences: [128]
   # staged_sequences: []
   staged_warmup_steps: 6000
+  optimizer: 'adafactor'
 
 model:
-  size: "QA"
+  size: "base"
 
 data:
   corpus: "openwebtext"
@@ -26,7 +27,7 @@ data:
   full_steps_in_batch: 24558
   workers: 0
   checkpoint_directory: "checkpoints"
-  # bucket_path: "bfattoriwebtext2"
-  bucket_path: 
+  bucket_path: "bfattoriwebtext2"
+  # bucket_path: 
   index_path_train: "data/index/openwebtext_useast.train.index"
   index_path_validation: "data/index/openwebtext_useast.val.index"
