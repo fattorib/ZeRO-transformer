@@ -1,11 +1,11 @@
 training:
   max_epochs: 2
   batch_size: 16
-  peak_learning_rate: 8e-4
+  peak_learning_rate: 6e-4
   warmup_steps: 2000
   decay_steps: 24000
   total_steps: 24500
-  end_learning_rate: 8e-5
+  end_learning_rate: 6e-5
   weight_decay: 0.1
   gradient_accumulation_steps: 8
   evaluation_frequency: 500
@@ -14,7 +14,6 @@ training:
   staged_sequences: [128]
   # staged_sequences: []
   staged_warmup_steps: 6000
-  optimizer: 'adamw'
 
 model:
   size: "base"
