@@ -8,8 +8,7 @@ import jax.random as random
 import pytest
 
 from src.models.experimental import MLPBoom
-from src.models.GPT import Transformer
-from src.models.GPT import TransformerBlock
+from src.models.GPT import Transformer, TransformerBlock
 
 
 class TestGPT(unittest.TestCase):
@@ -116,7 +115,7 @@ class TestGPT(unittest.TestCase):
             rngs={"dropout": self.rng},
         )
         self.assertEqual((1, self.block_size, self.vocab_size), out.shape)
-    
+
     def test_gpt_fwd_mlp_boom(self):
         block = Transformer(
             embedding_dim=128,
@@ -127,7 +126,7 @@ class TestGPT(unittest.TestCase):
             N=6,
             dtype=jnp.float32,
             fused_residuals=True,
-            mlp_boom = True
+            mlp_boom=True,
         )
         batch_tok = random.randint(self.rng, shape=(1, 512), maxval=256, minval=0)
         params = block.init(self.init_rng, batch_tok, None, False)
@@ -139,6 +138,7 @@ class TestGPT(unittest.TestCase):
             rngs={"dropout": self.rng},
         )
         self.assertEqual((1, self.block_size, self.vocab_size), out.shape)
+
 
 class TestTransformerBlock(unittest.TestCase):
     def setUp(self) -> None:
@@ -237,7 +237,6 @@ class TestTransformerBlock(unittest.TestCase):
             rngs={"dropout": self.rng},
         )[0]
         self.assertEqual(out.shape, batch_cts.shape)
-        
 
 
 class TestBoomLayer(unittest.TestCase):

@@ -60,7 +60,7 @@ class MLPBoom(nn.Module):
         x = nn.Dense(
             features=self.dimension_multiplier * self.embedding_dim,
             name="fc_in",
-            kernel_init=initializers.normal(stddev=0.02/jnp.sqrt(self.embedding_dim)),
+            kernel_init=initializers.normal(stddev=0.02 / jnp.sqrt(self.embedding_dim)),
             bias_init=initializers.zeros,
             dtype=self.dtype,
         )(x)

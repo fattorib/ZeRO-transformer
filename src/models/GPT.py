@@ -199,10 +199,10 @@ class Transformer(nn.Module):
 
         if past_states is None:
             past_states = [None] * self.N
-        
+
         if self.mlp_boom:
             mlp_block = MLPBoom
-        
+
         else:
             mlp_block = MLPBlock
 
@@ -218,7 +218,7 @@ class Transformer(nn.Module):
                 self.fused_residuals,
                 self.alibi_attn,
                 self.qk_norm,
-                mlp_block
+                mlp_block,
             )(out, train, use_cache, past_state)
 
             present_states.append(layer_past)
