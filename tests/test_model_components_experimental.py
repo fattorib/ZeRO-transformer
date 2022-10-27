@@ -9,7 +9,7 @@ import pytest
 
 from src.models.experimental import MLPBoom
 from src.models.GPT import Transformer
-from src.models.layers import TransformerBlock
+from src.models.GPT import TransformerBlock
 
 
 class TestGPT(unittest.TestCase):

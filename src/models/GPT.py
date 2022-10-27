@@ -70,7 +70,7 @@ class TransformerBlock(nn.Module):
                 self.alibi_attn,
                 self.dtype,
                 self.qk_norm,
-            )(nn.LayerNorm(dtype=self.dtype)(x), train, use_cache, layer_past)
+            )(nn.LayerNorm(dtype=self.dtype)(x), train, None, use_cache, layer_past)
             x = x + attn_out[0]
             x = x + MLPBlock(
                 self.embedding_dim,

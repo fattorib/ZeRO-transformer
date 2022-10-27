@@ -5,7 +5,8 @@ import jax.numpy as jnp
 import jax.random as random
 
 from src.models.GPT import Transformer
-from src.models.layers import CausalAttention, MLPBlock, TransformerBlock
+from src.models.layers import CausalAttention, MLPBlock
+from src.models.GPT import TransformerBlock
 from src.utils.losses import cross_entropy_loss
 
 
