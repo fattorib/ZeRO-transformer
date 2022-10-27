@@ -9,6 +9,7 @@ import pytest
 
 from src.models.GPT import Transformer
 from src.models.layers import TransformerBlock
+from src.models.experimental import MLPBoom
 
 
 class TestGPT(unittest.TestCase):
@@ -213,4 +214,40 @@ class TestTransformerBlock(unittest.TestCase):
             train=True,
             rngs={"dropout": self.rng},
         )[0]
+        self.assertEqual(out.shape, batch_cts.shape)
+
+
+class TestBoomLayer(unittest.TestCase):
+    def setUp(self) -> None:
+        self.init_rng, self.rng = random.split(random.PRNGKey(0))
+        self.block_size = 512
+
+    def tearDown(self) -> None:
+        pass
+
+    def test_MLP_create(self):
+
+        mlp = MLPBoom(embedding_dim=128, dimension_multiplier=4, dropout=0.1, N=10)
+        batch_cts = random.normal(self.rng, shape=(1, 512, 128))
+        params = mlp.init(self.init_rng, batch_cts, False)
+
+    def test_MLP_fwd(self):
+        mlp = MLPBoom(embedding_dim=128, dimension_multiplier=4, dropout=0.1, N=6)
+        batch_cts = random.normal(self.rng, shape=(1, 512, 128))
+        params = mlp.init(self.init_rng, batch_cts, False)
+
+        out = mlp.apply(
+            {"params": params["params"]},
+            batch_cts,
+            train=True,
+            rngs={"dropout": self.rng},
+        )
+        self.assertEqual(out.shape, batch_cts.shape)
+
+        out = mlp.apply(
+            {"params": params["params"]},
+            batch_cts,
+            train=False,
+            rngs={"dropout": self.rng},
+        )
         self.assertEqual(out.shape, batch_cts.shape)
