@@ -3,7 +3,6 @@ Helper methods used during training setup.
 """
 from typing import Any, Callable, List, Union
 
-import flax
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
