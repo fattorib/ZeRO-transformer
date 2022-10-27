@@ -250,7 +250,6 @@ def main():
     )
 
     running_metrics = []
-    running_intermediates = []
 
     if len(cfg.training.staged_sequences) > 0:
 
@@ -285,7 +284,7 @@ def main():
 
         t0 = time.time()
 
-        state, metrics, inspector_statistics = train_step(
+        state, metrics = train_step(
             state,
             sharded_batch,
         )
@@ -294,8 +293,6 @@ def main():
         metrics["Train Sequence Length"] = seq_len
 
         running_metrics.append(metrics)
-        if jax.process_index() == 0:
-            running_intermediates.append(inspector_statistics)
 
         if (i) % cfg.training.gradient_accumulation_steps == 0:
             # we've completed a full batch of data, log the metrics
@@ -306,8 +303,24 @@ def main():
             }
 
             running_metrics = []
-            running_intermediates = []
             validation_metrics = []
+
+            absolute_step = i // cfg.training.gradient_accumulation_steps
+
+            train_metrics_np["Tokens Seen (B)"] = (
+                num_host
+                * (
+                    cfg.training.batch_size
+                    * cfg.training.gradient_accumulation_steps
+                    * compute_tokens_seen(
+                        absolute_step,
+                        stages=cfg.training.staged_sequences,
+                        max_steps=cfg.training.staged_warmup_steps,
+                        max_context=cfg.data.max_context,
+                    )
+                )
+                / 1e9
+            )
 
             if (i) % (
                 cfg.training.evaluation_frequency
@@ -330,40 +343,6 @@ def main():
 
                 if jax.process_index() == 0:
                     train_metrics_np.update(validation_metrics_np)
-                    train_metrics_np["Train Step Time"] = (
-                        cfg.training.gradient_accumulation_steps
-                        * train_metrics_np["Train Batch Time"]
-                    )
-
-                    absolute_step = i // cfg.training.gradient_accumulation_steps
-                    if len(cfg.training.staged_sequences) > 0:
-                        train_metrics_np["Tokens Seen (B)"] = (
-                            num_host
-                            * (
-                                cfg.training.batch_size
-                                * cfg.training.gradient_accumulation_steps
-                                * compute_tokens_seen(
-                                    absolute_step,
-                                    stages=cfg.training.staged_sequences,
-                                    max_steps=cfg.training.staged_warmup_steps,
-                                    max_context=cfg.data.max_context,
-                                )
-                            )
-                            / 1e9
-                        )
-                    else:
-                        train_metrics_np["Tokens Seen (B)"] = (
-                            num_host
-                            * (
-                                cfg.training.batch_size
-                                * cfg.training.gradient_accumulation_steps
-                                * absolute_step
-                                * cfg.data.max_context
-                            )
-                            / 1e9
-                        )
-
-                    train_metrics_np.pop("Train Batch Time")
 
                     wandb.log(train_metrics_np)
 
@@ -381,35 +360,6 @@ def main():
                         cfg.training.gradient_accumulation_steps
                         * train_metrics_np["Train Batch Time"]
                     )
-
-                    absolute_step = i // cfg.training.gradient_accumulation_steps
-                    if len(cfg.training.staged_sequences) > 0:
-                        train_metrics_np["Tokens Seen (B)"] = (
-                            num_host
-                            * (
-                                cfg.training.batch_size
-                                * cfg.training.gradient_accumulation_steps
-                                * compute_tokens_seen(
-                                    absolute_step,
-                                    stages=cfg.training.staged_sequences,
-                                    max_steps=cfg.training.staged_warmup_steps,
-                                    max_context=cfg.data.max_context,
-                                )
-                            )
-                            / 1e9
-                        )
-                    else:
-                        train_metrics_np["Tokens Seen (B)"] = (
-                            num_host
-                            * (
-                                cfg.training.batch_size
-                                * cfg.training.gradient_accumulation_steps
-                                * absolute_step
-                                * cfg.data.max_context
-                            )
-                            / 1e9
-                        )
-
                     train_metrics_np.pop("Train Batch Time")
                     wandb.log(train_metrics_np)
 

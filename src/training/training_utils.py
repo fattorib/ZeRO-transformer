@@ -123,7 +123,7 @@ def step_to_seq_len(
         return stages[stage_idx]
 
 
-def compute_tokens_seen(
+def compute_tokens_seen_with_warmup(
     current_step: int, stages: List, max_steps: int, max_context=1024
 ) -> int:
     """Compute the number of tokens seen by the model. Requires scaling by batch size after
@@ -160,3 +160,13 @@ def compute_tokens_seen(
     else:
         # end is scaled by BS - This is constant
         return stages[0] * remainder
+
+
+def compute_tokens_seen(absolute_step, stages, max_steps, max_context):
+
+    if stages is not None:
+        return compute_tokens_seen_with_warmup(
+            absolute_step, stages, max_steps, max_context
+        )
+    else:
+        return absolute_step * max_context
