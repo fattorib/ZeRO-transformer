@@ -1,7 +1,7 @@
 """ 
 Replication of GPT2 transformers in Flax
 """
-from typing import Any, Tuple, Union
+from typing import Any, Callable, Tuple, Union
 
 import flax
 import flax.linen as nn
@@ -27,6 +27,7 @@ class TransformerBlock(nn.Module):
     fused_residuals: bool = False
     alibi_attn: bool = False
     qk_norm: bool = False
+    mlp_block: Callable = MLPBlock
 
     @nn.compact
     def __call__(
@@ -52,7 +53,7 @@ class TransformerBlock(nn.Module):
             return (
                 x
                 + attn_out[0]
-                + MLPBlock(
+                + self.mlp_block(
                     self.embedding_dim,
                     dropout=self.residual_dropout,
                     N=self.N,
@@ -72,7 +73,7 @@ class TransformerBlock(nn.Module):
                 self.qk_norm,
             )(nn.LayerNorm(dtype=self.dtype)(x), train, None, use_cache, layer_past)
             x = x + attn_out[0]
-            x = x + MLPBlock(
+            x = x + self.mlp_block(
                 self.embedding_dim,
                 dropout=self.residual_dropout,
                 N=self.N,
@@ -96,6 +97,7 @@ class Transformer(nn.Module):
     fused_residuals: bool = False
     alibi_attn: bool = False
     qk_norm: bool = False
+    mlp_boom: bool = False
 
     def generate(
         self,
@@ -197,6 +199,12 @@ class Transformer(nn.Module):
 
         if past_states is None:
             past_states = [None] * self.N
+        
+        if self.mlp_boom:
+            mlp_block = MLPBoom
+        
+        else:
+            mlp_block = MLPBlock
 
         for i, past_state in zip(range(self.N), past_states):
 
@@ -210,6 +218,7 @@ class Transformer(nn.Module):
                 self.fused_residuals,
                 self.alibi_attn,
                 self.qk_norm,
+                mlp_block
             )(out, train, use_cache, past_state)
 
             present_states.append(layer_past)
