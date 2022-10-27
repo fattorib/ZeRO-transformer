@@ -1,9 +1,9 @@
 import argparse
-from calendar import day_abbr
 import collections
 import logging
 import random as pyrandom
 import time
+from calendar import day_abbr
 from functools import partial
 from typing import Any
 
@@ -103,7 +103,7 @@ def main():
         weight_decay=cfg.training.weight_decay,
         model=model,
         grad_accum_steps=cfg.training.gradient_accumulation_steps,
-        optim_name = cfg.training.optimizer
+        optim_name=cfg.training.optimizer,
     )
 
     if jax.process_index() == 0:
@@ -185,7 +185,7 @@ def main():
 
     if jax.process_index() == 0:
         id = wandb.util.generate_id()
-        wandb.init(id=id, resume="allow", project="transformer-inspector")
+        wandb.init(id=id, resume="allow", project="LJX")
         flat_dict = flatten_dict(cfg)
 
         for key in model_config.keys():
@@ -306,24 +306,6 @@ def main():
                 for k in running_metrics[0]
             }
 
-            if jax.process_index() == 0:
-                intermediates_dict = collections.defaultdict(list)
-                # this actually sends a lot of data, to avoid hangs on slow connection,
-                # only take one minibatch of the total activations
-                out_chunk = get_intermediates(
-                    running_intermediates[0]["Activation PyTree"]
-                )
-                for key in out_chunk.keys():
-                    intermediates_dict[key] += out_chunk[key]
-
-                # TODO: Log Gradients
-
-                intermediates_hist = {}
-                for key in intermediates_dict.keys():
-                    intermediates_hist[key] = wandb.Histogram(intermediates_dict[key])
-
-                train_metrics_np.update(intermediates_hist)
-
             running_metrics = []
             running_intermediates = []
             validation_metrics = []
@@ -438,25 +420,24 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
     """Train on a single batch"""
 
     def loss_fn(params):
-        (_, loss), intermediates = state.apply_fn(
+        (_, loss) = state.apply_fn(
             {"params": params["params"]},
             x=batch,
             labels=batch,
             train=False,
-            mutable="intermediates" if jax.process_index() == 0 else None
         )
 
-        return loss, intermediates
+        return loss
 
     dynamic_scale = state.dynamic_scale
     if dynamic_scale:
         grad_fn = dynamic_scale.value_and_grad(loss_fn, has_aux=True, axis_name="batch")
-        dynamic_scale, is_fin, (loss, intermediates), grads = grad_fn(state.params)
+        dynamic_scale, is_fin, (loss), grads = grad_fn(state.params)
         state = state.replace(dynamic_scale=dynamic_scale)
 
     else:
         grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
-        (loss, intermediates), grads = grad_fn(state.params)
+        (loss), grads = grad_fn(state.params)
         # NOTE: compute all-reduce mean for gradients and loss
         # Ex: If we have 8 devices, each device takes the gradients from the other 7 and averages them all together
         # that way, all device replicas have the same gradients and optimization step can occur in parallel
@@ -482,22 +463,13 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
 
     metrics = {
         "Train LM Loss": loss,
-        "Train LM PPL": jnp.exp(loss), 
+        "Train LM PPL": jnp.exp(loss),
     }
 
     if dynamic_scale:
-        metrics["Loss Scale"] = dynamic_scale.scale 
+        metrics["Loss Scale"] = dynamic_scale.scale
 
-    if jax.process_index() == 0:
-        # NOTE: by default all PyTrees will stay on default device (not your CPU) which can eat up a lot of memory
-        # so we transfer them to CPU immediately to prevent them accumulating on device memory
-        inspector_statistics = {
-            "Activation PyTree": pytree_to_cpu(intermediates),
-        }
-
-        return new_state, metrics, inspector_statistics
-
-    return new_state, metrics, None
+    return new_state, metrics
 
 
 @partial(jax.pmap, axis_name="batch")
