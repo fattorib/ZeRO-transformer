@@ -1,9 +1,7 @@
 import argparse
-import collections
 import logging
 import random as pyrandom
 import time
-from calendar import day_abbr
 from functools import partial
 from typing import Any
 
@@ -23,9 +21,6 @@ from tqdm import tqdm
 
 import wandb
 from src.models.GPT import model_getter
-from src.training.inspector_utils import (get_intermediates,
-                                          get_num_components_pca,
-                                          pytree_to_cpu)
 from src.training.training_utils import (compute_tokens_seen,
                                          create_train_state, step_to_seq_len)
 from src.utils.configs import flatten_dict
@@ -163,8 +158,7 @@ def main():
     local_batch_size = cfg.training.batch_size // jax.local_device_count()
 
     # This is computed in terms of absolute steps
-    if len(cfg.training.staged_sequences) > 0:
-        total_tokens = num_host * (
+    total_tokens = num_host * (
             cfg.training.batch_size
             * cfg.training.gradient_accumulation_steps
             * compute_tokens_seen(
@@ -173,13 +167,6 @@ def main():
                 max_steps=cfg.training.staged_warmup_steps,
                 max_context=cfg.data.max_context,
             )
-        )
-    else:
-        total_tokens = num_host * (
-            cfg.training.batch_size
-            * cfg.training.gradient_accumulation_steps
-            * cfg.data.max_context
-            * cfg.training.total_steps
         )
 
     if jax.process_index() == 0:
