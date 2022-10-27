@@ -98,7 +98,6 @@ class CausalAttention(nn.Module):
         alibi_mask: jnp.array = None,
         use_cache: bool = False,
         layer_past: Tuple[jnp.array, jnp.array] = None,
-        pad_mask: jnp.array = None,
     ) -> Tuple[jnp.array, jnp.array]:
         dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
         B, T, C = x.shape[:3]
@@ -189,12 +188,8 @@ class CausalAttention(nn.Module):
                 attn_full = attn_full + alibi_mask
 
         mask = jnp.tril(jnp.ones((T, T), dtype=jnp.int8)).reshape(1, 1, T, T)
-        if pad_mask is None:
-            masked_attn = jnp.where(mask, attn_full, jnp.finfo(self.dtype).min)
 
-        else:
-            combined_mask = mask * pad_mask
-            masked_attn = jnp.where(combined_mask, attn_full, jnp.finfo(self.dtype).min)
+        masked_attn = jnp.where(mask, attn_full, jnp.finfo(self.dtype).min)
 
         attn_scores = nn.softmax(masked_attn, axis=-1)
         attn_out = (attn_scores @ value).transpose(
@@ -215,70 +210,3 @@ class CausalAttention(nn.Module):
         self.sow("intermediates", "attn_out", out)
 
         return dropout()(out), present
-
-
-class TransformerBlock(nn.Module):
-    """One full transformer block"""
-
-    embedding_dim: int
-    num_head: int
-    block_size: int
-    residual_dropout: float = 0.0
-    N: int = None
-    dtype: Any = jnp.float32
-    fused_residuals: bool = False
-    alibi_attn: bool = False
-    qk_norm: bool = False
-
-    @nn.compact
-    def __call__(
-        self,
-        x: jnp.array,
-        train: bool = False,
-        use_cache: bool = False,
-        layer_past: Tuple[jnp.array, jnp.array] = None,
-        pad_mask: jnp.array = None,
-    ) -> Tuple[jnp.array, jnp.array]:
-
-        if self.fused_residuals:
-            norm = nn.LayerNorm(dtype=self.dtype)
-            attn_out = CausalAttention(
-                self.embedding_dim,
-                self.num_head,
-                self.block_size,
-                self.residual_dropout,
-                self.N,
-                self.alibi_attn,
-                self.dtype,
-                self.qk_norm,
-            )(norm(x), train, None, use_cache, layer_past, pad_mask)
-            return (
-                x
-                + attn_out[0]
-                + MLPBlock(
-                    self.embedding_dim,
-                    dropout=self.residual_dropout,
-                    N=self.N,
-                    dtype=self.dtype,
-                )(norm(x), train),
-                attn_out[1],
-            )
-        else:
-            attn_out = CausalAttention(
-                self.embedding_dim,
-                self.num_head,
-                self.block_size,
-                self.residual_dropout,
-                self.N,
-                self.alibi_attn,
-                self.dtype,
-                self.qk_norm,
-            )(nn.LayerNorm(dtype=self.dtype)(x), train, use_cache, layer_past, pad_mask)
-            x = x + attn_out[0]
-            x = x + MLPBlock(
-                self.embedding_dim,
-                dropout=self.residual_dropout,
-                N=self.N,
-                dtype=self.dtype,
-            )(nn.LayerNorm(dtype=self.dtype)(x), train)
-            return x, attn_out[1]

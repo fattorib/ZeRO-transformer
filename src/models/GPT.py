@@ -10,8 +10,75 @@ import jax.nn.initializers as initializers
 import jax.numpy as jnp
 from omegaconf import OmegaConf
 
-from src.models.layers import TransformerBlock
+from src.models.experimental import MLPBoom
+from src.models.layers import CausalAttention, MLPBlock
 from src.utils.losses import cross_entropy_loss
+
+
+class TransformerBlock(nn.Module):
+    """One full transformer block"""
+
+    embedding_dim: int
+    num_head: int
+    block_size: int
+    residual_dropout: float = 0.0
+    N: int = None
+    dtype: Any = jnp.float32
+    fused_residuals: bool = False
+    alibi_attn: bool = False
+    qk_norm: bool = False
+
+    @nn.compact
+    def __call__(
+        self,
+        x: jnp.array,
+        train: bool = False,
+        use_cache: bool = False,
+        layer_past: Tuple[jnp.array, jnp.array] = None,
+    ) -> Tuple[jnp.array, jnp.array]:
+
+        if self.fused_residuals:
+            norm = nn.LayerNorm(dtype=self.dtype)
+            attn_out = CausalAttention(
+                self.embedding_dim,
+                self.num_head,
+                self.block_size,
+                self.residual_dropout,
+                self.N,
+                self.alibi_attn,
+                self.dtype,
+                self.qk_norm,
+            )(norm(x), train, None, use_cache, layer_past)
+            return (
+                x
+                + attn_out[0]
+                + MLPBlock(
+                    self.embedding_dim,
+                    dropout=self.residual_dropout,
+                    N=self.N,
+                    dtype=self.dtype,
+                )(norm(x), train),
+                attn_out[1],
+            )
+        else:
+            attn_out = CausalAttention(
+                self.embedding_dim,
+                self.num_head,
+                self.block_size,
+                self.residual_dropout,
+                self.N,
+                self.alibi_attn,
+                self.dtype,
+                self.qk_norm,
+            )(nn.LayerNorm(dtype=self.dtype)(x), train, use_cache, layer_past)
+            x = x + attn_out[0]
+            x = x + MLPBlock(
+                self.embedding_dim,
+                dropout=self.residual_dropout,
+                N=self.N,
+                dtype=self.dtype,
+            )(nn.LayerNorm(dtype=self.dtype)(x), train)
+            return x, attn_out[1]
 
 
 class Transformer(nn.Module):
@@ -98,7 +165,6 @@ class Transformer(nn.Module):
         train: bool = False,
         use_cache: bool = False,
         past_states: Tuple[jnp.array, jnp.array] = None,
-        pad_mask: jnp.array = None,
     ) -> Union[jnp.array, Tuple[jnp.array, jnp.array]]:
 
         B, T = x.shape[0:2]
@@ -144,7 +210,7 @@ class Transformer(nn.Module):
                 self.fused_residuals,
                 self.alibi_attn,
                 self.qk_norm,
-            )(out, train, use_cache, past_state, pad_mask)
+            )(out, train, use_cache, past_state)
 
             present_states.append(layer_past)
 

@@ -66,11 +66,11 @@ class MLPBoom(nn.Module):
         )(x)
         x = nn.gelu(x)
 
-        x = jnp.array(jnp.split(x, indices_or_sections=self.dimension_multiplier, axis = -1)).transpose(1,2,3,0)
+        x = jnp.array(
+            jnp.split(x, indices_or_sections=self.dimension_multiplier, axis=-1)
+        ).transpose(1, 2, 3, 0)
 
-        out = jnp.mean(x, axis = -1)
+        out = jnp.mean(x, axis=-1)
 
         self.sow("intermediates", "boom_out", x)
         return dropout()(out)
-
-

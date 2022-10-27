@@ -7,9 +7,9 @@ import jax.numpy as jnp
 import jax.random as random
 import pytest
 
+from src.models.experimental import MLPBoom
 from src.models.GPT import Transformer
 from src.models.layers import TransformerBlock
-from src.models.experimental import MLPBoom
 
 
 class TestGPT(unittest.TestCase):
