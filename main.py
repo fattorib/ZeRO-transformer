@@ -411,8 +411,8 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
         # NOTE: compute all-reduce mean for gradients and loss
         # Ex: If we have 8 devices, each device takes the gradients from the other 7 and averages them all together
         # that way, all device replicas have the same gradients and optimization step can occur in parallel
-        loss = jax.lax.pmean(loss, axis_name="batch")
-        grads = jax.lax.pmean(grads, axis_name="batch")
+        # loss = jax.lax.pmean(loss, axis_name="batch")
+        # grads = jax.lax.pmean(grads, axis_name="batch")
 
     new_state = state.apply_gradients(
         grads=grads,
