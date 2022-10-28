@@ -67,7 +67,7 @@ def setup_dp_mesh():
     Creates jax device mesh for data-parallel training
     """
     devices = np.asarray(jax.devices())
-    mesh = Mesh(devices, ("dp"))
+    mesh = Mesh(devices, ["dp"])
 
     return mesh
 
