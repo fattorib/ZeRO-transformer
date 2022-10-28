@@ -390,7 +390,7 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
     """Train on a single batch"""
 
     def loss_fn(params):
-        (_, loss) = state.apply_fn(
+        _, loss = state.apply_fn(
             {"params": params["params"]},
             x=batch,
             labels=batch,
@@ -406,8 +406,8 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
         state = state.replace(dynamic_scale=dynamic_scale)
 
     else:
-        grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
-        (loss), grads = grad_fn(state.params)
+        grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
+        loss, grads = grad_fn(state.params)
         # NOTE: compute all-reduce mean for gradients and loss
         # Ex: If we have 8 devices, each device takes the gradients from the other 7 and averages them all together
         # that way, all device replicas have the same gradients and optimization step can occur in parallel
