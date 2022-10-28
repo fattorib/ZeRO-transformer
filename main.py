@@ -104,9 +104,8 @@ def main():
     rng = jax.random.PRNGKey(0)
     rng, init_rng = jax.random.split(rng)
 
-    mesh = setup_dp_mesh()
+    mesh = setup_dp_mesh()     # NOTE: When do call mesh manager? Before/after this?
 
-    # NOTE: When do call mesh manager? Before/after this?
     state = create_train_state(
         init_rng,
         learning_rate_fn,
@@ -266,19 +265,19 @@ def main():
     else:
         step_to_seq = lambda x: cfg.data.max_context
 
-    with mesh:
-
-        pjit_train_step = pjit(
+    pjit_train_step = pjit(
             train_step,
             in_axis_resources=(None, PartitionSpec("dp"), None),
             out_axis_resources=None,
         )
 
-        pjit_eval_step = pjit(
-            eval_step,
-            in_axis_resources=(None, PartitionSpec("dp")),
-            out_axis_resources=None,
-        )
+    pjit_eval_step = pjit(
+        eval_step,
+        in_axis_resources=(None, PartitionSpec("dp")),
+        out_axis_resources=None,
+    )
+
+    with mesh:
 
         for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
