@@ -15,7 +15,8 @@ import webdataset as wds
 from flax.training import checkpoints
 from flax.training.common_utils import shard
 from jax import random
-from jax.experimental import PartitionSpec, pjit
+from jax.experimental import PartitionSpec
+from jax.experimental.pjit import pjit
 from jax.experimental.maps import Mesh
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
