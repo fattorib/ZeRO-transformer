@@ -66,8 +66,7 @@ def setup_dp_mesh():
     """
     Creates jax device mesh for data-parallel training
     """
-    mesh_shape = (jax.device_count(),)
-    devices = np.asarray(jax.devices()).reshape(*mesh_shape)
+    devices = np.asarray(jax.devices())
     mesh = Mesh(devices, ("dp"))
 
     return mesh
@@ -267,116 +266,122 @@ def main():
     else:
         step_to_seq = lambda x: cfg.data.max_context
 
-    pjit_train_step = pjit(
-        train_step,
-        in_axis_resources=(None, PartitionSpec("dp"), None),
-        out_axis_resources=None,
-    )
+    with mesh:
 
-    pjit_eval_step = pjit(
-        eval_step,
-        in_axis_resources=(None, PartitionSpec("dp")),
-        out_axis_resources=None,
-    )
-
-    for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
-
-        if (i // cfg.training.gradient_accumulation_steps) > cfg.training.total_steps:
-            if jax.process_index() == 0:
-                logger.debug(f"Training has completed.")
-
-            return True
-
-        if resume_step != None and i <= resume_step:
-            continue
-
-        seq_len = step_to_seq(i)
-
-        text = text[:, :seq_len]
-
-        #     # sharding batch
-        #     sharded_batch = shard(text)
-
-        t0 = time.time()
-
-        state, metrics = pjit_train_step(
-            state,
-            text,
+        pjit_train_step = pjit(
+            train_step,
+            in_axis_resources=(None, PartitionSpec("dp"), None),
+            out_axis_resources=None,
         )
 
-        metrics["Train Batch Time"] = time.time() - t0
-        metrics["Train Sequence Length"] = seq_len
+        pjit_eval_step = pjit(
+            eval_step,
+            in_axis_resources=(None, PartitionSpec("dp")),
+            out_axis_resources=None,
+        )
 
-        running_metrics.append(metrics)
+        for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
-        if (i) % cfg.training.gradient_accumulation_steps == 0:
-            # we've completed a full batch of data, log the metrics
+            if (
+                i // cfg.training.gradient_accumulation_steps
+            ) > cfg.training.total_steps:
+                if jax.process_index() == 0:
+                    logger.debug(f"Training has completed.")
 
-            train_metrics_np = {
-                k: np.mean([metrics[k] for metrics in running_metrics])
-                for k in running_metrics[0]
-            }
+                return True
 
-            running_metrics = []
-            validation_metrics = []
+            if resume_step != None and i <= resume_step:
+                continue
 
-            absolute_step = i // cfg.training.gradient_accumulation_steps
+            seq_len = step_to_seq(i)
 
-            train_metrics_np["Tokens Seen (B)"] = (
-                num_host
-                * (
-                    cfg.training.batch_size
-                    * cfg.training.gradient_accumulation_steps
-                    * compute_tokens_seen(
-                        absolute_step,
-                        stages=cfg.training.staged_sequences,
-                        max_steps=cfg.training.staged_warmup_steps,
-                        max_context=cfg.data.max_context,
-                    )
-                )
-                / 1e9
+            text = text[:, :seq_len]
+
+            #     # sharding batch
+            #     sharded_batch = shard(text)
+
+            t0 = time.time()
+
+            state, metrics = pjit_train_step(
+                state,
+                text,
             )
 
-            if (i) % (
-                cfg.training.evaluation_frequency
-                * cfg.training.gradient_accumulation_steps
-            ) == 0:
-                for val_it, val_text in enumerate(
-                    tqdm(vl, disable=not jax.process_index() == 0)
-                ):
-                    if val_it < cfg.training.maximum_evaluation_steps:
-                        # sharded_batch = shard(val_text)
-                        metrics = pjit_eval_step(state, val_text)
-                        validation_metrics.append(metrics)
-                    else:
-                        break
+            metrics["Train Batch Time"] = time.time() - t0
+            metrics["Train Sequence Length"] = seq_len
 
-                validation_metrics_np = {
-                    k: np.mean([metrics[k] for metrics in validation_metrics])
-                    for k in validation_metrics[0]
+            running_metrics.append(metrics)
+
+            if (i) % cfg.training.gradient_accumulation_steps == 0:
+                # we've completed a full batch of data, log the metrics
+
+                train_metrics_np = {
+                    k: np.mean([metrics[k] for metrics in running_metrics])
+                    for k in running_metrics[0]
                 }
 
-                if jax.process_index() == 0:
-                    train_metrics_np.update(validation_metrics_np)
+                running_metrics = []
+                validation_metrics = []
 
-                    wandb.log(train_metrics_np)
+                absolute_step = i // cfg.training.gradient_accumulation_steps
 
-                    if save_to_bucket:
-                        save_checkpoint(
-                            state,
-                            workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                train_metrics_np["Tokens Seen (B)"] = (
+                    num_host
+                    * (
+                        cfg.training.batch_size
+                        * cfg.training.gradient_accumulation_steps
+                        * compute_tokens_seen(
+                            absolute_step,
+                            stages=cfg.training.staged_sequences,
+                            max_steps=cfg.training.staged_warmup_steps,
+                            max_context=cfg.data.max_context,
                         )
-                    else:
-                        save_checkpoint(state, workdir=cfg.data.checkpoint_directory)
-
-            else:
-                if jax.process_index() == 0:
-                    train_metrics_np["Train Step Time"] = (
-                        cfg.training.gradient_accumulation_steps
-                        * train_metrics_np["Train Batch Time"]
                     )
-                    train_metrics_np.pop("Train Batch Time")
-                    wandb.log(train_metrics_np)
+                    / 1e9
+                )
+
+                if (i) % (
+                    cfg.training.evaluation_frequency
+                    * cfg.training.gradient_accumulation_steps
+                ) == 0:
+                    for val_it, val_text in enumerate(
+                        tqdm(vl, disable=not jax.process_index() == 0)
+                    ):
+                        if val_it < cfg.training.maximum_evaluation_steps:
+                            # sharded_batch = shard(val_text)
+                            metrics = pjit_eval_step(state, val_text)
+                            validation_metrics.append(metrics)
+                        else:
+                            break
+
+                    validation_metrics_np = {
+                        k: np.mean([metrics[k] for metrics in validation_metrics])
+                        for k in validation_metrics[0]
+                    }
+
+                    if jax.process_index() == 0:
+                        train_metrics_np.update(validation_metrics_np)
+
+                        wandb.log(train_metrics_np)
+
+                        if save_to_bucket:
+                            save_checkpoint(
+                                state,
+                                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                            )
+                        else:
+                            save_checkpoint(
+                                state, workdir=cfg.data.checkpoint_directory
+                            )
+
+                else:
+                    if jax.process_index() == 0:
+                        train_metrics_np["Train Step Time"] = (
+                            cfg.training.gradient_accumulation_steps
+                            * train_metrics_np["Train Batch Time"]
+                        )
+                        train_metrics_np.pop("Train Batch Time")
+                        wandb.log(train_metrics_np)
 
 
 # @partial(jax.pmap, axis_name="batch") #NOTE: Commented out for pjit
