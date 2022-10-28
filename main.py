@@ -305,6 +305,7 @@ def main():
             state, metrics = pjit_train_step(
                 state,
                 text,
+                None,
             )
 
             metrics["Train Batch Time"] = time.time() - t0
