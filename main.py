@@ -15,6 +15,8 @@ import webdataset as wds
 from flax.training import checkpoints
 from flax.training.common_utils import shard
 from jax import random
+from jax.experimental import PartitionSpec, pjit
+from jax.experimental.maps import Mesh
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -60,6 +62,17 @@ def restore_checkpoint(state, workdir):
     return checkpoints.restore_checkpoint(workdir, state)
 
 
+def setup_dp_mesh():
+    """
+    Creates jax device mesh for data-parallel training
+    """
+    mesh_shape = (jax.device_count(),)
+    devices = np.asarray(jax.devices()).reshape(*mesh_shape)
+    mesh = Mesh(devices, ("dp"))
+
+    return mesh
+
+
 def main():
     args = parse()
     cfg = OmegaConf.load(args.cfg)
@@ -92,6 +105,9 @@ def main():
     rng = jax.random.PRNGKey(0)
     rng, init_rng = jax.random.split(rng)
 
+    mesh = setup_dp_mesh()
+
+    # NOTE: When do call mesh manager? Before/after this?
     state = create_train_state(
         init_rng,
         learning_rate_fn,
@@ -153,21 +169,21 @@ def main():
                     blob.delete()
 
     # replicating state across devices
-    state = flax.jax_utils.replicate(state)
+    # state = flax.jax_utils.replicate(state) #NOTE: Commented out for pjit
 
     local_batch_size = cfg.training.batch_size // jax.local_device_count()
 
     # This is computed in terms of absolute steps
     total_tokens = num_host * (
-            cfg.training.batch_size
-            * cfg.training.gradient_accumulation_steps
-            * compute_tokens_seen(
-                cfg.training.total_steps,
-                stages=cfg.training.staged_sequences,
-                max_steps=cfg.training.staged_warmup_steps,
-                max_context=cfg.data.max_context,
-            )
+        cfg.training.batch_size
+        * cfg.training.gradient_accumulation_steps
+        * compute_tokens_seen(
+            cfg.training.total_steps,
+            stages=cfg.training.staged_sequences,
+            max_steps=cfg.training.staged_warmup_steps,
+            max_context=cfg.data.max_context,
         )
+    )
 
     if jax.process_index() == 0:
         id = wandb.util.generate_id()
@@ -251,6 +267,18 @@ def main():
     else:
         step_to_seq = lambda x: cfg.data.max_context
 
+    pjit_train_step = pjit(
+        train_step,
+        in_axis_resources=(None, PartitionSpec("dp"), None),
+        out_axis_resources=None,
+    )
+
+    pjit_eval_step = pjit(
+        eval_step,
+        in_axis_resources=(None, PartitionSpec("dp")),
+        out_axis_resources=None,
+    )
+
     for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
         if (i // cfg.training.gradient_accumulation_steps) > cfg.training.total_steps:
@@ -266,14 +294,14 @@ def main():
 
         text = text[:, :seq_len]
 
-        # sharding batch
-        sharded_batch = shard(text)
+        #     # sharding batch
+        #     sharded_batch = shard(text)
 
         t0 = time.time()
 
-        state, metrics = train_step(
+        state, metrics = pjit_train_step(
             state,
-            sharded_batch,
+            text,
         )
 
         metrics["Train Batch Time"] = time.time() - t0
@@ -317,8 +345,8 @@ def main():
                     tqdm(vl, disable=not jax.process_index() == 0)
                 ):
                     if val_it < cfg.training.maximum_evaluation_steps:
-                        sharded_batch = shard(val_text)
-                        metrics = eval_step(state, sharded_batch)
+                        # sharded_batch = shard(val_text)
+                        metrics = pjit_eval_step(state, val_text)
                         validation_metrics.append(metrics)
                     else:
                         break
@@ -351,7 +379,7 @@ def main():
                     wandb.log(train_metrics_np)
 
 
-@partial(jax.pmap, axis_name="batch")
+# @partial(jax.pmap, axis_name="batch") #NOTE: Commented out for pjit
 def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
     """Train on a single batch"""
 
@@ -408,7 +436,7 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
     return new_state, metrics
 
 
-@partial(jax.pmap, axis_name="batch")
+# @partial(jax.pmap, axis_name="batch") #NOTE: Commented out for pjit
 def eval_step(state: Any, batch: jnp.array):
     """Evaluate on a single batch"""
 
