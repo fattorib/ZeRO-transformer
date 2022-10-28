@@ -16,7 +16,7 @@ training:
   staged_warmup_steps: 6000
 
 model:
-  size: "base"
+  size: "small"
 
 data:
   corpus: "openwebtext"
