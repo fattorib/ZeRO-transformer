@@ -55,7 +55,6 @@ def create_train_state(
     weight_decay: float,
     model: nn.Module,
     grad_accum_steps: int,
-    optim_name: str,
 ):
     """Creates initial `TrainState` for model."""
     params = initialized(rng, model)
