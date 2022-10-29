@@ -16,8 +16,8 @@ from flax.training import checkpoints
 from flax.training.common_utils import shard
 from jax import random
 from jax.experimental import PartitionSpec
-from jax.experimental.pjit import pjit
 from jax.experimental.maps import Mesh
+from jax.experimental.pjit import pjit
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -105,7 +105,7 @@ def main():
     rng = jax.random.PRNGKey(0)
     rng, init_rng = jax.random.split(rng)
 
-    mesh = setup_dp_mesh()     # NOTE: When do call mesh manager? Before/after this?
+    mesh = setup_dp_mesh()  # NOTE: When do call mesh manager? Before/after this?
 
     state = create_train_state(
         init_rng,
@@ -267,10 +267,10 @@ def main():
         step_to_seq = lambda x: cfg.data.max_context
 
     pjit_train_step = pjit(
-            train_step,
-            in_axis_resources=(None, PartitionSpec("dp"), None),
-            out_axis_resources=None,
-        )
+        train_step,
+        in_axis_resources=(None, PartitionSpec("dp"), None),
+        out_axis_resources=None,
+    )
 
     pjit_eval_step = pjit(
         eval_step,
@@ -461,7 +461,7 @@ def eval_step(state: Any, batch: jnp.array):
 
 if __name__ == "__main__":
     # try:
-        # main()
+    # main()
     # except Exception as e:
-        # print(f"Error encountered: {e}")
+    # print(f"Error encountered: {e}")
     main()
