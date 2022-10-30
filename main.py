@@ -203,7 +203,7 @@ def main():
         params = initialized(rng, model)
 
         def init_state(params):
-            return TrainState(
+            return TrainState.create(
                 apply_fn=model.__call__,
                 tx=tx,
                 params=params,
