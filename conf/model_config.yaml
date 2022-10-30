@@ -41,7 +41,7 @@ small:
   
 base:
   embedding_dim: 768
-  vocab_size: 50257
+  vocab_size: 50258
   num_head: 12
   block_size: 512
   dropout: 0.0
