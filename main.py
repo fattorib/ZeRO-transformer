@@ -73,6 +73,17 @@ def setup_dp_mesh():
     return mesh
 
 
+def setup_mp_mesh(cfg):
+    """
+    Creates jax device mesh for data-parallel and model-parellel training
+    """
+    mesh_shape = (cfg.device.dp_devices, cfg.device.mp_devices)
+    devices = np.asarray(jax.devices()).reshape(*mesh_shape)
+    mesh = Mesh(devices, ("dp", "mp"))
+
+    return mesh
+
+
 def main():
     args = parse()
     cfg = OmegaConf.load(args.cfg)
@@ -113,16 +124,81 @@ def main():
         mesh = setup_dp_mesh()
 
     else:
-        # TODO:
-        pass
+        mesh = setup_mp_mesh(cfg)
 
-    state = create_train_state(
-        init_rng,
-        learning_rate_fn,
-        weight_decay=cfg.training.weight_decay,
-        model=model,
-        grad_accum_steps=cfg.training.gradient_accumulation_steps,
-    )
+    if cfg.device.mp_devices == 1:
+        state = create_train_state(
+            init_rng,
+            learning_rate_fn,
+            weight_decay=cfg.training.weight_decay,
+            model=model,
+            grad_accum_steps=cfg.training.gradient_accumulation_steps,
+        )
+
+    else:
+        from flax.training.train_state import TrainState
+
+        from src.training.training_utils import initialized
+        from src.utils.partitioning import create_opt_spec, set_partitions
+
+        # use jax.eval_shape to get pytree with empty params and correct shapes
+        # saves us having to do an actual model forward pass / any actual computation
+        rng = random.split(random.PRNGKey(23))
+        batch_tok = random.randint(
+            rng, shape=(1, cfg.data.max_context), maxval=50257, minval=0
+        )
+        param_shape = jax.eval_shape(model.init, init_rng, batch_tok)
+
+        # TODO: Refactor this part of the code, we can probably push all of this to its own function
+        param_spec = set_partitions(param_shape)
+        opt_spec = create_opt_spec(param_spec, param_shape)
+
+        mask = jax.tree_map(
+            lambda x: x.ndim != 1
+            and x.shape != (model.block_size, model.embedding_dim),
+            param_shape,
+        )
+
+        tx = optax.chain(
+            optax.clip(1.0),
+            optax.adamw(
+                learning_rate=learning_rate_fn,
+                weight_decay=cfg.training.weight_decay,
+                mask=mask,
+                b2=0.95,
+            ),
+        )
+
+        if cfg.training.gradient_accumulation_steps > 1:
+            tx = optax.MultiSteps(
+                tx,
+                every_k_schedule=cfg.training.gradient_accumulation_steps,
+                should_skip_update_fn=optax.skip_not_finite,
+            )
+
+        state_spec = TrainState(
+            params=param_spec,
+            opt_state=create_opt_spec(param_spec, param_shape),
+            tx=tx,
+            step=0,
+            apply_fn=model.apply,
+        )
+
+        params = initialized(rng, model)
+
+        def init_state(params):
+            return TrainState(
+                apply_fn=model.__call__,
+                tx=tx,
+                params=params,
+            )
+
+        state = pjit(
+            init_state,
+            in_axis_resources=(param_spec,),
+            out_axis_resources=state_spec,
+            donate_argnums=(0,),
+        )(params)
 
     if jax.process_index() == 0:
         logger.debug(f"VM setup with {num_devices} devices.")
@@ -190,7 +266,9 @@ def main():
     # replicating state across devices
     # state = flax.jax_utils.replicate(state) #NOTE: Commented out for pjit
 
-    local_batch_size = cfg.training.batch_size // jax.local_device_count()
+    local_batch_size = cfg.training.batch_size // (
+        jax.local_device_count() // cfg.device.mp_devices
+    )
 
     # This is computed in terms of absolute steps
     total_tokens = num_host * (
@@ -286,17 +364,31 @@ def main():
     else:
         step_to_seq = lambda x: cfg.data.max_context
 
-    pjit_train_step = pjit(
-        train_step,
-        in_axis_resources=(None, PartitionSpec("dp"), None),
-        out_axis_resources=None,
-    )
+    if cfg.device.mp_devices == 1:
+        pjit_train_step = pjit(
+            train_step,
+            in_axis_resources=(None, PartitionSpec("dp"), None),
+            out_axis_resources=None,
+        )
 
-    pjit_eval_step = pjit(
-        eval_step,
-        in_axis_resources=(None, PartitionSpec("dp")),
-        out_axis_resources=None,
-    )
+        pjit_eval_step = pjit(
+            eval_step,
+            in_axis_resources=(None, PartitionSpec("dp")),
+            out_axis_resources=None,
+        )
+
+    else:  # TODO: Might have to change the batch param spec...?
+        pjit_train_step = pjit(
+            train_step,
+            in_axis_resources=(state_spec, PartitionSpec("dp"), None),
+            out_axis_resources=(state_spec),
+        )
+
+        pjit_eval_step = pjit(
+            eval_step,
+            in_axis_resources=(state_spec, PartitionSpec("dp")),
+            out_axis_resources=None,
+        )
 
     with mesh:
 
