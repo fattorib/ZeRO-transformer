@@ -176,19 +176,27 @@ def main():
                 should_skip_update_fn=optax.skip_not_finite,
             )
 
-        class TrainStateSpec(flax.struct.PyTreeNode):
-            step: int
-            params: flax.core.FrozenDict[str, Any]
-            opt_state: optax.OptState
-            apply_fn: Callable = flax.struct.field(pytree_node=False)
-            tx: optax.GradientTransformation = flax.struct.field(pytree_node=False)
+        # class TrainStateSpec(flax.struct.PyTreeNode):
+        #     step: int
+        #     params: flax.core.FrozenDict[str, Any]
+        #     opt_state: optax.OptState
+        #     apply_fn: Callable = flax.struct.field(pytree_node=False)
+        #     tx: optax.GradientTransformation = flax.struct.field(pytree_node=False)
 
-        state_spec = TrainStateSpec(
-            params=param_spec,
-            opt_state=create_opt_spec(param_spec, param_shape),
-            tx=tx,
-            step=0,
-            apply_fn=model.apply,
+        # state_spec = TrainStateSpec(
+        #     params=param_spec,
+        #     opt_state=create_opt_spec(param_spec, param_shape),
+        #     tx=tx,
+        #     step=0,
+        #     apply_fn=model.apply,
+        # )
+
+        state_spec = TrainState(
+            params = param_spec,
+            opt_state = create_opt_spec(param_spec, param_shape),
+            tx = tx,
+            step = None,
+            apply_fn=model.apply
         )
 
         params = initialized(rng, model)

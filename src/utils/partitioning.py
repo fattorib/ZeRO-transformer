@@ -103,7 +103,7 @@ def create_opt_spec(param_spec, param_shape):
     for k, p in param_spec.items():
         opt_state_spec[k] = jax.tree_util.tree_map(
             lambda p: p,
-            param_shape[k],
+            param_spec[k],
             # return None spec for empty elements
             is_leaf=lambda x: isinstance(x, (FrozenDict, optax.EmptyState)),
         )
