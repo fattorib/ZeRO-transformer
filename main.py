@@ -136,11 +136,12 @@ def main():
         )
 
     else:
+        from typing import Any, Callable
+
         from flax.training.train_state import TrainState
 
         from src.training.training_utils import initialized
         from src.utils.partitioning import create_opt_spec, set_partitions
-        from typing import Callable, Any
 
         # use jax.eval_shape to get pytree with empty params and correct shapes
         # saves us having to do an actual model forward pass / any actual computation
@@ -176,28 +177,12 @@ def main():
                 should_skip_update_fn=optax.skip_not_finite,
             )
 
-        # class TrainStateSpec(flax.struct.PyTreeNode):
-        #     step: int
-        #     params: flax.core.FrozenDict[str, Any]
-        #     opt_state: optax.OptState
-        #     apply_fn: Callable = flax.struct.field(pytree_node=False)
-        #     tx: optax.GradientTransformation = flax.struct.field(pytree_node=False)
-
-        # state_spec = TrainStateSpec(
-        #     params=param_spec,
-        #     opt_state=create_opt_spec(param_spec, param_shape),
-        #     tx=tx,
-        #     step=0,
-        #     apply_fn=model.apply,
-        # )
-
-        
         state_spec = TrainState(
-            params = param_spec,
-            opt_state = create_opt_spec(param_spec, param_shape),
-            tx = tx,
-            step = None,
-            apply_fn=model.apply
+            params=param_spec,
+            opt_state=create_opt_spec(param_spec, param_shape),
+            tx=tx,
+            step=None,
+            apply_fn=model.apply,
         )
 
         params = initialized(rng, model)
@@ -208,6 +193,7 @@ def main():
                 tx=tx,
                 params=params,
             )
+
         with mesh:
             state = pjit(
                 init_state,
@@ -494,7 +480,7 @@ def main():
                         wandb.log(train_metrics_np)
 
                         if cfg.device.mp_devices > 1:
-                            pass 
+                            pass
 
                         else:
                             if save_to_bucket:
