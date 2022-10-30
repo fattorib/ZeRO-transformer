@@ -143,7 +143,7 @@ def main():
 
         # use jax.eval_shape to get pytree with empty params and correct shapes
         # saves us having to do an actual model forward pass / any actual computation
-        rng = random.split(random.PRNGKey(23))
+        rng = random.PRNGKey(23)
         batch_tok = random.randint(
             rng, shape=(1, cfg.data.max_context), maxval=50257, minval=0
         )
@@ -151,7 +151,6 @@ def main():
 
         # TODO: Refactor this part of the code, we can probably push all of this to its own function
         param_spec = set_partitions(param_shape)
-        opt_spec = create_opt_spec(param_spec, param_shape)
 
         mask = jax.tree_map(
             lambda x: x.ndim != 1
@@ -522,6 +521,7 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
         loss, grads = grad_fn(state.params)
 
         # grads = with_sharding_constraint(grads, param_spec) # TODO: What does this do?
+
         # NOTE: compute all-reduce mean for gradients and loss
         # Ex: If we have 8 devices, each device takes the gradients from the other 7 and averages them all together
         # that way, all device replicas have the same gradients and optimization step can occur in parallel
