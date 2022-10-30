@@ -140,6 +140,8 @@ def main():
 
         from src.training.training_utils import initialized
         from src.utils.partitioning import create_opt_spec, set_partitions
+        from typing import Callable, Any
+        import struct
 
         # use jax.eval_shape to get pytree with empty params and correct shapes
         # saves us having to do an actual model forward pass / any actual computation
@@ -175,7 +177,14 @@ def main():
                 should_skip_update_fn=optax.skip_not_finite,
             )
 
-        state_spec = TrainState(
+        class TrainStateSpec(struct.PyTreeNode):
+            step: int
+            params: flax.core.FrozenDict[str, Any]
+            opt_state: optax.OptState
+            apply_fn: Callable = struct.field(pytree_node=False)
+            tx: optax.GradientTransformation = struct.field(pytree_node=False)
+
+        state_spec = TrainStateSpec(
             params=param_spec,
             opt_state=create_opt_spec(param_spec, param_shape),
             tx=tx,
@@ -476,15 +485,19 @@ def main():
 
                         wandb.log(train_metrics_np)
 
-                        if save_to_bucket:
-                            save_checkpoint(
-                                state,
-                                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                            )
+                        if cfg.device.mp_devices > 1:
+                            pass 
+
                         else:
-                            save_checkpoint(
-                                state, workdir=cfg.data.checkpoint_directory
-                            )
+                            if save_to_bucket:
+                                save_checkpoint(
+                                    state,
+                                    workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                                )
+                            else:
+                                save_checkpoint(
+                                    state, workdir=cfg.data.checkpoint_directory
+                                )
 
                 else:
                     if jax.process_index() == 0:
