@@ -189,7 +189,7 @@ def main():
 
         def init_state(params):
             return TrainState.create(
-                apply_fn=model.__call__,
+                apply_fn=model.apply,
                 tx=tx,
                 params=params,
             )
