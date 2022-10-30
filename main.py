@@ -176,12 +176,12 @@ def main():
                 should_skip_update_fn=optax.skip_not_finite,
             )
 
-        class TrainStateSpec(flax.core.struct.PyTreeNode):
+        class TrainStateSpec(flax.struct.PyTreeNode):
             step: int
             params: flax.core.FrozenDict[str, Any]
             opt_state: optax.OptState
-            apply_fn: Callable = flax.core.struct.field(pytree_node=False)
-            tx: optax.GradientTransformation = flax.core.struct.field(pytree_node=False)
+            apply_fn: Callable = flax.struct.field(pytree_node=False)
+            tx: optax.GradientTransformation = flax.struct.field(pytree_node=False)
 
         state_spec = TrainStateSpec(
             params=param_spec,
