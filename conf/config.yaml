@@ -30,3 +30,7 @@ data:
   # bucket_path: 
   index_path_train: "data/index/openwebtext_useast.train.index"
   index_path_validation: "data/index/openwebtext_useast.val.index"
+
+device:
+  dp_devices:
+  mp_devices: 

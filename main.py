@@ -83,6 +83,10 @@ def main():
     num_host = num_devices // num_local_devices
     platform = jax.local_devices()[0].platform
 
+    assert (
+        num_devices // (cfg.device.dp_devices * cfg.device.mp_devices) == 1
+    ), f"Incorrect mesh shape specified for {num_devices} devices with mesh shape {(cfg.device.dp_devices,cfg.device.mp_devices)}. Check your device configs"
+
     if cfg.training.precision == "fp16":
         model_dtype = jnp.float16
     elif cfg.training.precision == "bf16":
@@ -105,7 +109,12 @@ def main():
     rng = jax.random.PRNGKey(0)
     rng, init_rng = jax.random.split(rng)
 
-    mesh = setup_dp_mesh()  # NOTE: When do call mesh manager? Before/after this?
+    if cfg.device.mp_devices == 1:
+        mesh = setup_dp_mesh()
+
+    else:
+        # TODO:
+        pass
 
     state = create_train_state(
         init_rng,
@@ -119,6 +128,17 @@ def main():
         logger.debug(f"VM setup with {num_devices} devices.")
         logger.debug(f"Host setup with {num_local_devices} devices.")
         logger.debug(f"Using platform: {platform} with precision {model_dtype}")
+
+        if cfg.device.mp_devices == 1:
+            logger.debug(
+                f"Performing data parallel training only. Model and train state will be replicated across all devices"
+            )
+
+        else:
+            logger.debug(
+                f"Performing DP and MP training with grid shape {(cfg.device.dp_devices, cfg.device.mp_devices)}"
+            )
+
         if len(cfg.training.staged_sequences) > 0:
             logger.debug(
                 f"Running sequence length warmup for {cfg.training.staged_warmup_steps} total steps with stages: {cfg.training.staged_sequences}"
