@@ -141,7 +141,6 @@ def main():
         from src.training.training_utils import initialized
         from src.utils.partitioning import create_opt_spec, set_partitions
         from typing import Callable, Any
-        import struct
 
         # use jax.eval_shape to get pytree with empty params and correct shapes
         # saves us having to do an actual model forward pass / any actual computation
@@ -177,12 +176,12 @@ def main():
                 should_skip_update_fn=optax.skip_not_finite,
             )
 
-        class TrainStateSpec(struct.PyTreeNode):
+        class TrainStateSpec(flax.core.struct.PyTreeNode):
             step: int
             params: flax.core.FrozenDict[str, Any]
             opt_state: optax.OptState
-            apply_fn: Callable = struct.field(pytree_node=False)
-            tx: optax.GradientTransformation = struct.field(pytree_node=False)
+            apply_fn: Callable = flax.core.struct.field(pytree_node=False)
+            tx: optax.GradientTransformation = flax.core.struct.field(pytree_node=False)
 
         state_spec = TrainStateSpec(
             params=param_spec,
