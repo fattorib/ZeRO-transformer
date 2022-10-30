@@ -191,6 +191,7 @@ def main():
         #     apply_fn=model.apply,
         # )
 
+        
         state_spec = TrainState(
             params = param_spec,
             opt_state = create_opt_spec(param_spec, param_shape),
@@ -207,13 +208,13 @@ def main():
                 tx=tx,
                 params=params,
             )
-
-        state = pjit(
-            init_state,
-            in_axis_resources=(param_spec,),
-            out_axis_resources=state_spec,
-            donate_argnums=(0,),
-        )(params)
+        with mesh:
+            state = pjit(
+                init_state,
+                in_axis_resources=(param_spec,),
+                out_axis_resources=state_spec,
+                donate_argnums=(0,),
+            )(params)
 
     if jax.process_index() == 0:
         logger.debug(f"VM setup with {num_devices} devices.")
