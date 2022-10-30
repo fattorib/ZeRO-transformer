@@ -380,7 +380,7 @@ def main():
     else:  # TODO: Might have to change the batch param spec...?
         pjit_train_step = pjit(
             train_step,
-            in_axis_resources=(state_spec, PartitionSpec("dp"), None),
+            in_axis_resources=(state_spec, (None, PartitionSpec("dp")), None),
             out_axis_resources=(state_spec),
         )
 
@@ -520,6 +520,8 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
     else:
         grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
         loss, grads = grad_fn(state.params)
+
+        # grads = with_sharding_constraint(grads, param_spec) # TODO: What does this do?
         # NOTE: compute all-reduce mean for gradients and loss
         # Ex: If we have 8 devices, each device takes the gradients from the other 7 and averages them all together
         # that way, all device replicas have the same gradients and optimization step can occur in parallel
