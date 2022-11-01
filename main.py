@@ -417,20 +417,13 @@ def main():
             t0 = time.time()
 
             #TODO: Issue here, keeps saying we aren't returning the correct types
-            # state, metrics = pjit_train_step(
-            #     state,
-            #     text,
-            #     None,
-            #     param_spec
-            # )
-            out = pjit_train_step(
+            state, metrics = pjit_train_step(
                 state,
                 text,
                 None,
                 param_spec
             )
-
-            print(out)
+    
 
             metrics["Train Batch Time"] = time.time() - t0
             metrics["Train Sequence Length"] = seq_len
