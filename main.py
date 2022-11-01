@@ -380,7 +380,7 @@ def main():
 
     else:  
         pjit_train_step = pjit(
-            train_step,
+            partial(train_step, param_spec = param_spec),
             in_axis_resources=(state_spec, PartitionSpec("dp"), None, None),
             out_axis_resources=(state_spec, None),
         )
@@ -420,7 +420,6 @@ def main():
                 state,
                 text,
                 None,
-                None
             )
     
 
