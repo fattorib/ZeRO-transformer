@@ -139,10 +139,13 @@ def main():
     else:
         from functools import partial
 
-        from flax.training.train_state import TrainState
+        from flax.training import train_state
 
         from src.training.training_utils import get_optimizer
         from src.utils.partitioning import create_opt_spec, set_partitions
+
+        class TrainState(train_state.TrainState):
+            dynamic_scale: Any = None
 
         # use jax.eval_shape to get pytree with empty params and correct shapes
         # saves us having to do an actual model forward pass / any actual computation
