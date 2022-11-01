@@ -10,6 +10,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
+from pytest import param
 import torch
 import webdataset as wds
 from flax.training import checkpoints
@@ -17,7 +18,7 @@ from flax.training.common_utils import shard
 from jax import random
 from jax.experimental import PartitionSpec
 from jax.experimental.maps import Mesh
-from jax.experimental.pjit import pjit
+from jax.experimental.pjit import pjit, with_sharding_constraint
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -134,6 +135,7 @@ def main():
             model=model,
             grad_accum_steps=cfg.training.gradient_accumulation_steps,
         )
+        param_spec = None
 
     else:
         from functools import partial
@@ -367,7 +369,7 @@ def main():
     if cfg.device.mp_devices == 1:
         pjit_train_step = pjit(
             train_step,
-            in_axis_resources=(None, PartitionSpec("dp"), None),
+            in_axis_resources=(None, PartitionSpec("dp"), None, None),
             out_axis_resources=None,
         )
 
@@ -380,7 +382,7 @@ def main():
     else:  
         pjit_train_step = pjit(
             train_step,
-            in_axis_resources=(state_spec, PartitionSpec("dp"), None),
+            in_axis_resources=(state_spec, PartitionSpec("dp"), None, None),
             out_axis_resources=(state_spec),
         )
 
@@ -418,6 +420,7 @@ def main():
                 state,
                 text,
                 None,
+                param_spec
             )
 
             metrics["Train Batch Time"] = time.time() - t0
@@ -478,7 +481,7 @@ def main():
                         wandb.log(train_metrics_np)
 
                         if cfg.device.mp_devices > 1:
-                            pass
+                            pass #skip model checkpointing for now. Need to verify everything else works first
 
                         else:
                             if save_to_bucket:
@@ -502,7 +505,7 @@ def main():
 
 
 # @partial(jax.pmap, axis_name="batch") #NOTE: Commented out for pjit
-def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
+def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None, param_spec: Any = None):
     """Train on a single batch"""
 
     def loss_fn(params):
@@ -525,7 +528,8 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
         grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
         loss, grads = grad_fn(state.params)
 
-        # grads = with_sharding_constraint(grads, param_spec) # TODO: What does this do?
+        if param_spec is not None:
+            grads = with_sharding_constraint(grads, param_spec) # TODO: What does this do? All repos I see use this but there is _no_ documentation on it
 
         # NOTE: compute all-reduce mean for gradients and loss
         # Ex: If we have 8 devices, each device takes the gradients from the other 7 and averages them all together
