@@ -177,7 +177,7 @@ def get_optimizer(
     param_shape: Any,
 ):
     """
-    Used for returning optimizer in the case where we are sharding the state. Just removes a bit
+    We just use this for returning optax optimizer class in the case where we are sharding the TrainState (mp > 1). Removes a bit
     of boilerplate code from the main training script
     """
 
