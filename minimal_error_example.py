@@ -13,7 +13,7 @@ from src.utils.partitioning import create_opt_spec, set_partitions
 from src.training.training_utils import get_optimizer
 from main import train_step
 
-
+# works on TPU
 from flax.training import train_state
 
 class TrainState(train_state.TrainState):
@@ -25,7 +25,7 @@ def main():
     mesh = Mesh(devices, ("dp", "mp"))
 
 
-    model = model_getter("small", return_cfg=False, dtype = jax.numpy.bfloat16)
+    model = model_getter("base", return_cfg=False, dtype = jax.numpy.bfloat16)
 
 
     rng = jax.random.PRNGKey(23)
@@ -84,8 +84,8 @@ def main():
 
         print('State Sharded Sucessfully')
 
-
-        state,metrics = train_step_pjit(state_sharded, init_batch, None, None)
+        batch = jax.random.randint(rng, shape=(16, 1024), maxval=50257, minval=0)
+        state,metrics = train_step_pjit(state_sharded, batch, None, None)
 
         print(metrics)
 
