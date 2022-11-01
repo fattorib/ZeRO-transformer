@@ -144,7 +144,7 @@ def main():
         from src.training.training_utils import get_optimizer
         from src.utils.partitioning import create_opt_spec, set_partitions
 
-        class TrainState(train_state.TrainState):
+        class TrainState(train_state.TrainState): #TODO: Do we actually need this if?
             dynamic_scale: Any = None
 
         # use jax.eval_shape to get pytree with empty params and correct shapes
@@ -384,7 +384,7 @@ def main():
     else:  
         pjit_train_step = pjit(
             partial(train_step, param_spec = param_spec),
-            in_axis_resources=(state_spec, PartitionSpec("dp"), None, None),
+            in_axis_resources=(state_spec, PartitionSpec("dp"), None),
             out_axis_resources=(state_spec, None),
         )
 
