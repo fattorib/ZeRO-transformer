@@ -528,8 +528,8 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None, par
         grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
         loss, grads = grad_fn(state.params)
 
-        if param_spec is not None:
-            grads = with_sharding_constraint(grads, param_spec) # TODO: What does this do? All repos I see use this but there is _no_ documentation on it
+        # if param_spec is not None:
+        #     grads = with_sharding_constraint(grads, param_spec) # TODO: What does this do? All repos I see use this but there is _no_ documentation on it
 
         # NOTE: compute all-reduce mean for gradients and loss
         # Ex: If we have 8 devices, each device takes the gradients from the other 7 and averages them all together
