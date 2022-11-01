@@ -29,7 +29,7 @@ def initialized(key: random.PRNGKey, model: nn.Module, input_shape: Tuple[int, i
     """
     rng_init, batch_init = jax.random.split(key, num=2)
 
-    init_batch = random.randint(
+    init_batch = random.randint( #TODO: This isn't needed. Replace with jnp.ones(shape, dtype = jnp.int32)
         batch_init,
         shape=input_shape,
         maxval=50257,
