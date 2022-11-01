@@ -10,7 +10,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
-from pytest import param
 import torch
 import webdataset as wds
 from flax.training import checkpoints
