@@ -380,7 +380,7 @@ def main():
     else:  # TODO: Might have to change the batch param spec...?
         pjit_train_step = pjit(
             train_step,
-            in_axis_resources=(state_spec, (None, PartitionSpec("dp")), None),
+            in_axis_resources=(state_spec, PartitionSpec("dp"), None),
             out_axis_resources=(state_spec),
         )
 
