@@ -136,11 +136,11 @@ def main():
         )
 
     else:
-        from typing import Any, Callable
+        from functools import partial
 
         from flax.training.train_state import TrainState
 
-        from src.training.training_utils import initialized
+        from src.training.training_utils import get_optimizer
         from src.utils.partitioning import create_opt_spec, set_partitions
 
         # use jax.eval_shape to get pytree with empty params and correct shapes
@@ -150,42 +150,29 @@ def main():
             rng, shape=(1, cfg.data.max_context), maxval=50257, minval=0
         )
         param_shape = jax.eval_shape(model.init, init_rng, batch_tok)
-
-        # TODO: Refactor this part of the code, we can probably push all of this to its own function
         param_spec = set_partitions(param_shape)
 
-        mask = jax.tree_map(
-            lambda x: x.ndim != 1
-            and x.shape != (model.block_size, model.embedding_dim),
-            param_shape,
+        # creating optimizer
+        tx = get_optimizer(
+            learning_rate_fn,
+            weight_decay=cfg.training.weight_decay,
+            model=model,
+            grad_accum_steps=cfg.training.gradient_accumulation_steps,
+            param_shape=param_shape,
         )
 
-        tx = optax.chain(
-            optax.clip(1.0),
-            optax.adamw(
-                learning_rate=learning_rate_fn,
-                weight_decay=cfg.training.weight_decay,
-                mask=mask,
-                b2=0.95,
-            ),
-        )
+        # get optimizer state spec
+        opt_state_shapes = jax.eval_shape(tx.init, param_shape)
+        opt_state_spec = create_opt_spec(param_spec, opt_state_shapes)
 
-        if cfg.training.gradient_accumulation_steps > 1:
-            tx = optax.MultiSteps(
-                tx,
-                every_k_schedule=cfg.training.gradient_accumulation_steps,
-                should_skip_update_fn=optax.skip_not_finite,
-            )
-
+        # create TrainState spec
         state_spec = TrainState(
             params=param_spec,
-            opt_state=create_opt_spec(param_spec, param_shape),
+            opt_state=opt_state_spec,
             tx=tx,
             step=None,
             apply_fn=model.apply,
         )
-
-        params = initialized(rng, model)
 
         def init_state(params):
             return TrainState.create(
@@ -195,12 +182,23 @@ def main():
             )
 
         with mesh:
+            init_batch = jax.numpy.ones(shape=(1, 1024), dtype=jax.numpy.int32)
+
+            # shard params across mesh
+            sharded_params = pjit(
+                partial(
+                    model.init, train=False
+                ),  # TODO: We need to change this if we want to use dropout
+                in_axis_resources=(None, None),
+                out_axis_resources=(param_spec),
+            )(rng, init_batch)
+
+            # shard state across mesh
             state = pjit(
                 init_state,
                 in_axis_resources=(param_spec,),
-                out_axis_resources=state_spec,
-                donate_argnums=(0,),
-            )(params)
+                out_axis_resources=(state_spec),
+            )(sharded_params)
 
     if jax.process_index() == 0:
         logger.debug(f"VM setup with {num_devices} devices.")
@@ -411,7 +409,7 @@ def main():
 
             text = text[:, :seq_len]
 
-            #     # sharding batch
+            #     # sharding batch #NOTE: Removed with Pjit
             #     sharded_batch = shard(text)
 
             t0 = time.time()

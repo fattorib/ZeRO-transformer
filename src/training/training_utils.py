@@ -1,7 +1,7 @@
 """ 
 Helper methods used during training setup. 
 """
-from typing import Any, Callable, List, Union
+from typing import Any, Callable, List, Tuple, Union
 
 import flax.linen as nn
 import jax
@@ -18,7 +18,7 @@ def to_precision(t, dtype: jnp.dtype):
     )
 
 
-def initialized(key: random.PRNGKey, model: nn.Module):
+def initialized(key: random.PRNGKey, model: nn.Module, input_shape: Tuple[int, int]):
     """Initializes param dict for a model
     Args:
         key (_type_): _description_
@@ -31,8 +31,8 @@ def initialized(key: random.PRNGKey, model: nn.Module):
 
     init_batch = random.randint(
         batch_init,
-        shape=(1, model.block_size),
-        maxval=model.vocab_size,
+        shape=input_shape,
+        maxval=50257,
         minval=0,
     )
 
@@ -41,7 +41,6 @@ def initialized(key: random.PRNGKey, model: nn.Module):
 
     jit_apply = jax.jit(init, backend="cpu")
     variables = jit_apply(rng=rng_init, init_batch=init_batch)
-    # variables = to_precision(variables, dtype)
     return variables
 
 
@@ -168,3 +167,39 @@ def compute_tokens_seen(absolute_step, stages, max_steps, max_context):
         )
     else:
         return absolute_step * max_context
+
+
+def get_optimizer(
+    learning_rate_fn: Union[float, Callable],
+    weight_decay: float,
+    model: nn.Module,
+    grad_accum_steps: int,
+    param_shape: Any,
+):
+    """
+    Used for returning optimizer in the case where we are sharding the state. Just removes a bit
+    of boilerplate code from the main training script
+    """
+
+    mask = jax.tree_map(
+        lambda x: x.ndim != 1 and x.shape != (model.block_size, model.embedding_dim),
+        param_shape,
+    )
+
+    tx = optax.chain(
+        optax.clip(1.0),
+        optax.adamw(
+            learning_rate=learning_rate_fn,
+            weight_decay=weight_decay,
+            mask=mask,
+            b2=0.95,
+        ),
+    )
+
+    if grad_accum_steps > 1:
+        tx = optax.MultiSteps(
+            tx,
+            every_k_schedule=grad_accum_steps,
+            should_skip_update_fn=optax.skip_not_finite,
+        )
+    return tx

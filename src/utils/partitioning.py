@@ -5,6 +5,7 @@ Modified from: https://github.com/borisdayma/dalle-mini/blob/main/src/dalle_mini
 """
 
 import re
+from functools import partial
 
 import jax
 import optax
@@ -51,22 +52,20 @@ def _get_partition_rules():
         # attention
         (("(query_proj|key_proj|value_proj)", "kernel"), PartitionSpec(None, "mp")),
         (("residual_out", "kernel"), PartitionSpec("mp", None)),
-        # TODO: What is done about biases?
-        (("(query_proj|key_proj|value_proj)", "bias"), None),
-        (("residual_out", "bias"), None),
+        (("(query_proj|key_proj|value_proj)", "bias"), PartitionSpec("mp")),
+        (("residual_out", "bias"), PartitionSpec(None)),
         # MLP
         (("fc_in", "kernel"), PartitionSpec(None, "mp")),
         (("fc_residual", "kernel"), PartitionSpec("mp", None)),
-        # TODO: What is done about biases?
-        (("fc_in", "bias"), None),
-        (("fc_residual", "bias"), None),
+        (("fc_in", "bias"), PartitionSpec("mp")),
+        (("fc_residual", "bias"), PartitionSpec(None)),
         # layer norms
         (
             (
                 "LayerNorm_0",
                 "(bias|scale)",
             ),
-            None,
+            PartitionSpec(None),
         ),
     ]
 
@@ -95,17 +94,30 @@ def set_partitions(in_dict):
     return freeze(unflatten_dict(result))
 
 
-def create_opt_spec(param_spec, param_shape):
+def create_opt_spec(param_spec, opt_state_shapes):
     """
     Create optimizer PartitionSpec frozendict to match params PartitionSpec
     """
-    opt_state_spec = {}
-    for k, p in param_spec.items():
-        opt_state_spec[k] = jax.tree_util.tree_map(
-            lambda p: p,
-            param_spec[k],
-            # return None spec for empty elements
-            is_leaf=lambda x: isinstance(x, (FrozenDict, optax.EmptyState)),
-        )
 
-    return freeze(opt_state_spec)
+    # used to assign PartitionSpecs to Optax optimizer states
+    # we need this special function since the optimizer state includes extra items beyond just 2 FrozenDicts for the buffers
+    def get_opt_spec(x):
+        if isinstance(
+            x, (FrozenDict,)
+        ):  # if we get first/second moment buffers, clone PSpec of the params
+            return param_spec
+        return None  # else, PSpec of None (this is to be copied across all devices) (stuff like GA step, skip_step, etc)
+
+    opt_state_spec = jax.tree_util.tree_map(
+        get_opt_spec,
+        opt_state_shapes,
+        is_leaf=lambda x: isinstance(
+            x,
+            (
+                FrozenDict,
+                optax.EmptyState,
+            ),
+        ),
+    )
+
+    return opt_state_spec
