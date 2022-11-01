@@ -420,7 +420,7 @@ def main():
                 state,
                 text,
                 None,
-                param_spec
+                None
             )
     
 
