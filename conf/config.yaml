@@ -32,5 +32,5 @@ data:
   index_path_validation: "data/index/openwebtext_useast.val.index"
 
 device:
-  dp_devices: 4
-  mp_devices: 2
+  dp_devices: 8
+  mp_devices: 1
