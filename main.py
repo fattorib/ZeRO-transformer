@@ -383,7 +383,7 @@ def main():
         pjit_train_step = pjit(
             train_step,
             in_axis_resources=(state_spec, PartitionSpec("dp"), None, None),
-            out_axis_resources=(state_spec),
+            out_axis_resources=(state_spec, None),
         )
 
         pjit_eval_step = pjit(
