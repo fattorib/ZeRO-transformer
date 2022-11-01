@@ -19,71 +19,75 @@ from flax.training import train_state
 class TrainState(train_state.TrainState):
     dynamic_scale: Any = None
 
-mesh_shape = (4, 2)
-devices = np.asarray(jax.devices()).reshape(*mesh_shape)
-mesh = Mesh(devices, ("dp", "mp"))
+def main():
+    mesh_shape = (4, 2)
+    devices = np.asarray(jax.devices()).reshape(*mesh_shape)
+    mesh = Mesh(devices, ("dp", "mp"))
 
 
-model = model_getter("small", return_cfg=False)
+    model = model_getter("small", return_cfg=False, dtype = jax.numpy.bfloat16)
 
 
-rng = jax.random.PRNGKey(23)
-batch_tok = jax.random.randint(rng, shape=(1, 256), maxval=50257, minval=0)
-param_shape = jax.eval_shape(model.init, rng, batch_tok)
-param_spec = set_partitions(param_shape)
+    rng = jax.random.PRNGKey(23)
+    batch_tok = jax.random.randint(rng, shape=(1, 1024), maxval=50257, minval=0)
+    param_shape = jax.eval_shape(model.init, rng, batch_tok)
+    param_spec = set_partitions(param_shape)
 
 
-tx = get_optimizer(
-    3e-4,0.01,model, 16, param_shape
-)
+    tx = get_optimizer(
+        3e-4,0.01,model, 16, param_shape
+    )
 
-def init_state(params):
+    def init_state(params):
 
-    return TrainState.create(
-        apply_fn=model.apply,
+        return TrainState.create(
+            apply_fn=model.apply,
+            tx=tx,
+            params=params,
+        )
+
+
+    opt_state_shapes = jax.eval_shape(tx.init, param_shape)
+    opt_state_spec = create_opt_spec(param_spec, opt_state_shapes)
+
+
+    # create the state_spec given our opt and param specs
+    state_spec = TrainState(
+        params=param_spec,
+        opt_state=opt_state_spec,
         tx=tx,
-        params=params,
+        step=None,
+        apply_fn=model.apply,
     )
 
+    train_step_pjit= pjit(train_step,
+            in_axis_resources=(state_spec, PartitionSpec("dp"), None, None),
+            out_axis_resources=(state_spec, None),
+        )
 
-opt_state_shapes = jax.eval_shape(tx.init, param_shape)
-opt_state_spec = create_opt_spec(param_spec, opt_state_shapes)
+    with mesh:
 
+        init_batch = jax.numpy.ones(shape=(4, 1024), dtype=jax.numpy.int32)
 
-# create the state_spec given our opt and param specs
-state_spec = TrainState(
-    params=param_spec,
-    opt_state=opt_state_spec,
-    tx=tx,
-    step=None,
-    apply_fn=model.apply,
-)
+        # shard params across mesh
+        sharded_params = pjit(
+            functools.partial(model.init, train=False),
+            in_axis_resources=(None, None),
+            out_axis_resources=(param_spec),
+        )(rng, init_batch)
 
-train_step_pjit= pjit(train_step,
-        in_axis_resources=(state_spec, PartitionSpec("dp"), None, None),
-        out_axis_resources=(state_spec, None),
-    )
+        state_sharded = pjit(
+            init_state,
+            in_axis_resources=(param_spec,),
+            out_axis_resources=(state_spec),
+        )(sharded_params)
 
-with mesh:
-
-    init_batch = jax.numpy.ones(shape=(4, 256), dtype=jax.numpy.int32)
-
-    # shard params across mesh
-    sharded_params = pjit(
-        functools.partial(model.init, train=False),
-        in_axis_resources=(None, None),
-        out_axis_resources=(param_spec),
-    )(rng, init_batch)
-
-    state_sharded = pjit(
-        init_state,
-        in_axis_resources=(param_spec,),
-        out_axis_resources=(state_spec),
-    )(sharded_params)
-
-    print('State Sharded Sucessfully')
+        print('State Sharded Sucessfully')
 
 
-    state,metrics = train_step_pjit(state_sharded, init_batch, None, None)
+        state,metrics = train_step_pjit(state_sharded, init_batch, None, None)
 
-    print(metrics)
+        print(metrics)
+
+if __name__ == '__main__':
+    main()
