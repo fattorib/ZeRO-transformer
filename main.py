@@ -11,7 +11,8 @@ import numpy as np
 import optax
 import torch
 import webdataset as wds
-from flax.training import checkpoints, train_state
+from flax.serialization import from_bytes, to_bytes
+from flax.training import checkpoints
 from jax import random
 from jax.experimental import PartitionSpec
 from jax.experimental.pjit import pjit, with_sharding_constraint
@@ -21,7 +22,7 @@ from tqdm import tqdm
 
 import wandb
 from src.models.GPT import model_getter
-from src.training.training_utils import (compute_tokens_seen,
+from src.training.training_utils import (TrainState, compute_tokens_seen,
                                          create_train_state, get_optimizer,
                                          step_to_seq_len)
 from src.utils.configs import flatten_dict
@@ -55,6 +56,9 @@ def save_checkpoint(state, workdir):
     if jax.process_index() == 0:
         step = int(state.step)
         checkpoints.save_checkpoint(workdir, state, step, keep=5, overwrite=True)
+
+        with open(f"{workdir}/opt_state.msgpack", "wb") as f:
+            f.write(to_bytes(state.opt_state))
 
 
 def restore_checkpoint(state, workdir):
@@ -134,12 +138,9 @@ def main():
     else:
         # TODO: Most of this code can probably be moved out to partitioning.py
 
-        class TrainState(train_state.TrainState):  # TODO: Do we actually need this?
-            dynamic_scale: Any = None
-
         # use jax.eval_shape to get pytree with empty params and correct shapes
         # saves us having to do an actual model forward pass / any actual computation
-        batch_tok = jnp.ones(shape=(1, cfg.data.max_context), dtype = jnp.int32)
+        batch_tok = jnp.ones(shape=(1, cfg.data.max_context), dtype=jnp.int32)
         param_shape = jax.eval_shape(model.init, init_rng, batch_tok)
         param_spec = set_partitions(param_shape)
 
@@ -173,8 +174,15 @@ def main():
             )
 
         # pjit-able way to restore sharded state from a non-sharded state
-        def restore_from_state(state):
-            return state
+        # using lambda x: x doesn't work, pjit complains about opt_state being different (even though it isnt!)
+        def restore_state(params, step, opt_state):
+            return TrainState(
+                params=params,
+                opt_state=opt_state,
+                step=step,
+                tx=tx,
+                apply_fn=model.apply,
+            )
 
         if args.resume:
             # Just make a valid copy of the trainstate to read into
@@ -191,8 +199,18 @@ def main():
                     state,
                     workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
                 )
+                with open(
+                    f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/opt_state.msgpack",
+                    "rb",
+                ) as f:
+                    opt_bytes = f.read()
             else:
                 state = restore_checkpoint(state, workdir=cfg.data.checkpoint_directory)
+
+                with open(
+                    f"{cfg.data.checkpoint_directory}/opt_state.msgpack", "rb"
+                ) as f:
+                    opt_bytes = f.read()
 
             if jax.process_index() == 0:
                 logger.debug(f"Resuming training from step {int(state.step)}")
@@ -200,11 +218,13 @@ def main():
             # resume step is ga_steps*global steps
             resume_step = int(state.step)
 
+            opt_state = from_bytes(opt_state_shapes, opt_bytes)
+
             state = pjit(
-                restore_from_state,
-                in_axis_resources=(None),
+                restore_state,
+                in_axis_resources=(None, None, None),
                 out_axis_resources=(state_spec),
-            )(state)
+            )(state.params, state.step, opt_state)
 
         else:
             with mesh:
