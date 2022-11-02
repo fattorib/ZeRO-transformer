@@ -58,8 +58,8 @@ def save_checkpoint(state, workdir):
         checkpoints.save_checkpoint(workdir, state, step, keep=3, overwrite=True)
 
         # we have to save optimizer state separately when resuming to a sharded state
-        with open(f"{workdir}/opt_state.msgpack", "wb") as f:
-            f.write(to_bytes(state.opt_state))
+        # with open(f"{workdir}/opt_state.msgpack", "wb") as f: #TODO: Need to make file in gfile first before saving
+        #     f.write(to_bytes(state.opt_state))
 
 
 def restore_checkpoint(state, workdir):
