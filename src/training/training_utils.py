@@ -27,20 +27,14 @@ def initialized(key: random.PRNGKey, model: nn.Module, input_shape: Tuple[int, i
     Returns:
         _type_: _description_
     """
-    rng_init, batch_init = jax.random.split(key, num=2)
 
-    init_batch = random.randint(  # TODO: This isn't needed. Replace with jnp.ones(shape, dtype = jnp.int32)
-        batch_init,
-        shape=input_shape,
-        maxval=50257,
-        minval=0,
-    )
+    init_batch = jnp.ones((input_shape), dtype=jnp.int32)
 
     def init(rng, init_batch):
         return model.init(rng, init_batch, None, False)
 
     jit_apply = jax.jit(init, backend="cpu")
-    variables = jit_apply(rng=rng_init, init_batch=init_batch)
+    variables = jit_apply(rng=key, init_batch=init_batch)
     return variables
 
 

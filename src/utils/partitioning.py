@@ -5,14 +5,36 @@ Modified from: https://github.com/borisdayma/dalle-mini/blob/main/src/dalle_mini
 """
 
 import re
-from functools import partial
 
 import jax
+import numpy as np
 import optax
 from flax.core import FrozenDict
 from flax.core.frozen_dict import freeze
 from flax.traverse_util import flatten_dict, unflatten_dict
 from jax.experimental import PartitionSpec
+from jax.experimental.maps import Mesh
+
+
+def setup_dp_mesh():
+    """
+    Creates jax device mesh for data-parallel training
+    """
+    devices = np.asarray(jax.devices())
+    mesh = Mesh(devices, ["dp"])
+
+    return mesh
+
+
+def setup_mp_mesh(cfg):
+    """
+    Creates jax device mesh for data-parallel and model-parellel training
+    """
+    mesh_shape = (cfg.device.dp_devices, cfg.device.mp_devices)
+    devices = np.asarray(jax.devices()).reshape(*mesh_shape)
+    mesh = Mesh(devices, ("dp", "mp"))
+
+    return mesh
 
 
 def _match(qs, ks):
