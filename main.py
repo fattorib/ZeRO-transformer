@@ -55,8 +55,9 @@ def parse():
 def save_checkpoint(state, workdir):
     if jax.process_index() == 0:
         step = int(state.step)
-        checkpoints.save_checkpoint(workdir, state, step, keep=5, overwrite=True)
+        checkpoints.save_checkpoint(workdir, state, step, keep=3, overwrite=True)
 
+        # we have to save optimizer state separately when resuming to a sharded state
         with open(f"{workdir}/opt_state.msgpack", "wb") as f:
             f.write(to_bytes(state.opt_state))
 
