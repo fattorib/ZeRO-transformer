@@ -11,10 +11,9 @@ import numpy as np
 import optax
 import torch
 import webdataset as wds
-from flax.training import checkpoints
+from flax.training import checkpoints, train_state
 from jax import random
 from jax.experimental import PartitionSpec
-from jax.experimental.maps import Mesh
 from jax.experimental.pjit import pjit, with_sharding_constraint
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
@@ -23,9 +22,12 @@ from tqdm import tqdm
 import wandb
 from src.models.GPT import model_getter
 from src.training.training_utils import (compute_tokens_seen,
-                                         create_train_state, step_to_seq_len)
+                                         create_train_state, get_optimizer,
+                                         step_to_seq_len)
 from src.utils.configs import flatten_dict
 from src.utils.dataloader import numpy_collate
+from src.utils.partitioning import (create_opt_spec, set_partitions,
+                                    setup_dp_mesh, setup_mp_mesh)
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -57,27 +59,6 @@ def save_checkpoint(state, workdir):
 
 def restore_checkpoint(state, workdir):
     return checkpoints.restore_checkpoint(workdir, state)
-
-
-def setup_dp_mesh():
-    """
-    Creates jax device mesh for data-parallel training
-    """
-    devices = np.asarray(jax.devices())
-    mesh = Mesh(devices, ["dp"])
-
-    return mesh
-
-
-def setup_mp_mesh(cfg):
-    """
-    Creates jax device mesh for data-parallel and model-parellel training
-    """
-    mesh_shape = (cfg.device.dp_devices, cfg.device.mp_devices)
-    devices = np.asarray(jax.devices()).reshape(*mesh_shape)
-    mesh = Mesh(devices, ("dp", "mp"))
-
-    return mesh
 
 
 def main():
@@ -122,6 +103,8 @@ def main():
     else:
         mesh = setup_mp_mesh(cfg)
 
+    resume_step = None
+
     if cfg.device.mp_devices == 1:
         state = create_train_state(
             init_rng,
@@ -132,13 +115,24 @@ def main():
         )
         param_spec = None
 
+        resume_step = None
+        if args.resume:
+            if save_to_bucket:
+                state = restore_checkpoint(
+                    state,
+                    workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                )
+            else:
+                state = restore_checkpoint(state, workdir=cfg.data.checkpoint_directory)
+
+            if jax.process_index() == 0:
+                logger.debug(f"Resuming training from step {int(state.step)}")
+
+            # resume step is ga_steps*global steps
+            resume_step = int(state.step)
+
     else:
-        from functools import partial
-
-        from flax.training import train_state
-
-        from src.training.training_utils import get_optimizer
-        from src.utils.partitioning import create_opt_spec, set_partitions
+        # TODO: Most of this code can probably be moved out to partitioning.py
 
         class TrainState(train_state.TrainState):  # TODO: Do we actually need this?
             dynamic_scale: Any = None
@@ -181,24 +175,59 @@ def main():
                 params=params,
             )
 
-        with mesh:
-            init_batch = jax.numpy.ones(shape=(1, 1024), dtype=jax.numpy.int32)
+        # pjit-able function to restore from a non-sharded state
+        def restore_from_state(state):
+            return state
 
-            # shard params across mesh
-            sharded_params = pjit(
-                partial(
-                    model.init, train=False
-                ),  # TODO: We need to change this if we want to use dropout
-                in_axis_resources=(None, None),
-                out_axis_resources=(param_spec),
-            )(rng, init_batch)
+        if args.resume:
+            # Just make a valid copy of the trainstate to read into
+            state = create_train_state(
+                init_rng,
+                learning_rate_fn,
+                weight_decay=cfg.training.weight_decay,
+                model=model,
+                grad_accum_steps=cfg.training.gradient_accumulation_steps,
+            )
 
-            # shard state across mesh
+            if save_to_bucket:
+                state = restore_checkpoint(
+                    state,
+                    workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                )
+            else:
+                state = restore_checkpoint(state, workdir=cfg.data.checkpoint_directory)
+
+            if jax.process_index() == 0:
+                logger.debug(f"Resuming training from step {int(state.step)}")
+
+            # resume step is ga_steps*global steps
+            resume_step = int(state.step)
+
             state = pjit(
-                init_state,
-                in_axis_resources=(param_spec,),
+                restore_from_state,
+                in_axis_resources=(None),
                 out_axis_resources=(state_spec),
-            )(sharded_params)
+            )(state)
+
+        else:
+            with mesh:
+                init_batch = jax.numpy.ones(shape=(1, 1024), dtype=jax.numpy.int32)
+
+                # shard params across mesh
+                sharded_params = pjit(
+                    partial(
+                        model.init, train=False
+                    ),  # TODO: We need to change this if we want to use dropout
+                    in_axis_resources=(None, None),
+                    out_axis_resources=(param_spec),
+                )(rng, init_batch)
+
+                # shard state across mesh
+                state = pjit(
+                    init_state,
+                    in_axis_resources=(param_spec,),
+                    out_axis_resources=(state_spec),
+                )(sharded_params)
 
     if jax.process_index() == 0:
         logger.debug(f"VM setup with {num_devices} devices.")
@@ -253,9 +282,9 @@ def main():
         # resume step is ga_steps*global steps
         resume_step = int(state.step)
 
-    else:
+    if not args.resume:
         if cfg.data.bucket_path is not None:
-            # clear bucket here
+            # clear bucket
             client = storage.Client()
             if jax.process_index() == 0:
                 bucket = storage.Bucket(client, f"{cfg.data.bucket_path}")
@@ -472,7 +501,13 @@ def main():
                         wandb.log(train_metrics_np)
 
                         if cfg.device.mp_devices > 1:
-                            pass  # skip model checkpointing for now. Need to verify everything else works first
+                            device_state = jax.device_get(
+                                state
+                            )  # pull a copy of the sharded state to CPU and save
+                            save_checkpoint(
+                                device_state,
+                                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                            )
 
                         else:
                             if save_to_bucket:
