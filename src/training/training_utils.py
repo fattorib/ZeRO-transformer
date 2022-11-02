@@ -29,7 +29,7 @@ def initialized(key: random.PRNGKey, model: nn.Module, input_shape: Tuple[int, i
     """
     rng_init, batch_init = jax.random.split(key, num=2)
 
-    init_batch = random.randint( #TODO: This isn't needed. Replace with jnp.ones(shape, dtype = jnp.int32)
+    init_batch = random.randint(  # TODO: This isn't needed. Replace with jnp.ones(shape, dtype = jnp.int32)
         batch_init,
         shape=input_shape,
         maxval=50257,
@@ -56,7 +56,7 @@ def create_train_state(
     grad_accum_steps: int,
 ):
     """Creates initial `TrainState` for model."""
-    params = initialized(rng, model, input_shape = (1,1024))
+    params = initialized(rng, model, input_shape=(1, 1024))
 
     # This mask turns off weight decay for bias terms, LN terms and position embeddings
     mask = jax.tree_map(

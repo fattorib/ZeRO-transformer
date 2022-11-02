@@ -5,7 +5,6 @@ import time
 from functools import partial
 from typing import Any
 
-import flax
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -13,7 +12,6 @@ import optax
 import torch
 import webdataset as wds
 from flax.training import checkpoints
-from flax.training.common_utils import shard
 from jax import random
 from jax.experimental import PartitionSpec
 from jax.experimental.maps import Mesh
@@ -53,8 +51,6 @@ def parse():
 
 def save_checkpoint(state, workdir):
     if jax.process_index() == 0:
-        # get train state from the first replica
-        # state = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], state)) # NOTE: Commented out for pjit
         step = int(state.step)
         checkpoints.save_checkpoint(workdir, state, step, keep=5, overwrite=True)
 
@@ -144,7 +140,7 @@ def main():
         from src.training.training_utils import get_optimizer
         from src.utils.partitioning import create_opt_spec, set_partitions
 
-        class TrainState(train_state.TrainState): #TODO: Do we actually need this if?
+        class TrainState(train_state.TrainState):  # TODO: Do we actually need this?
             dynamic_scale: Any = None
 
         # use jax.eval_shape to get pytree with empty params and correct shapes
@@ -267,9 +263,6 @@ def main():
                 for blob in blobs:
                     blob.delete()
 
-    # replicating state across devices
-    # state = flax.jax_utils.replicate(state) #NOTE: Commented out for pjit
-
     local_batch_size = cfg.training.batch_size // (
         jax.local_device_count() // cfg.device.mp_devices
     )
@@ -381,9 +374,9 @@ def main():
             out_axis_resources=None,
         )
 
-    else:  
+    else:
         pjit_train_step = pjit(
-            partial(train_step, param_spec = param_spec),
+            partial(train_step, param_spec=param_spec),
             in_axis_resources=(state_spec, PartitionSpec("dp"), None),
             out_axis_resources=(state_spec, None),
         )
@@ -413,18 +406,13 @@ def main():
 
             text = text[:, :seq_len]
 
-            #     # sharding batch #NOTE: Removed with Pjit
-            #     sharded_batch = shard(text)
-
             t0 = time.time()
 
-            #TODO: Issue here, keeps saying we aren't returning the correct types
             state, metrics = pjit_train_step(
                 state,
                 text,
                 None,
             )
-    
 
             metrics["Train Batch Time"] = time.time() - t0
             metrics["Train Sequence Length"] = seq_len
@@ -484,7 +472,7 @@ def main():
                         wandb.log(train_metrics_np)
 
                         if cfg.device.mp_devices > 1:
-                            pass #skip model checkpointing for now. Need to verify everything else works first
+                            pass  # skip model checkpointing for now. Need to verify everything else works first
 
                         else:
                             if save_to_bucket:
@@ -507,8 +495,9 @@ def main():
                         wandb.log(train_metrics_np)
 
 
-# @partial(jax.pmap, axis_name="batch") #NOTE: Commented out for pjit
-def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None, param_spec: Any = None):
+def train_step(
+    state: Any, batch: jnp.array, rng_key: random.PRNGKey = None, param_spec: Any = None
+):
     """Train on a single batch"""
 
     def loss_fn(params):
@@ -532,13 +521,9 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None, par
         loss, grads = grad_fn(state.params)
 
         if param_spec is not None:
-            grads = with_sharding_constraint(grads, param_spec) # TODO: What does this do? All repos I see use this but there is _no_ documentation on it
-
-        # NOTE: compute all-reduce mean for gradients and loss
-        # Ex: If we have 8 devices, each device takes the gradients from the other 7 and averages them all together
-        # that way, all device replicas have the same gradients and optimization step can occur in parallel
-        # loss = jax.lax.pmean(loss, axis_name="batch")
-        # grads = jax.lax.pmean(grads, axis_name="batch")
+            grads = with_sharding_constraint(
+                grads, param_spec
+            )  # TODO: What does this do? All repos I see use this but there is _no_ documentation on it
 
     new_state = state.apply_gradients(
         grads=grads,
@@ -568,7 +553,6 @@ def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None, par
     return new_state, metrics
 
 
-# @partial(jax.pmap, axis_name="batch") #NOTE: Commented out for pjit
 def eval_step(state: Any, batch: jnp.array):
     """Evaluate on a single batch"""
 
@@ -578,7 +562,6 @@ def eval_step(state: Any, batch: jnp.array):
         labels=batch,
         train=False,
     )
-    # loss = jax.lax.pmean(loss, axis_name="batch")
 
     metrics = {"Validation LM Loss": loss, "Validation LM PPL": jnp.exp(loss)}
 
