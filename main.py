@@ -139,10 +139,7 @@ def main():
 
         # use jax.eval_shape to get pytree with empty params and correct shapes
         # saves us having to do an actual model forward pass / any actual computation
-        rng = random.PRNGKey(23)
-        batch_tok = random.randint(
-            rng, shape=(1, cfg.data.max_context), maxval=50257, minval=0
-        )
+        batch_tok = jnp.ones(shape=(1, cfg.data.max_context), dtype = jnp.int32)
         param_shape = jax.eval_shape(model.init, init_rng, batch_tok)
         param_spec = set_partitions(param_shape)
 
@@ -175,7 +172,7 @@ def main():
                 params=params,
             )
 
-        # pjit-able function to restore from a non-sharded state
+        # pjit-able way to restore sharded state from a non-sharded state
         def restore_from_state(state):
             return state
 
