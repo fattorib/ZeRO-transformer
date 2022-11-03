@@ -55,17 +55,7 @@ large:
   vocab_size: 50258
   num_head: 16
   block_size: 1024
-  dropout: 0.0
-  N: 24
-  fused_residuals: True
-  alibi_attn: True
-
-XL:
-  embedding_dim: 2048
-  vocab_size: 50257
-  num_head: 16
-  block_size: 1024
-  dropout: 0.0
+  dropout: 0.1
   N: 24
   fused_residuals: True
   alibi_attn: True

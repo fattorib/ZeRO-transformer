@@ -63,7 +63,7 @@ def save_checkpoint(state, workdir, bucket_path=None, client=None):
             from google.cloud import storage
 
             bucket = storage.Bucket(client, bucket_path)
-            blob_name = f"{workdir}/opt_state.msgpack"
+            blob_name = f"checkpoints/opt_state.msgpack"
             blob = bucket.blob(blob_name)
             blob.upload_from_file(io.BytesIO(to_bytes(state.opt_state)))
 
