@@ -1,4 +1,5 @@
 import argparse
+import io
 import logging
 import random as pyrandom
 import time
@@ -52,14 +53,23 @@ def parse():
     return args
 
 
-def save_checkpoint(state, workdir):
+def save_checkpoint(state, workdir, bucket_path=None, client=None):
     if jax.process_index() == 0:
         step = int(state.step)
         checkpoints.save_checkpoint(workdir, state, step, keep=3, overwrite=True)
 
         # we have to save optimizer state separately when resuming to a sharded state
-        # with open(f"{workdir}/opt_state.msgpack", "wb") as f: #TODO: Need to make file in gfile first before saving
-        #     f.write(to_bytes(state.opt_state))
+        if client is not None:
+            from google.cloud import storage
+
+            bucket = storage.Bucket(client, bucket_path)
+            blob_name = f"{workdir}/opt_state.msgpack"
+            blob = bucket.blob(blob_name)
+            blob.upload_from_file(io.BytesIO(to_bytes(state.opt_state)))
+
+        else:
+            with open(f"{workdir}/opt_state.msgpack", "wb") as f:
+                f.write(to_bytes(state.opt_state))
 
 
 def restore_checkpoint(state, workdir):
@@ -120,7 +130,6 @@ def main():
         )
         param_spec = None
 
-        resume_step = None
         if args.resume:
             if save_to_bucket:
                 state = restore_checkpoint(
@@ -268,6 +277,8 @@ def main():
             )
 
     save_to_bucket = False
+    client = None
+    bucket_path = None
     if platform == "tpu":
         if cfg.data.bucket_path is not None:
             # use GCP
@@ -276,29 +287,13 @@ def main():
 
             client = storage.Client()
             save_to_bucket = True
-
+            bucket_path = cfg.data.bucket_path
             train_shards = open(cfg.data.index_path_train).read().splitlines()
             validation_shards = open(cfg.data.index_path_validation).read().splitlines()
 
     else:
         train_shards = cfg.data.train_shard_urls
         validation_shards = cfg.data.validation_shard_urls
-
-    resume_step = None
-    if args.resume:
-        if save_to_bucket:
-            state = restore_checkpoint(
-                state,
-                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-            )
-        else:
-            state = restore_checkpoint(state, workdir=cfg.data.checkpoint_directory)
-
-        if jax.process_index() == 0:
-            logger.debug(f"Resuming training from step {int(state.step)}")
-
-        # resume step is ga_steps*global steps
-        resume_step = int(state.step)
 
     if not args.resume:
         if cfg.data.bucket_path is not None:
@@ -525,6 +520,8 @@ def main():
                             save_checkpoint(
                                 device_state,
                                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                                bucket_path=bucket_path,
+                                client=client,
                             )
 
                         else:
