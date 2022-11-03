@@ -38,7 +38,6 @@ base:
   N: 12
   fused_residuals: True
   alibi_attn: True
-  mlp_boom: True
 
 medium:
   embedding_dim: 1024
