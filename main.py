@@ -444,6 +444,8 @@ def main():
             if resume_step != None and i <= resume_step:
                 continue
 
+            rng, dropout_rng = jax.random.split(rng, 2)
+
             seq_len = step_to_seq(i)
 
             text = text[:, :seq_len]
@@ -453,7 +455,7 @@ def main():
             state, metrics = pjit_train_step(
                 state,
                 text,
-                None,
+                dropout_rng,
             )
 
             metrics["Train Batch Time"] = time.time() - t0
@@ -555,7 +557,8 @@ def train_step(
             {"params": params["params"]},
             x=batch,
             labels=batch,
-            train=False,
+            train=True, 
+            rngs={"dropout": rng_key}
         )
 
         return loss
