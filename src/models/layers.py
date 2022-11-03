@@ -52,7 +52,6 @@ class MLPBlock(nn.Module):
             bias_init=initializers.zeros,
             dtype=self.dtype,
         )(x)
-        self.sow("intermediates", "mlp_out", x)
         return dropout()(out)
 
 
@@ -98,7 +97,7 @@ class CausalAttention(nn.Module):
         alibi_mask: jnp.array = None,
         use_cache: bool = False,
         layer_past: Tuple[jnp.array, jnp.array] = None,
-    ) -> Tuple[jnp.array, jnp.array]:
+    ) -> jnp.array:
         dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
         B, T, C = x.shape[:3]
 
@@ -141,20 +140,6 @@ class CausalAttention(nn.Module):
             .transpose(0, 2, 1, 3)
         )
 
-        present = None
-        if use_cache:
-            if layer_past is not None:
-                past_keys, past_values = layer_past  # (1, nh, T, h_dim)
-                # get shape here, we only keep the past block_size values so lax.scan is happy that we are passing stuff with a fixed size over
-                key = jnp.concatenate((past_keys, key), axis=-2)[
-                    :, :, -self.block_size :, :
-                ]
-                value = jnp.concatenate((past_values, value), axis=-2)[
-                    :, :, -self.block_size :, :
-                ]
-
-            present = jnp.stack((key, value))
-
         if self.qk_norm:
             query /= jnp.linalg.norm(query, ord=2, axis=-1, keepdims=True)
             key /= jnp.linalg.norm(key, ord=2, axis=-1, keepdims=True)
@@ -192,6 +177,7 @@ class CausalAttention(nn.Module):
         masked_attn = jnp.where(mask, attn_full, jnp.finfo(self.dtype).min)
 
         attn_scores = nn.softmax(masked_attn, axis=-1)
+        attn_scores = dropout()(attn_scores)
         attn_out = (attn_scores @ value).transpose(
             0, 2, 1, 3
         )  # Shape is (B, T, nh, h_dim)
@@ -207,6 +193,4 @@ class CausalAttention(nn.Module):
             dtype=self.dtype,
         )(attn_out)
 
-        self.sow("intermediates", "attn_out", out)
-
-        return dropout()(out), present
+        return dropout()(out)

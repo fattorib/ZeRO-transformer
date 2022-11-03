@@ -1,7 +1,8 @@
 """ 
 Replication of GPT2 transformers in Flax
 """
-from typing import Any, Callable, Tuple, Union
+from functools import partial
+from typing import Any, Tuple, Union
 
 import flax
 import flax.linen as nn
@@ -10,7 +11,6 @@ import jax.nn.initializers as initializers
 import jax.numpy as jnp
 from omegaconf import OmegaConf
 
-from src.models.experimental import MLPBoom
 from src.models.layers import CausalAttention, MLPBlock
 from src.utils.losses import cross_entropy_loss
 
@@ -27,7 +27,6 @@ class TransformerBlock(nn.Module):
     fused_residuals: bool = False
     alibi_attn: bool = False
     qk_norm: bool = False
-    mlp_block: Callable = MLPBlock
 
     @nn.compact
     def __call__(
@@ -36,7 +35,7 @@ class TransformerBlock(nn.Module):
         train: bool = False,
         use_cache: bool = False,
         layer_past: Tuple[jnp.array, jnp.array] = None,
-    ) -> Tuple[jnp.array, jnp.array]:
+    ) -> jnp.array:
 
         if self.fused_residuals:
             norm = nn.LayerNorm(dtype=self.dtype)
@@ -52,15 +51,15 @@ class TransformerBlock(nn.Module):
             )(norm(x), train, None, use_cache, layer_past)
             return (
                 x
-                + attn_out[0]
-                + self.mlp_block(
+                + attn_out
+                + MLPBlock(
                     self.embedding_dim,
                     dropout=self.residual_dropout,
                     N=self.N,
                     dtype=self.dtype,
-                )(norm(x), train),
-                attn_out[1],
+                )(norm(x), train)
             )
+
         else:
             attn_out = CausalAttention(
                 self.embedding_dim,
@@ -72,14 +71,14 @@ class TransformerBlock(nn.Module):
                 self.dtype,
                 self.qk_norm,
             )(nn.LayerNorm(dtype=self.dtype)(x), train, None, use_cache, layer_past)
-            x = x + attn_out[0]
-            x = x + self.mlp_block(
+            x = x + attn_out
+            x = x + MLPBlock(
                 self.embedding_dim,
                 dropout=self.residual_dropout,
                 N=self.N,
                 dtype=self.dtype,
             )(nn.LayerNorm(dtype=self.dtype)(x), train)
-            return x, attn_out[1]
+            return x
 
 
 class Transformer(nn.Module):
@@ -97,7 +96,6 @@ class Transformer(nn.Module):
     fused_residuals: bool = False
     alibi_attn: bool = False
     qk_norm: bool = False
-    mlp_boom: bool = False
 
     def generate(
         self,
@@ -168,8 +166,9 @@ class Transformer(nn.Module):
         use_cache: bool = False,
         past_states: Tuple[jnp.array, jnp.array] = None,
     ) -> Union[jnp.array, Tuple[jnp.array, jnp.array]]:
-
         B, T = x.shape[0:2]
+
+        dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
 
         embed = nn.Embed(
             name="wte",
@@ -193,22 +192,11 @@ class Transformer(nn.Module):
 
             out += wpe
 
-        present_states = []
-        if not use_cache:
-            past_states = [None] * self.N
+        out = dropout()(out)
 
-        if past_states is None:
-            past_states = [None] * self.N
+        for i in range(self.N):
 
-        if self.mlp_boom:
-            mlp_block = MLPBoom
-
-        else:
-            mlp_block = MLPBlock
-
-        for i, past_state in zip(range(self.N), past_states):
-
-            out, layer_past = TransformerBlock(
+            out = TransformerBlock(
                 self.embedding_dim,
                 self.num_head,
                 self.block_size,
@@ -218,20 +206,14 @@ class Transformer(nn.Module):
                 self.fused_residuals,
                 self.alibi_attn,
                 self.qk_norm,
-                mlp_block,
-            )(out, train, use_cache, past_state)
-
-            present_states.append(layer_past)
+            )(out, train)
 
         out = nn.LayerNorm(dtype=self.dtype)(out)
 
         logits = embed.attend(out)
 
         if labels is None:
-            if use_cache:
-                return logits, present_states
-            else:
-                return logits
+            return logits
         else:
             labels_shifted = labels[..., 1:].reshape(-1)
             logits_shifted = logits[..., :-1, :].reshape(-1, logits.shape[-1])
