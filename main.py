@@ -442,7 +442,6 @@ def main():
             seq_len = step_to_seq(i)
 
             text = text.reshape(-1,seq_len)
-            text = text[:,:128] # for debugging, small BS for quicker models
 
             # t0 = time.time()
 
