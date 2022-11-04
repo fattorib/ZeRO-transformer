@@ -50,11 +50,11 @@ medium:
   alibi_attn: True
 
 
-large:
+large: 
   embedding_dim: 1536
   vocab_size: 50258
   num_head: 16
-  block_size: 1024
+  block_size: 512
   dropout: 0.1
   N: 24
   fused_residuals: True
