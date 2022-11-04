@@ -96,7 +96,8 @@ def main():
         model_dtype = jnp.bfloat16
     else:
         model_dtype = jnp.float32
-    
+
+    # setting up GCP bucket/client info if training on TPU
     save_to_bucket = False
     client = None
     bucket_path = None
@@ -214,7 +215,7 @@ def main():
             )
 
         if args.resume:
-            
+
             # Just make a valid copy of the trainstate to read into
             state = create_train_state(
                 init_rng,
@@ -234,11 +235,7 @@ def main():
                     state,
                     workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
                 )
-                # with open(
-                #     f"checkpoints/opt_state.msgpack",
-                #     "rb",
-                # ) as f:
-                #     opt_bytes = f.read()
+
             else:
                 state = restore_checkpoint(state, workdir=cfg.data.checkpoint_directory)
 
@@ -254,7 +251,7 @@ def main():
             resume_step = int(state.step)
 
             opt_state = from_bytes(opt_state_shapes, opt_bytes)
-            
+
             with mesh:
                 state = pjit(
                     restore_state,
@@ -268,9 +265,7 @@ def main():
 
                 # shard params across mesh
                 sharded_params = pjit(
-                    partial(
-                        model.init, train=False
-                    ),  # TODO: We need to change this if we want to use dropout
+                    partial(model.init, train=False),
                     in_axis_resources=(None, None),
                     out_axis_resources=(param_spec),
                 )(rng, init_batch)
@@ -301,7 +296,6 @@ def main():
             logger.debug(
                 f"Running sequence length warmup for {cfg.training.staged_warmup_steps} total steps with stages: {cfg.training.staged_sequences}"
             )
-
 
     if not args.resume:
         if cfg.data.bucket_path is not None:
@@ -565,8 +559,8 @@ def train_step(
             {"params": params["params"]},
             x=batch,
             labels=batch,
-            train=True, 
-            rngs={"dropout": rng_key}
+            train=True,
+            rngs={"dropout": rng_key},
         )
 
         return loss
