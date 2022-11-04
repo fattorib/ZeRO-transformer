@@ -392,18 +392,7 @@ def main():
 
     running_metrics = []
 
-    if len(cfg.training.staged_sequences) > 0:
-
-        step_to_seq = partial(
-            step_to_seq_len,
-            stages=cfg.training.staged_sequences,
-            max_steps=cfg.training.gradient_accumulation_steps
-            * cfg.training.staged_warmup_steps,
-            max_context=cfg.data.max_context,
-        )
-
-    else:
-        step_to_seq = lambda x: cfg.data.max_context
+    step_to_seq = lambda x: 512
 
     if cfg.device.mp_devices == 1:
         pjit_train_step = pjit(
@@ -450,7 +439,7 @@ def main():
 
             seq_len = step_to_seq(i)
 
-            text = text[:, :seq_len]
+            text = text.reshape(-1,seq_len)
 
             t0 = time.time()
 
