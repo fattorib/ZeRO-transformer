@@ -130,6 +130,9 @@ def main():
         )
         param_spec = None
 
+        if cfg.data.bucket_path is not None:
+            save_to_bucket = True #TODO: Move this around
+
         if args.resume:
             if save_to_bucket:
                 state = restore_checkpoint(
@@ -195,6 +198,7 @@ def main():
             )
 
         if args.resume:
+            
             # Just make a valid copy of the trainstate to read into
             state = create_train_state(
                 init_rng,
@@ -204,7 +208,11 @@ def main():
                 grad_accum_steps=cfg.training.gradient_accumulation_steps,
             )
 
+            if cfg.data.bucket_path is not None:
+                save_to_bucket = True #TODO: Move this around
+
             if save_to_bucket:
+
                 state = restore_checkpoint(
                     state,
                     workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
