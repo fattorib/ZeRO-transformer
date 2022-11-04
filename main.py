@@ -503,7 +503,7 @@ def main():
 
                     if jax.process_index() == 0:
                         train_metrics_np.update(validation_metrics_np)
-
+                        train_metrics_np.pop("Train Batch Time")
                         wandb.log(train_metrics_np)
 
                         if cfg.device.mp_devices > 1:
