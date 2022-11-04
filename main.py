@@ -217,12 +217,17 @@ def main():
                 from google.cloud.exceptions import NotFound
                 client = storage.Client()
 
+                bucket = storage.Bucket(client, bucket_path)
+                blob_name = f"checkpoints/opt_state.msgpack"
+                blob = bucket.blob(blob_name)
+                blob.download_as_bytes()
+
                 state = restore_checkpoint(
                     state,
                     workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
                 )
                 with open(
-                    f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/opt_state.msgpack",
+                    f"checkpoints/opt_state.msgpack",
                     "rb",
                 ) as f:
                     opt_bytes = f.read()
