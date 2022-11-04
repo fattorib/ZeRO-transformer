@@ -3,8 +3,8 @@ training:
   batch_size: 8
   peak_learning_rate: 2.5e-4
   warmup_steps: 2000
-  decay_steps: 20000
-  total_steps: 192000
+  decay_steps: 176400
+  total_steps: 196000
   end_learning_rate: 2.5e-5
   weight_decay: 0.1
   # corresponds to full CTX BS of 256 on 4 host TPU -> reshape to 512 CTX BS of 512
