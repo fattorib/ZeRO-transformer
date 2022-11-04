@@ -1,22 +1,23 @@
 training:
-  max_epochs: 2
+  max_epochs: 8
   batch_size: 4
-  peak_learning_rate: 6e-4
+  peak_learning_rate: 2.5e-4
   warmup_steps: 2000
-  decay_steps: 24000
-  total_steps: 24500
-  end_learning_rate: 6e-5
+  decay_steps: 20000
+  total_steps: 192000
+  end_learning_rate: 2.5e-5
   weight_decay: 0.1
-  gradient_accumulation_steps: 128
+  # corresponds to full CTX BS of 256 on 4 host TPU -> reshape to 512 CTX BS of 512
+  gradient_accumulation_steps: 16 
   evaluation_frequency: 500
   maximum_evaluation_steps: 500
   precision: 'bf16'
-  staged_sequences: [128]
-  # staged_sequences: []
-  staged_warmup_steps: 1000
+  staged_sequences: []
+  staged_sequences: []
+  # staged_warmup_steps: 1000
 
 model:
-  size: "base"
+  size: "large"
 
 data:
   corpus: "openwebtext"
@@ -26,15 +27,15 @@ data:
   full_steps_in_batch: 24558
   workers: 0
   checkpoint_directory: "checkpoints"
-  # bucket_path: "bfattoriwebtext2"
-  bucket_path: "bfattoribooks2"
+  bucket_path: "bfattoriwebtext2"
+  # bucket_path: "bfattoribooks2"
   # bucket_path: 
-  # index_path_train: "data/index/openwebtext_useast.train.index"
-  # index_path_validation: "data/index/openwebtext_useast.val.index"
-  index_path_train: "data/index/openwebtext.train.index"
-  index_path_validation: "data/index/openwebtext.val.index"
+  index_path_train: "data/index/openwebtext_useast.train.index"
+  index_path_validation: "data/index/openwebtext_useast.val.index"
+  # index_path_train: "data/index/openwebtext.train.index"
+  # index_path_validation: "data/index/openwebtext.val.index"
 
 
 device:
-  dp_devices: 4
-  mp_devices: 2
+  dp_devices: 8
+  mp_devices: 4
