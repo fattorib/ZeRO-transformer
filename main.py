@@ -228,17 +228,17 @@ def main():
                 bucket = storage.Bucket(client, bucket_path)
                 blob_name = f"checkpoints/opt_state.msgpack"
                 blob = bucket.blob(blob_name)
-                print(blob.download_as_bytes())
+                opt_bytes = blob.download_as_bytes()
 
                 state = restore_checkpoint(
                     state,
                     workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
                 )
-                with open(
-                    f"checkpoints/opt_state.msgpack",
-                    "rb",
-                ) as f:
-                    opt_bytes = f.read()
+                # with open(
+                #     f"checkpoints/opt_state.msgpack",
+                #     "rb",
+                # ) as f:
+                #     opt_bytes = f.read()
             else:
                 state = restore_checkpoint(state, workdir=cfg.data.checkpoint_directory)
 
