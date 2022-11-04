@@ -414,6 +414,7 @@ def main():
                 partial(train_step, param_spec=param_spec),
                 in_axis_resources=(state_spec, PartitionSpec("dp"), None),
                 out_axis_resources=(state_spec, None),
+                donate_argnums=(0,)
             )
 
             pjit_eval_step = pjit(
