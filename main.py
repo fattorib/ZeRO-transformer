@@ -254,12 +254,13 @@ def main():
             resume_step = int(state.step)
 
             opt_state = from_bytes(opt_state_shapes, opt_bytes)
-
-            state = pjit(
-                restore_state,
-                in_axis_resources=(None, None, None),
-                out_axis_resources=(state_spec),
-            )(state.params, state.step, opt_state)
+            
+            with mesh:
+                state = pjit(
+                    restore_state,
+                    in_axis_resources=(None, None, None),
+                    out_axis_resources=(state_spec),
+                )(state.params, state.step, opt_state)
 
         else:
             with mesh:
