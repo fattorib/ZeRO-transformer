@@ -96,6 +96,25 @@ def main():
         model_dtype = jnp.bfloat16
     else:
         model_dtype = jnp.float32
+    
+    save_to_bucket = False
+    client = None
+    bucket_path = None
+    if platform == "tpu":
+        if cfg.data.bucket_path is not None:
+            # use GCP
+            from google.cloud import storage
+            from google.cloud.exceptions import NotFound
+
+            client = storage.Client()
+            save_to_bucket = True
+            bucket_path = cfg.data.bucket_path
+            train_shards = open(cfg.data.index_path_train).read().splitlines()
+            validation_shards = open(cfg.data.index_path_validation).read().splitlines()
+
+    else:
+        train_shards = cfg.data.train_shard_urls
+        validation_shards = cfg.data.validation_shard_urls
 
     model, model_config = model_getter(
         cfg.model.size, config_path=args.model_cfg, return_cfg=True, dtype=model_dtype
@@ -129,9 +148,6 @@ def main():
             grad_accum_steps=cfg.training.gradient_accumulation_steps,
         )
         param_spec = None
-
-        if cfg.data.bucket_path is not None:
-            save_to_bucket = True #TODO: Move this around
 
         if args.resume:
             if save_to_bucket:
@@ -208,15 +224,7 @@ def main():
                 grad_accum_steps=cfg.training.gradient_accumulation_steps,
             )
 
-            if cfg.data.bucket_path is not None:
-                save_to_bucket = True #TODO: Move this around
-
             if save_to_bucket:
-                
-                from google.cloud import storage
-                from google.cloud.exceptions import NotFound
-                client = storage.Client()
-
                 bucket = storage.Bucket(client, bucket_path)
                 blob_name = f"checkpoints/opt_state.msgpack"
                 blob = bucket.blob(blob_name)
@@ -293,24 +301,6 @@ def main():
                 f"Running sequence length warmup for {cfg.training.staged_warmup_steps} total steps with stages: {cfg.training.staged_sequences}"
             )
 
-    save_to_bucket = False
-    client = None
-    bucket_path = None
-    if platform == "tpu":
-        if cfg.data.bucket_path is not None:
-            # use GCP
-            from google.cloud import storage
-            from google.cloud.exceptions import NotFound
-
-            client = storage.Client()
-            save_to_bucket = True
-            bucket_path = cfg.data.bucket_path
-            train_shards = open(cfg.data.index_path_train).read().splitlines()
-            validation_shards = open(cfg.data.index_path_validation).read().splitlines()
-
-    else:
-        train_shards = cfg.data.train_shard_urls
-        validation_shards = cfg.data.validation_shard_urls
 
     if not args.resume:
         if cfg.data.bucket_path is not None:
