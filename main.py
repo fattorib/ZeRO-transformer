@@ -437,23 +437,23 @@ def main():
             if resume_step != None and i <= resume_step:
                 continue
 
-            rng, dropout_rng = jax.random.split(rng, 2)
+            # rng, dropout_rng = jax.random.split(rng, 2)
 
             seq_len = step_to_seq(i)
 
-            # text = text.reshape(-1,seq_len)
-            text = text[:,:128] # for debugging, small BS for quicker models
+            text = text.reshape(-1,seq_len)
+            # text = text[:,:128] # for debugging, small BS for quicker models
 
-            t0 = time.time()
+            # t0 = time.time()
 
-            state, metrics = pjit_train_step(
-                state,
-                text,
-                dropout_rng,
-            )
+            # state, metrics = pjit_train_step(
+            #     state,
+            #     text,
+            #     dropout_rng,
+            # )
 
-            metrics["Train Batch Time"] = time.time() - t0
-            metrics["Train Sequence Length"] = seq_len
+            # metrics["Train Batch Time"] = time.time() - t0
+            # metrics["Train Sequence Length"] = seq_len
 
             # running_metrics.append(metrics)
 
