@@ -395,30 +395,32 @@ def main():
     step_to_seq = lambda x: 512
 
     if cfg.device.mp_devices == 1:
-        pjit_train_step = pjit(
-            train_step,
-            in_axis_resources=(None, PartitionSpec("dp"), None, None),
-            out_axis_resources=None,
-        )
+        with mesh:
+            pjit_train_step = pjit(
+                train_step,
+                in_axis_resources=(None, PartitionSpec("dp"), None, None),
+                out_axis_resources=None,
+            )
 
-        pjit_eval_step = pjit(
-            eval_step,
-            in_axis_resources=(None, PartitionSpec("dp")),
-            out_axis_resources=None,
-        )
+            pjit_eval_step = pjit(
+                eval_step,
+                in_axis_resources=(None, PartitionSpec("dp")),
+                out_axis_resources=None,
+            )
 
     else:
-        pjit_train_step = pjit(
-            partial(train_step, param_spec=param_spec),
-            in_axis_resources=(state_spec, PartitionSpec("dp"), None),
-            out_axis_resources=(state_spec, None),
-        )
+        with mesh:
+            pjit_train_step = pjit(
+                partial(train_step, param_spec=param_spec),
+                in_axis_resources=(state_spec, PartitionSpec("dp"), None),
+                out_axis_resources=(state_spec, None),
+            )
 
-        pjit_eval_step = pjit(
-            eval_step,
-            in_axis_resources=(state_spec, PartitionSpec("dp")),
-            out_axis_resources=None,
-        )
+            pjit_eval_step = pjit(
+                eval_step,
+                in_axis_resources=(state_spec, PartitionSpec("dp")),
+                out_axis_resources=None,
+            )
 
     with mesh:
 
