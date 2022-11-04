@@ -443,7 +443,7 @@ def main():
 
             text = text.reshape(-1,seq_len)
 
-            # t0 = time.time()
+            t0 = time.time()
 
             state, metrics = pjit_train_step(
                 state,
