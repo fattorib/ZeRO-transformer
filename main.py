@@ -228,7 +228,7 @@ def main():
                 bucket = storage.Bucket(client, bucket_path)
                 blob_name = f"checkpoints/opt_state.msgpack"
                 blob = bucket.blob(blob_name)
-                blob.download_as_bytes()
+                print(blob.download_as_bytes())
 
                 state = restore_checkpoint(
                     state,
