@@ -212,6 +212,10 @@ def main():
                 save_to_bucket = True #TODO: Move this around
 
             if save_to_bucket:
+                
+                from google.cloud import storage
+                from google.cloud.exceptions import NotFound
+                client = storage.Client()
 
                 state = restore_checkpoint(
                     state,
