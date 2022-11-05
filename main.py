@@ -57,23 +57,11 @@ def save_checkpoint(state, workdir, bucket_path=None, client=None):
     if jax.process_index() == 0:
         step = int(state.step)
         checkpoints.save_checkpoint(workdir, state, step, keep=3, overwrite=True)
-
-        # we have to save optimizer state separately when resuming to a sharded state
-        if client is not None:
-            from google.cloud import storage
-
-            bucket = storage.Bucket(client, bucket_path)
-            blob_name = f"checkpoints/opt_state.msgpack"
-            blob = bucket.blob(blob_name)
-            blob.upload_from_file(io.BytesIO(to_bytes(state.opt_state)))
-
-        else:
-            with open(f"{workdir}/opt_state.msgpack", "wb") as f:
-                f.write(to_bytes(state.opt_state))
+        checkpoints.save_checkpoint(workdir, state.opt_state, step, keep=3, prefix = 'opt_state', overwrite=True)
 
 
-def restore_checkpoint(state, workdir):
-    return checkpoints.restore_checkpoint(workdir, state)
+def restore_checkpoint(state, workdir, prefix):
+    return checkpoints.restore_checkpoint(workdir, state, prefix=prefix)
 
 
 def main():
@@ -155,6 +143,7 @@ def main():
                 state = restore_checkpoint(
                     state,
                     workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                    prefix='checkpoint_'
                 )
             else:
                 state = restore_checkpoint(state, workdir=cfg.data.checkpoint_directory)
@@ -234,6 +223,13 @@ def main():
                 state = restore_checkpoint(
                     state,
                     workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                    prefix='checkpoint_'
+                )
+
+                opt_state = restore_checkpoint(
+                    opt_state_shapes,
+                    workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                    prefix='opt_state_'
                 )
 
             else:
@@ -250,7 +246,7 @@ def main():
             # resume step is ga_steps*global steps
             resume_step = int(state.step)
 
-            opt_state = from_bytes(opt_state_shapes, opt_bytes)
+            # opt_state = from_bytes(opt_state_shapes, opt_bytes)
 
             with mesh:
                 state = pjit(
