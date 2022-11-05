@@ -343,6 +343,7 @@ def main():
         wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23)),
         wds.decode(),
         wds.map(preprocess),
+        handler = wds.ignore_and_continue
     ).repeat(nepochs=cfg.training.max_epochs)
 
     validation_dataset = wds.DataPipeline(
@@ -352,6 +353,7 @@ def main():
         wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23)),
         wds.decode(),
         wds.map(preprocess),
+        handler = wds.ignore_and_continue
     )
 
     tl = DataLoader(
