@@ -57,8 +57,6 @@ def save_checkpoint(state, workdir, bucket_path=None, client=None):
     if jax.process_index() == 0:
         step = int(state.step)
         checkpoints.save_checkpoint(workdir, state, step, keep=3, overwrite=True)
-        checkpoints.save_checkpoint(workdir, state.opt_state, step, keep=3, prefix = 'opt_state_', overwrite=True)
-
 
 def restore_checkpoint(state, workdir, prefix):
     return checkpoints.restore_checkpoint(workdir, state, prefix=prefix)
@@ -215,30 +213,15 @@ def main():
             )
 
             if save_to_bucket:
-                bucket = storage.Bucket(client, bucket_path)
-                blob_name = f"checkpoints/opt_state.msgpack"
-                blob = bucket.blob(blob_name)
-                opt_bytes = blob.download_as_bytes()
-
                 state = restore_checkpoint(
                     state,
                     workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
                     prefix='checkpoint_'
                 )
 
-                opt_state = restore_checkpoint(
-                    opt_state_shapes,
-                    workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                    prefix='opt_state_'
-                )
-
             else:
                 state = restore_checkpoint(state, workdir=cfg.data.checkpoint_directory)
 
-                with open(
-                    f"{cfg.data.checkpoint_directory}/opt_state.msgpack", "rb"
-                ) as f:
-                    opt_bytes = f.read()
 
             if jax.process_index() == 0:
                 logger.debug(f"Resuming training from step {int(state.step)}")
@@ -253,7 +236,7 @@ def main():
                     restore_state,
                     in_axis_resources=(None, None, None),
                     out_axis_resources=(state_spec),
-                )(state.params, state.step, opt_state)
+                )(state.params, state.step, state.opt_state)
 
         else:
             with mesh:
@@ -500,7 +483,7 @@ def main():
                     }
 
                     if jax.process_index() == 0:
-                        # train_metrics_np.update(validation_metrics_np)
+                        train_metrics_np.update(validation_metrics_np)
                         train_metrics_np.pop("Train Batch Time")
                         wandb.log(train_metrics_np)
 
