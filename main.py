@@ -534,45 +534,23 @@ def train_step(
 
         return loss
 
-    dynamic_scale = state.dynamic_scale
-    if dynamic_scale:
-        grad_fn = dynamic_scale.value_and_grad(loss_fn, has_aux=True, axis_name="batch")
-        dynamic_scale, is_fin, (loss), grads = grad_fn(state.params)
-        state = state.replace(dynamic_scale=dynamic_scale)
 
-    else:
-        grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
-        loss, grads = grad_fn(state.params)
+    grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
+    loss, grads = grad_fn(state.params)
 
-        if param_spec is not None:
-            grads = with_sharding_constraint(
-                grads, param_spec
-            )  
+    if param_spec is not None:
+        grads = with_sharding_constraint(
+            grads, param_spec
+        )  
 
     new_state = state.apply_gradients(
         grads=grads,
     )
 
-    if dynamic_scale:
-        # if is_fin == False the gradients contain Inf/NaNs and optimizer state and
-        # params should be restored (= skip this step).
-        new_state = new_state.replace(
-            opt_state=jax.tree_util.tree_map(
-                partial(jnp.where, is_fin), new_state.opt_state, state.opt_state
-            ),
-            params=jax.tree_util.tree_map(
-                partial(jnp.where, is_fin), new_state.params, state.params
-            ),
-            dynamic_scale=dynamic_scale,
-        )
-
     metrics = {
         "Train LM Loss": loss,
         "Train LM PPL": jnp.exp(loss),
     }
-
-    if dynamic_scale:
-        metrics["Loss Scale"] = dynamic_scale.scale
 
     return new_state, metrics
 
