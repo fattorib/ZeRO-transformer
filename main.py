@@ -554,7 +554,6 @@ def train_step(
 
     return new_state, metrics
 
-# This function is problematic, also slows down computation a LOT
 def eval_step(state: Any, batch: jnp.array):
     """Evaluate on a single batch"""
 
