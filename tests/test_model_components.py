@@ -96,6 +96,8 @@ class TestAttn(unittest.TestCase):
         batch_cts = random.normal(self.rng, shape=(1, 512, 128))
         params = attn.init(self.init_rng, batch_cts, False)
 
+        alibi_mask = 
+
         out = attn.apply(
             {"params": params["params"]},
             batch_cts,
@@ -111,15 +113,6 @@ class TestAttn(unittest.TestCase):
             rngs={"dropout": self.rng},
         )
         self.assertEqual(out.shape, batch_cts.shape)
-
-        batch_cts_longer_ctx = random.normal(self.rng, shape=(1, 768, 128))
-        out = attn.apply(
-            {"params": params["params"]},
-            batch_cts_longer_ctx,
-            train=False,
-            rngs={"dropout": self.rng},
-        )
-        self.assertEqual(out.shape, batch_cts_longer_ctx.shape)
 
 
 class TestTransformerBlock(unittest.TestCase):

@@ -23,6 +23,20 @@ def get_slopes(n: int) -> List:
             + get_slopes(2 * closest_power_of_2)[0::2][: n - closest_power_of_2]
         )
 
+def create_mask(seq_len_k, slopes):
+
+    a = -jnp.tril(
+            jnp.tile(
+                jnp.arange(seq_len_k).reshape(seq_len_k, 1), (1, seq_len_k)
+            )
+            + jnp.arange(0, -seq_len_k, step=-1)
+        )
+
+    a = a * (slopes.reshape(slopes.shape[0], 1, 1))
+
+    alibi_mask = a[:, seq_len_k - 1, :].reshape(a.shape[0], 1, a.shape[2])
+
+    return alibi_mask
 
 class MLPBlock(nn.Module):
     """Standard MLP Block"""
@@ -88,6 +102,8 @@ class CausalAttention(nn.Module):
                 (self.num_head,),
                 jnp.float32,
             )
+        
+        self.alibi_mask = create_mask(self.block_size, self.slopes)
 
     @nn.compact
     def __call__(
@@ -154,23 +170,8 @@ class CausalAttention(nn.Module):
             )  # Shape is (B, nh, sq, sk)
 
         if self.alibi_attn:
-
-            seq_len_k, seq_len_q = key.shape[-2], query.shape[-2]
-
-            if alibi_mask is None:
-
-                a = -jnp.tril(
-                    jnp.tile(
-                        jnp.arange(seq_len_k).reshape(seq_len_k, 1), (1, seq_len_k)
-                    )
-                    + jnp.arange(0, -seq_len_k, step=-1)
-                )
-
-                a = a * (self.slopes.reshape(self.slopes.shape[0], 1, 1))
-
-                alibi_mask = a[:, seq_len_k - 1, :].reshape(a.shape[0], 1, a.shape[2])
-
-                attn_full = attn_full + alibi_mask
+            # NOTE: We are fixing the ALiBi mask since this is for training, during inference or is seq_len changes this will cause issues
+            attn_full = attn_full + self.alibi_mask[:,:T,:T]
 
         mask = jnp.tril(jnp.ones((T, T), dtype=jnp.int8)).reshape(1, 1, T, T)
 
