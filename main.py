@@ -12,7 +12,6 @@ import numpy as np
 import optax
 import torch
 import webdataset as wds
-from flax.serialization import from_bytes, to_bytes
 from flax.training import checkpoints
 from jax import random
 from jax.experimental import PartitionSpec
@@ -24,8 +23,7 @@ from tqdm import tqdm
 import wandb
 from src.models.GPT import model_getter
 from src.training.training_utils import (TrainState, compute_tokens_seen,
-                                         create_train_state, get_optimizer,
-                                         step_to_seq_len)
+                                         create_train_state, get_optimizer,)
 from src.utils.configs import flatten_dict
 from src.utils.dataloader import numpy_collate
 from src.utils.partitioning import (create_opt_spec, set_partitions,
