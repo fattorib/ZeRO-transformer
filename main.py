@@ -73,7 +73,7 @@ def save_checkpoint(state, workdir, bucket_path=None, client=None):
 
 
 def restore_checkpoint(state, workdir):
-    return checkpoints.restore_checkpoint(workdir, state, prefix='checkpoint_')
+    return checkpoints.restore_checkpoint(workdir, state)
 
 
 def main():
@@ -489,20 +489,20 @@ def main():
                     cfg.training.evaluation_frequency
                     * cfg.training.gradient_accumulation_steps
                 ) == 0:
-                    for val_it, val_text in enumerate(
-                        tqdm(vl, disable=not jax.process_index() == 0)
-                    ):
-                        if val_it < cfg.training.maximum_evaluation_steps:
-                            # sharded_batch = shard(val_text)
-                            metrics = pjit_eval_step(state, val_text)
-                            validation_metrics.append(metrics)
-                        else:
-                            break
+                #     for val_it, val_text in enumerate(
+                #         tqdm(vl, disable=not jax.process_index() == 0)
+                #     ):
+                #         if val_it < cfg.training.maximum_evaluation_steps:
+                #             # sharded_batch = shard(val_text)
+                #             metrics = pjit_eval_step(state, val_text)
+                #             validation_metrics.append(metrics)
+                #         else:
+                #             break
 
-                    validation_metrics_np = {
-                        k: np.mean([metrics[k] for metrics in validation_metrics])
-                        for k in validation_metrics[0]
-                    }
+                #     validation_metrics_np = {
+                #         k: np.mean([metrics[k] for metrics in validation_metrics])
+                #         for k in validation_metrics[0]
+                #     }
 
                     # if jax.process_index() == 0:
                     #     # train_metrics_np.update(validation_metrics_np)
