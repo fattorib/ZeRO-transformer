@@ -155,7 +155,7 @@ def main():
 
         # use jax.eval_shape to get pytree with empty params and correct shapes
         # saves us having to do an actual model forward pass / any actual computation
-        batch_tok = jnp.ones(shape=(1, cfg.data.max_context), dtype=jnp.int32)
+        batch_tok = jnp.ones(shape=(1, 512), dtype=jnp.int32)
         param_shape = jax.eval_shape(model.init, init_rng, batch_tok)
         param_spec = set_partitions(param_shape)
 
@@ -237,7 +237,7 @@ def main():
 
         else:
             with mesh:
-                init_batch = jax.numpy.ones(shape=(1, 1024), dtype=jax.numpy.int32)
+                init_batch = jax.numpy.ones(shape=(1, 512), dtype=jax.numpy.int32)
 
                 # shard params across mesh
                 sharded_params = pjit(

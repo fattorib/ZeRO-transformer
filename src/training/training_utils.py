@@ -50,7 +50,7 @@ def create_train_state(
     grad_accum_steps: int,
 ):
     """Creates initial `TrainState` for model."""
-    params = initialized(rng, model, input_shape=(1, 1024))
+    params = initialized(rng, model, input_shape=(1, 512))
 
     # This mask turns off weight decay for bias terms, LN terms and position embeddings
     mask = jax.tree_map(
