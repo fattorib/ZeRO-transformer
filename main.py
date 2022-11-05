@@ -57,7 +57,7 @@ def save_checkpoint(state, workdir, bucket_path=None, client=None):
     if jax.process_index() == 0:
         step = int(state.step)
         checkpoints.save_checkpoint(workdir, state, step, keep=3, overwrite=True)
-        checkpoints.save_checkpoint(workdir, state.opt_state, step, keep=3, prefix = 'opt_state', overwrite=True)
+        checkpoints.save_checkpoint(workdir, state.opt_state, step, keep=3, prefix = 'opt_state_', overwrite=True)
 
 
 def restore_checkpoint(state, workdir, prefix):
@@ -489,7 +489,6 @@ def main():
                 #         tqdm(vl, disable=not jax.process_index() == 0)
                 #     ):
                 #         if val_it < cfg.training.maximum_evaluation_steps:
-                #             # sharded_batch = shard(val_text)
                 #             metrics = pjit_eval_step(state, val_text)
                 #             validation_metrics.append(metrics)
                 #         else:
@@ -500,33 +499,30 @@ def main():
                 #         for k in validation_metrics[0]
                 #     }
 
-                    # if jax.process_index() == 0:
-                    #     # train_metrics_np.update(validation_metrics_np)
-                    #     train_metrics_np.pop("Train Batch Time")
-                    #     wandb.log(train_metrics_np)
+                    if jax.process_index() == 0:
+                        # train_metrics_np.update(validation_metrics_np)
+                        train_metrics_np.pop("Train Batch Time")
+                        wandb.log(train_metrics_np)
 
-                    #     if cfg.device.mp_devices > 1:
-                    #         device_state = jax.device_get(
-                    #             state
-                    #         )  # pull a copy of the sharded state to CPU and save
-                    #         save_checkpoint(
-                    #             device_state,
-                    #             workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                    #             bucket_path=bucket_path,
-                    #             client=client,
-                    #         )
+                        if cfg.device.mp_devices > 1:
+                            device_state = jax.device_get(
+                                state
+                            )  # pull a copy of the sharded state to CPU and save
+                            save_checkpoint(
+                                device_state,
+                                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                            )
 
-                    #     else:
-                    #         if save_to_bucket:
-                    #             save_checkpoint(
-                    #                 state,
-                    #                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                    #             )
-                    #         else:
-                    #             save_checkpoint(
-                    #                 state, workdir=cfg.data.checkpoint_directory
-                    #             )
-                    pass 
+                        else:
+                            if save_to_bucket:
+                                save_checkpoint(
+                                    state,
+                                    workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                                )
+                            else:
+                                save_checkpoint(
+                                    state, workdir=cfg.data.checkpoint_directory
+                                )
 
                 else:
                     if jax.process_index() == 0:
@@ -567,7 +563,7 @@ def train_step(
         if param_spec is not None:
             grads = with_sharding_constraint(
                 grads, param_spec
-            )  # TODO: What does this do? All repos I see use this but there is _no_ documentation on it
+            )  
 
     new_state = state.apply_gradients(
         grads=grads,
