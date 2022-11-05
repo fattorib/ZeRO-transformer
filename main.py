@@ -23,7 +23,7 @@ from tqdm import tqdm
 import wandb
 from src.models.GPT import model_getter
 from src.training.training_utils import (TrainState, compute_tokens_seen,
-                                         create_train_state, get_optimizer,)
+                                         create_train_state, get_optimizer)
 from src.utils.configs import flatten_dict
 from src.utils.dataloader import numpy_collate
 from src.utils.partitioning import (create_opt_spec, set_partitions,
@@ -55,6 +55,7 @@ def save_checkpoint(state, workdir, bucket_path=None, client=None):
     if jax.process_index() == 0:
         step = int(state.step)
         checkpoints.save_checkpoint(workdir, state, step, keep=3, overwrite=True)
+
 
 def restore_checkpoint(state, workdir, prefix):
     return checkpoints.restore_checkpoint(workdir, state, prefix=prefix)
@@ -139,7 +140,7 @@ def main():
                 state = restore_checkpoint(
                     state,
                     workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                    prefix='checkpoint_'
+                    prefix="checkpoint_",
                 )
             else:
                 state = restore_checkpoint(state, workdir=cfg.data.checkpoint_directory)
@@ -214,12 +215,11 @@ def main():
                 state = restore_checkpoint(
                     state,
                     workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                    prefix='checkpoint_'
+                    prefix="checkpoint_",
                 )
 
             else:
                 state = restore_checkpoint(state, workdir=cfg.data.checkpoint_directory)
-
 
             if jax.process_index() == 0:
                 logger.debug(f"Resuming training from step {int(state.step)}")
@@ -232,7 +232,6 @@ def main():
                     restore_state,
                     in_axis_resources=(None, None, None),
                     out_axis_resources=(state_spec),
-                    donate_argnums=(0, 1, 2),
                 )(state.params, state.step, state.opt_state)
 
         else:
@@ -341,7 +340,7 @@ def main():
         wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23)),
         wds.decode(),
         wds.map(preprocess),
-        handler = wds.warn_and_continue
+        handler=wds.warn_and_continue,
     ).repeat(nepochs=cfg.training.max_epochs)
 
     validation_dataset = wds.DataPipeline(
@@ -351,7 +350,7 @@ def main():
         wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23)),
         wds.decode(),
         wds.map(preprocess),
-        handler = wds.warn_and_continue
+        handler=wds.warn_and_continue,
     )
 
     tl = DataLoader(
@@ -392,7 +391,7 @@ def main():
                 partial(train_step, param_spec=param_spec),
                 in_axis_resources=(state_spec, PartitionSpec("dp"), None),
                 out_axis_resources=(state_spec, None),
-                donate_argnums=(0,)
+                donate_argnums=(0,),
             )
 
             pjit_eval_step = pjit(
@@ -420,7 +419,7 @@ def main():
 
             seq_len = step_to_seq(i)
 
-            text = text.reshape(-1,seq_len)
+            text = text.reshape(-1, seq_len)
 
             t0 = time.time()
 
@@ -469,8 +468,8 @@ def main():
                 ) == 0:
                     for val_it, val_text in enumerate(
                         tqdm(vl, disable=not jax.process_index() == 0)
-                    ):  
-                        val_text = val_text[:,512]
+                    ):
+                        val_text = val_text[:, 512]
                         if val_it < cfg.training.maximum_evaluation_steps:
                             metrics = pjit_eval_step(state, val_text)
                             validation_metrics.append(metrics)
@@ -533,14 +532,11 @@ def train_step(
 
         return loss
 
-
     grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
     loss, grads = grad_fn(state.params)
 
     if param_spec is not None:
-        grads = with_sharding_constraint(
-            grads, param_spec
-        )  
+        grads = with_sharding_constraint(grads, param_spec)
 
     new_state = state.apply_gradients(
         grads=grads,
@@ -552,6 +548,7 @@ def train_step(
     }
 
     return new_state, metrics
+
 
 def eval_step(state: Any, batch: jnp.array):
     """Evaluate on a single batch"""
