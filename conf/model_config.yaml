@@ -56,6 +56,6 @@ large:
   num_head: 12
   block_size: 512
   dropout: 0.1
-  N: 22
+  N: 20
   fused_residuals: True
   alibi_attn: True

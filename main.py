@@ -229,13 +229,12 @@ def main():
             # resume step is ga_steps*global steps
             resume_step = int(state.step)
 
-            # opt_state = from_bytes(opt_state_shapes, opt_bytes)
-
             with mesh:
                 state = pjit(
                     restore_state,
                     in_axis_resources=(None, None, None),
                     out_axis_resources=(state_spec),
+                    donate_argnums=(0, 1, 2),
                 )(state.params, state.step, state.opt_state)
 
         else:
