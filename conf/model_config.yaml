@@ -53,9 +53,9 @@ medium:
 large: 
   embedding_dim: 1536
   vocab_size: 50260
-  num_head: 16
+  num_head: 12
   block_size: 512
   dropout: 0.1
-  N: 24
+  N: 22
   fused_residuals: True
   alibi_attn: True
