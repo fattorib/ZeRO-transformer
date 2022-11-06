@@ -424,7 +424,8 @@ def main():
             text = text.reshape(-1, seq_len)
 
             # we add a 'grad_accum' batch dimension
-            text = text.reshape(text.shape[0]//8, 8, seq_len)
+            # in our case, we have BS (64, 512) -> (grad_accum_cnt, bs, 512)
+            text = text.reshape(8, text.shape[0]//8, seq_len)
         
             t0 = time.time()
 
