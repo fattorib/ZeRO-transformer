@@ -52,7 +52,7 @@ medium:
 
 large: 
   embedding_dim: 1536
-  vocab_size: 50260
+  vocab_size: 50264
   num_head: 12
   block_size: 512
   dropout: 0.1
