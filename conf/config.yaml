@@ -1,6 +1,6 @@
 training:
   max_epochs: 8
-  batch_size: 8
+  batch_size: 64
   peak_learning_rate: 2.5e-4
   warmup_steps: 2000
   decay_steps: 176400
@@ -8,7 +8,7 @@ training:
   end_learning_rate: 2.5e-5
   weight_decay: 0.1
   # corresponds to full CTX BS of 256 on 4 host TPU -> reshape to 512 CTX BS of 512
-  gradient_accumulation_steps: 8 
+  gradient_accumulation_steps: 1 
   evaluation_frequency: 500
   maximum_evaluation_steps: 500
   precision: 'bf16'

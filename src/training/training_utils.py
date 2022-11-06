@@ -68,12 +68,12 @@ def create_train_state(
         ),
     )
 
-    if grad_accum_steps > 1:
-        tx = optax.MultiSteps(
-            tx,
-            every_k_schedule=grad_accum_steps,
-            should_skip_update_fn=optax.skip_not_finite,
-        )
+    # if grad_accum_steps > 1:
+    #     tx = optax.MultiSteps(
+    #         tx,
+    #         every_k_schedule=grad_accum_steps,
+    #         should_skip_update_fn=optax.skip_not_finite,
+    #     )
 
     state = TrainState.create(
         apply_fn=model.apply,

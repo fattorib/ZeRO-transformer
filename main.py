@@ -52,13 +52,15 @@ def parse():
 
 
 def save_checkpoint(state, workdir, bucket_path=None, client=None):
-    if jax.process_index() == 0:
-        step = int(state.step)
-        checkpoints.save_checkpoint(workdir, state, step, keep=3, overwrite=True)
+    # if jax.process_index() == 0:
+    #     step = int(state.step)
+    #     checkpoints.save_checkpoint(workdir, state, step, keep=3, overwrite=True)
+    return None
 
 
 def restore_checkpoint(state, workdir, prefix):
-    return checkpoints.restore_checkpoint(workdir, state, prefix=prefix)
+    # return checkpoints.restore_checkpoint(workdir, state, prefix=prefix)
+    return None
 
 
 def main():
@@ -272,15 +274,15 @@ def main():
                 f"Running sequence length warmup for {cfg.training.staged_warmup_steps} total steps with stages: {cfg.training.staged_sequences}"
             )
 
-    if not args.resume:
-        if cfg.data.bucket_path is not None:
-            # clear bucket
-            client = storage.Client()
-            if jax.process_index() == 0:
-                bucket = storage.Bucket(client, f"{cfg.data.bucket_path}")
-                blobs = bucket.list_blobs(prefix=f"{cfg.data.checkpoint_directory}")
-                for blob in blobs:
-                    blob.delete()
+    # if not args.resume:
+    #     if cfg.data.bucket_path is not None:
+    #         # clear bucket
+    #         client = storage.Client()
+    #         if jax.process_index() == 0:
+    #             bucket = storage.Bucket(client, f"{cfg.data.bucket_path}")
+    #             blobs = bucket.list_blobs(prefix=f"{cfg.data.checkpoint_directory}")
+    #             for blob in blobs:
+    #                 blob.delete()
 
     local_batch_size = cfg.training.batch_size // (
         jax.local_device_count() // cfg.device.mp_devices
@@ -490,21 +492,22 @@ def main():
                             device_state = jax.device_get(
                                 state
                             )  # pull a copy of the sharded state to CPU and save
-                            save_checkpoint(
-                                device_state,
-                                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                            )
+                            # save_checkpoint(
+                            #     device_state,
+                            #     workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                            # )
 
                         else:
-                            if save_to_bucket:
-                                save_checkpoint(
-                                    state,
-                                    workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                                )
-                            else:
-                                save_checkpoint(
-                                    state, workdir=cfg.data.checkpoint_directory
-                                )
+                            # if save_to_bucket:
+                            #     save_checkpoint(
+                            #         state,
+                            #         workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                            #     )
+                            # else:
+                            #     save_checkpoint(
+                            #         state, workdir=cfg.data.checkpoint_directory
+                            #     )
+                            pass 
 
                 else:
                     if jax.process_index() == 0:
@@ -517,11 +520,20 @@ def main():
 
 
 def train_step(
-    state: Any, batch: jnp.array, rng_key: random.PRNGKey = None, param_spec: Any = None
+    state: Any, batch: jnp.array, rng_key: jax.random.PRNGKey = None, param_spec: Any = None
 ):
-    """Train on a single batch"""
+    """Train on a single Gradient-Accumulation batch
+    This means that the batch will be size (local_bs*grad_accum, ctx) instead of (local_bs, ctx)
 
-    def loss_fn(params):
+    """
+
+    def get_minibatch(batch, grad_idx):
+        return jax.tree_util.tree_map(
+            lambda x: jax.lax.dynamic_index_in_dim(x, grad_idx, keepdims=True),
+            batch,
+        )
+    
+    def loss_fn(params, batch):
         _, loss = state.apply_fn(
             {"params": params["params"]},
             x=batch,
@@ -529,15 +541,54 @@ def train_step(
             train=True,
             rngs={"dropout": rng_key},
         )
-
-        return loss
+        return loss 
 
     grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
-    loss, grads = grad_fn(state.params)
 
-    if param_spec is not None:
+    def loss_and_grad(grad_idx): #TODO: Maybe fix dropout rng?
+        minibatch = (
+                get_minibatch(batch, grad_idx) if grad_idx is not None else batch
+            )
+        minibatch = with_sharding_constraint(minibatch, PartitionSpec('dp'))
+
+        loss, grads = grad_fn(state.params, minibatch)
+
         grads = with_sharding_constraint(grads, param_spec)
 
+        return loss, grads 
+
+    init_minibatch = (
+        0.0, 
+        with_sharding_constraint(
+                    jax.tree_util.tree_map(jnp.zeros_like, state.params), param_spec
+        )
+    )
+
+    # accumulate gradients
+    def cumul_minibatch_step(grad_idx, cumul_loss_grad):
+        cumul_loss, cumul_grads= cumul_loss_grad
+        loss, grads = loss_and_grad(grad_idx)
+        cumul_loss, cumul_grads = jax.tree_util.tree_map(
+            jnp.add, (cumul_loss, cumul_grads), (loss, grads)
+        )
+        cumul_grads = with_sharding_constraint(cumul_grads, param_spec)
+        return cumul_loss, cumul_grads
+
+    loss, grads = jax.lax.fori_loop(
+                0,
+                8, #TODO: Unhardcode these
+                cumul_minibatch_step,
+                init_minibatch,
+            )
+    grads = with_sharding_constraint(grads, param_spec)
+    # sum -> mean
+    loss, grads = jax.tree_util.tree_map(
+        lambda x: x / 8, (loss, grads)
+    )
+
+    grads = with_sharding_constraint(grads, param_spec)
+
+    # only update train_state at the end of a single full batch 
     new_state = state.apply_gradients(
         grads=grads,
     )
