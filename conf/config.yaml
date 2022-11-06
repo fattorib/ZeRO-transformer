@@ -36,5 +36,5 @@ data:
 
 
 device:
-  dp_devices: 4
-  mp_devices: 8
+  dp_devices: 16
+  mp_devices: 2
