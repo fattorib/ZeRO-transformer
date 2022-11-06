@@ -424,8 +424,6 @@ def main():
             text = text.reshape(-1, seq_len)
 
             # we add a 'grad_accum' batch dimension
-            # in our case, we have BS (64, 512) -> (grad_accum_cnt, bs, 512)
-            # within train_step, we look over the first axis
             text = text.reshape(8, text.shape[0]//8, seq_len)
         
             t0 = time.time()
@@ -553,7 +551,7 @@ def train_step(
 
     grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
 
-    def loss_and_grad(grad_idx): 
+    def loss_and_grad(grad_idx): #TODO: Maybe fix dropout rng?
         minibatch = (
                 get_minibatch(batch, grad_idx) if grad_idx is not None else batch
             )
@@ -563,19 +561,18 @@ def train_step(
 
         grads = with_sharding_constraint(grads, param_spec)
 
-        return loss, grads
+        return loss, grads 
 
     init_minibatch = (
         0.0, 
         with_sharding_constraint(
                     jax.tree_util.tree_map(jnp.zeros_like, state.params), param_spec
-        ), 
-        rng_key
+        )
     )
 
     # accumulate gradients
     def cumul_minibatch_step(grad_idx, cumul_loss_grad):
-        cumul_loss, cumul_grads = cumul_loss_grad
+        cumul_loss, cumul_grads= cumul_loss_grad
         loss, grads = loss_and_grad(grad_idx)
         cumul_loss, cumul_grads = jax.tree_util.tree_map(
             jnp.add, (cumul_loss, cumul_grads), (loss, grads)
