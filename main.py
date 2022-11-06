@@ -577,14 +577,6 @@ def train_step(
             jnp.add, (cumul_loss, cumul_grads), (loss, grads)
         )
 
-        # Better approach for computing accumulated gradients. Better numerical stability + we don't have to call another tree_map later
-        # cumul_grads = jax.tree_util.tree_map(
-        #     lambda grad, acc: acc + (grad-acc)/(8 + 1), grads, cumul_grads #TODO: Unhardcode 8 to be the number of accum steps
-        # )
-        # cumul_loss = jax.tree_util.tree_map(
-        #     lambda loss, acc: acc + (loss-acc)/(8 + 1), loss, cumul_loss #TODO: Unhardcode 8 to be the number of accum steps
-        # )
-
         cumul_grads = with_sharding_constraint(cumul_grads, param_spec)
         return cumul_loss, cumul_grads
 
@@ -597,7 +589,7 @@ def train_step(
 
     grads = with_sharding_constraint(grads, param_spec)
 
-    loss, grads = jax.tree_util.tree_map(lambda x: x / 8, (loss, grads))
+    loss, grads = jax.tree_util.tree_map(lambda x: x / 8, (loss, grads)) # TODO: Unhardcode these
 
     grads = with_sharding_constraint(grads, param_spec)
 
