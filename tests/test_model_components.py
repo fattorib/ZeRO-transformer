@@ -96,8 +96,6 @@ class TestAttn(unittest.TestCase):
         batch_cts = random.normal(self.rng, shape=(1, 512, 128))
         params = attn.init(self.init_rng, batch_cts, False)
 
-        alibi_mask = 
-
         out = attn.apply(
             {"params": params["params"]},
             batch_cts,
