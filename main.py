@@ -423,6 +423,9 @@ def main():
 
             text = text.reshape(-1, seq_len)
 
+            # we add a 'grad_accum' batch dimension
+            text = text.reshape(text.shape[0]//8, 8, seq_len)
+        
             t0 = time.time()
 
             state, metrics = pjit_train_step(
@@ -527,9 +530,12 @@ def train_step(
 
     """
 
+    # effective BS is (128,512)
+    # loop through this in groups of 16
+
     def get_minibatch(batch, grad_idx):
         return jax.tree_util.tree_map(
-            lambda x: jax.lax.dynamic_index_in_dim(x, grad_idx, keepdims=True),
+            lambda x: jax.lax.dynamic_index_in_dim(x, grad_idx, keepdims=False),
             batch,
         )
     
