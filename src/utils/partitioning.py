@@ -74,12 +74,12 @@ def _get_partition_rules():
         # attention
         (("(query_proj|key_proj|value_proj)", "kernel"), PartitionSpec(None, "mp")),
         (("residual_out", "kernel"), PartitionSpec("mp", None)),
-        (("(query_proj|key_proj|value_proj)", "bias"), PartitionSpec("mp")),
+        (("(query_proj|key_proj|value_proj)", "bias"), PartitionSpec(None)),
         (("residual_out", "bias"), PartitionSpec(None)),
         # MLP
         (("fc_in", "kernel"), PartitionSpec(None, "mp")),
         (("fc_residual", "kernel"), PartitionSpec("mp", None)),
-        (("fc_in", "bias"), PartitionSpec("mp")),
+        (("fc_in", "bias"), PartitionSpec(None)),
         (("fc_residual", "bias"), PartitionSpec(None)),
         # layer norms
         (
