@@ -47,7 +47,6 @@ def create_train_state(
     learning_rate_fn: Union[float, Callable],
     weight_decay: float,
     model: nn.Module,
-    grad_accum_steps: int,
 ):
     """Creates initial `TrainState` for model."""
     params = initialized(rng, model, input_shape=(1, 512))
@@ -67,13 +66,6 @@ def create_train_state(
             b2=0.95,
         ),
     )
-
-    # if grad_accum_steps > 1:
-    #     tx = optax.MultiSteps(
-    #         tx,
-    #         every_k_schedule=grad_accum_steps,
-    #         should_skip_update_fn=optax.skip_not_finite,
-    #     )
 
     state = TrainState.create(
         apply_fn=model.apply,
@@ -167,7 +159,6 @@ def get_optimizer(
     learning_rate_fn: Union[float, Callable],
     weight_decay: float,
     model: nn.Module,
-    grad_accum_steps: int,
     param_shape: Any,
 ):
     """
@@ -190,10 +181,4 @@ def get_optimizer(
         ),
     )
 
-    if grad_accum_steps > 1:
-        tx = optax.MultiSteps(
-            tx,
-            every_k_schedule=grad_accum_steps,
-            should_skip_update_fn=optax.skip_not_finite,
-        )
     return tx
