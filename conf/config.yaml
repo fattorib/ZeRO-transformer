@@ -1,5 +1,5 @@
 training:
-  max_epochs: 8
+  max_epochs: 4
   batch_size: 64
   peak_learning_rate: 2.5e-4
   warmup_steps: 2000
@@ -23,7 +23,7 @@ data:
   train_shard_urls: "data/processed/sharded/openwebtext_train-{000000..000125}.tar.gz"
   validation_shard_urls: "data/processed/sharded/openwebtext_val-{000000..000008}.tar.gz"
   max_context: 1024
-  full_steps_in_batch: 24558
+  full_steps_in_batch: 49117
   workers: 0
   checkpoint_directory: "checkpoints"
   bucket_path: "bfattoriwebtext2"
