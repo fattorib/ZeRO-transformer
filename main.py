@@ -364,7 +364,7 @@ def main():
 
     vl = DataLoader(
         dataset=validation_dataset,
-        batch_size=cfg.training.batch_size,
+        batch_size=cfg.training.batch_size//8,
         collate_fn=numpy_collate,
         drop_last=True,
     )
