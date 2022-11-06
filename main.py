@@ -22,12 +22,20 @@ from tqdm import tqdm
 
 import wandb
 from src.models.GPT import model_getter
-from src.training.training_utils import (TrainState, compute_tokens_seen,
-                                         create_train_state, get_optimizer)
+from src.training.training_utils import (
+    TrainState,
+    compute_tokens_seen,
+    create_train_state,
+    get_optimizer,
+)
 from src.utils.configs import flatten_dict
 from src.utils.dataloader import numpy_collate
-from src.utils.partitioning import (create_opt_spec, set_partitions,
-                                    setup_dp_mesh, setup_mp_mesh)
+from src.utils.partitioning import (
+    create_opt_spec,
+    set_partitions,
+    setup_dp_mesh,
+    setup_mp_mesh,
+)
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -131,7 +139,6 @@ def main():
             learning_rate_fn,
             weight_decay=cfg.training.weight_decay,
             model=model,
-            grad_accum_steps=cfg.training.gradient_accumulation_steps,
         )
         param_spec = None
 
@@ -165,7 +172,6 @@ def main():
             learning_rate_fn,
             weight_decay=cfg.training.weight_decay,
             model=model,
-            grad_accum_steps=cfg.training.gradient_accumulation_steps,
             param_shape=param_shape,
         )
 
@@ -208,7 +214,6 @@ def main():
                 learning_rate_fn,
                 weight_decay=cfg.training.weight_decay,
                 model=model,
-                grad_accum_steps=cfg.training.gradient_accumulation_steps,
             )
 
             if save_to_bucket:
@@ -289,7 +294,6 @@ def main():
     # This is computed in terms of absolute steps
     total_tokens = num_host * (
         cfg.training.batch_size
-        * cfg.training.gradient_accumulation_steps
         * compute_tokens_seen(
             cfg.training.total_steps,
             stages=cfg.training.staged_sequences,
@@ -362,7 +366,7 @@ def main():
 
     vl = DataLoader(
         dataset=validation_dataset,
-        batch_size=cfg.training.batch_size,
+        batch_size=cfg.training.batch_size // 8,
         collate_fn=numpy_collate,
         drop_last=True,
     )
@@ -389,7 +393,7 @@ def main():
         with mesh:
             pjit_train_step = pjit(
                 partial(train_step, param_spec=param_spec),
-                in_axis_resources=(state_spec, PartitionSpec("dp"), None),
+                in_axis_resources=(state_spec, PartitionSpec(None, "dp"), None),
                 out_axis_resources=(state_spec, None),
                 donate_argnums=(0,),
             )
@@ -404,9 +408,7 @@ def main():
 
         for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
-            if (
-                i // cfg.training.gradient_accumulation_steps
-            ) > cfg.training.total_steps:
+            if (i) > cfg.training.total_steps:
                 if jax.process_index() == 0:
                     logger.debug(f"Training has completed.")
 
@@ -421,6 +423,13 @@ def main():
 
             text = text.reshape(-1, seq_len)
 
+            # we add a 'grad_accum' batch dimension which we then iterate through in train_step
+            text = text.reshape(
+                cfg.training.gradient_accumulation_steps,
+                text.shape[0] // cfg.training.gradient_accumulation_steps,
+                seq_len,
+            )
+
             t0 = time.time()
 
             state, metrics = pjit_train_step(
@@ -434,94 +443,104 @@ def main():
 
             running_metrics.append(metrics)
 
-            if (i) % cfg.training.gradient_accumulation_steps == 0:
-                # we've completed a full batch of data, log the metrics
+            train_metrics_np = {
+                k: np.mean([metrics[k] for metrics in running_metrics])
+                for k in running_metrics[0]
+            }
 
-                train_metrics_np = {
-                    k: np.mean([metrics[k] for metrics in running_metrics])
-                    for k in running_metrics[0]
+            running_metrics = []
+            validation_metrics = []
+
+            absolute_step = i
+
+            train_metrics_np["Tokens Seen (B)"] = (
+                num_host
+                * (
+                    cfg.training.batch_size
+                    * compute_tokens_seen(
+                        absolute_step,
+                        stages=cfg.training.staged_sequences,
+                        max_steps=cfg.training.staged_warmup_steps,
+                        max_context=cfg.data.max_context,
+                    )
+                )
+                / 1e9
+            )
+
+            if (i) % (cfg.training.evaluation_frequency) == 0:
+                for val_it, val_text in enumerate(
+                    tqdm(vl, disable=not jax.process_index() == 0)
+                ):
+                    val_text = val_text[:, :512]
+                    if val_it < cfg.training.maximum_evaluation_steps:
+                        metrics = pjit_eval_step(state, val_text)
+                        validation_metrics.append(metrics)
+                    else:
+                        break
+
+                validation_metrics_np = {
+                    k: np.mean([metrics[k] for metrics in validation_metrics])
+                    for k in validation_metrics[0]
                 }
 
-                running_metrics = []
-                validation_metrics = []
+                if jax.process_index() == 0:
+                    train_metrics_np.update(validation_metrics_np)
+                    train_metrics_np.pop("Train Batch Time")
+                    wandb.log(train_metrics_np)
 
-                absolute_step = i // cfg.training.gradient_accumulation_steps
-
-                train_metrics_np["Tokens Seen (B)"] = (
-                    num_host
-                    * (
-                        cfg.training.batch_size
-                        * cfg.training.gradient_accumulation_steps
-                        * compute_tokens_seen(
-                            absolute_step,
-                            stages=cfg.training.staged_sequences,
-                            max_steps=cfg.training.staged_warmup_steps,
-                            max_context=cfg.data.max_context,
+                    if cfg.device.mp_devices > 1:
+                        device_state = jax.device_get(
+                            state
+                        )  # pull a copy of the sharded state to CPU and save
+                        save_checkpoint(
+                            device_state,
+                            workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
                         )
-                    )
-                    / 1e9
-                )
 
-                if (i) % (
-                    cfg.training.evaluation_frequency
-                    * cfg.training.gradient_accumulation_steps
-                ) == 0:
-                    for val_it, val_text in enumerate(
-                        tqdm(vl, disable=not jax.process_index() == 0)
-                    ):
-                        val_text = val_text[:,:512]
-                        if val_it < cfg.training.maximum_evaluation_steps:
-                            metrics = pjit_eval_step(state, val_text)
-                            validation_metrics.append(metrics)
-                        else:
-                            break
-
-                    validation_metrics_np = {
-                        k: np.mean([metrics[k] for metrics in validation_metrics])
-                        for k in validation_metrics[0]
-                    }
-
-                    if jax.process_index() == 0:
-                        train_metrics_np.update(validation_metrics_np)
-                        train_metrics_np.pop("Train Batch Time")
-                        wandb.log(train_metrics_np)
-
-                        if cfg.device.mp_devices > 1:
-                            device_state = jax.device_get(
-                                state
-                            )  # pull a copy of the sharded state to CPU and save
+                    else:
+                        if save_to_bucket:
                             save_checkpoint(
-                                device_state,
+                                state,
                                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
                             )
-
                         else:
-                            if save_to_bucket:
-                                save_checkpoint(
-                                    state,
-                                    workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                                )
-                            else:
-                                save_checkpoint(
-                                    state, workdir=cfg.data.checkpoint_directory
-                                )
+                            save_checkpoint(
+                                state, workdir=cfg.data.checkpoint_directory
+                            )
 
-                else:
-                    if jax.process_index() == 0:
-                        train_metrics_np["Train Step Time"] = (
-                            cfg.training.gradient_accumulation_steps
-                            * train_metrics_np["Train Batch Time"]
-                        )
-                        train_metrics_np.pop("Train Batch Time")
-                        wandb.log(train_metrics_np)
+            else:
+                if jax.process_index() == 0:
+                    train_metrics_np["Train Step Time"] = train_metrics_np[
+                        "Train Batch Time"
+                    ]
+                    train_metrics_np.pop("Train Batch Time")
+                    wandb.log(train_metrics_np)
 
 
 def train_step(
-    state: Any, batch: jnp.array, rng_key: random.PRNGKey = None, param_spec: Any = None
+    state: Any,
+    batch: jnp.array,
+    rng_key: jax.random.PRNGKey = None,
+    param_spec: Any = None,
 ):
-    """Train on a single batch"""
+    """Train on a single Gradient-Accumulation batch
+    This means that the batch will be size (local_bs*grad_accum, ctx) instead of (local_bs, ctx)
 
-    def loss_fn(params):
+    """
+
+    # Based off of Boris Dayma's train step for Dalle Mini
+    # By manually performing gradient accumulation, we avoid
+    # calling state.apply_gradients when we aren't actually updating the gradients (i.e. part way through a gradient accumulation step)
+    # every time state.apply_gradients is called, we perform an all-sync on the TrainState object when it isn't needed!
+    # This manual implementation results in an
+
+    def get_minibatch(batch, grad_idx):
+        return jax.tree_util.tree_map(
+            lambda x: jax.lax.dynamic_index_in_dim(x, grad_idx, keepdims=False),
+            batch,
+        )
+
+    def loss_fn(params, batch):
         _, loss = state.apply_fn(
             {"params": params["params"]},
             x=batch,
@@ -529,15 +548,60 @@ def train_step(
             train=True,
             rngs={"dropout": rng_key},
         )
-
         return loss
 
     grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
-    loss, grads = grad_fn(state.params)
 
-    if param_spec is not None:
+    def loss_and_grad(grad_idx):
+        minibatch = get_minibatch(batch, grad_idx) if grad_idx is not None else batch
+        minibatch = with_sharding_constraint(minibatch, PartitionSpec("dp"))
+
+        loss, grads = grad_fn(state.params, minibatch)
+
         grads = with_sharding_constraint(grads, param_spec)
 
+        return loss, grads
+
+    init_minibatch = (
+        0.0,
+        with_sharding_constraint(
+            jax.tree_util.tree_map(jnp.zeros_like, state.params), param_spec
+        ),
+    )
+
+    # accumulate gradients
+    def cumul_minibatch_step(grad_idx, cumul_loss_grad):
+        cumul_loss, cumul_grads = cumul_loss_grad
+        loss, grads = loss_and_grad(grad_idx)
+        cumul_loss, cumul_grads = jax.tree_util.tree_map(
+            jnp.add, (cumul_loss, cumul_grads), (loss, grads)
+        )
+
+        # Better approach for computing accumulated gradients. Better numerical stability + we don't have to call another tree_map later
+        # cumul_grads = jax.tree_util.tree_map(
+        #     lambda grad, acc: acc + (grad-acc)/(8 + 1), grads, cumul_grads #TODO: Unhardcode 8 to be the number of accum steps
+        # )
+        # cumul_loss = jax.tree_util.tree_map(
+        #     lambda loss, acc: acc + (loss-acc)/(8 + 1), loss, cumul_loss #TODO: Unhardcode 8 to be the number of accum steps
+        # )
+
+        cumul_grads = with_sharding_constraint(cumul_grads, param_spec)
+        return cumul_loss, cumul_grads
+
+    loss, grads = jax.lax.fori_loop(
+        0,
+        8,  # TODO: Unhardcode these
+        cumul_minibatch_step,
+        init_minibatch,
+    )
+
+    grads = with_sharding_constraint(grads, param_spec)
+
+    loss, grads = jax.tree_util.tree_map(lambda x: x / 8, (loss, grads))
+
+    grads = with_sharding_constraint(grads, param_spec)
+
+    # only update train_state at the end of a single full batch
     new_state = state.apply_gradients(
         grads=grads,
     )
