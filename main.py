@@ -424,7 +424,8 @@ def main():
             text = text.reshape(-1, seq_len)
 
             # we add a 'grad_accum' batch dimension
-            text = text.reshape(text.shape[0]//8, 8, seq_len)
+            # takes element of BS (global_bs, 512) and reshapes to (grad_accum_cnt, bs, 512)
+            text = text.reshape(8, text.shape[0]//8, seq_len)
         
             t0 = time.time()
 
@@ -551,7 +552,7 @@ def train_step(
 
     grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
 
-    def loss_and_grad(grad_idx, dropout_rng): #TODO: Maybe fix dropout rng?
+    def loss_and_grad(grad_idx, dropout_rng): 
         minibatch = (
                 get_minibatch(batch, grad_idx) if grad_idx is not None else batch
             )
