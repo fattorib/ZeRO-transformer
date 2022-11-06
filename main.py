@@ -385,7 +385,7 @@ def main():
         with mesh:
             pjit_train_step = pjit(
                 partial(train_step, param_spec=param_spec),
-                in_axis_resources=(state_spec, PartitionSpec("dp"), None),
+                in_axis_resources=(state_spec, PartitionSpec(None, "dp"), None),
                 out_axis_resources=(state_spec, None),
                 donate_argnums=(0,),
             )
