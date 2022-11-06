@@ -425,6 +425,7 @@ def main():
 
             # we add a 'grad_accum' batch dimension
             # in our case, we have BS (64, 512) -> (grad_accum_cnt, bs, 512)
+            # within train_step, we look over the first axis
             text = text.reshape(8, text.shape[0]//8, seq_len)
         
             t0 = time.time()
@@ -540,7 +541,7 @@ def train_step(
             batch,
         )
     
-    def loss_fn(params, batch, rng_key):
+    def loss_fn(params, batch):
         _, loss = state.apply_fn(
             {"params": params["params"]},
             x=batch,
@@ -552,19 +553,17 @@ def train_step(
 
     grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
 
-    def loss_and_grad(grad_idx, dropout_rng): 
+    def loss_and_grad(grad_idx): 
         minibatch = (
                 get_minibatch(batch, grad_idx) if grad_idx is not None else batch
             )
         minibatch = with_sharding_constraint(minibatch, PartitionSpec('dp'))
 
-        rng_new, rng_drop = jax.random.split(dropout_rng)
-
-        loss, grads = grad_fn(state.params, minibatch, rng_drop)
+        loss, grads = grad_fn(state.params, minibatch)
 
         grads = with_sharding_constraint(grads, param_spec)
 
-        return loss, grads, rng_new
+        return loss, grads
 
     init_minibatch = (
         0.0, 
@@ -576,15 +575,15 @@ def train_step(
 
     # accumulate gradients
     def cumul_minibatch_step(grad_idx, cumul_loss_grad):
-        cumul_loss, cumul_grads, dropout_rng = cumul_loss_grad
-        loss, grads = loss_and_grad(grad_idx, dropout_rng)
+        cumul_loss, cumul_grads = cumul_loss_grad
+        loss, grads = loss_and_grad(grad_idx)
         cumul_loss, cumul_grads = jax.tree_util.tree_map(
             jnp.add, (cumul_loss, cumul_grads), (loss, grads)
         )
         cumul_grads = with_sharding_constraint(cumul_grads, param_spec)
-        return cumul_loss, cumul_grads, dropout_rng
+        return cumul_loss, cumul_grads
 
-    loss, grads, dropout_rng = jax.lax.fori_loop(
+    loss, grads = jax.lax.fori_loop(
                 0,
                 8, #TODO: Unhardcode these
                 cumul_minibatch_step,
