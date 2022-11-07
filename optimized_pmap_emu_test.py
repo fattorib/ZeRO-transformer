@@ -3,18 +3,18 @@ import os
 from typing import Any
 
 import jax
+from flax.jax_utils import replicate
+from flax.training.common_utils import shard, shard_prng_key
 
+from optimized_pmap import train_step
 from src.models.GPT import model_getter
 from src.training.training_utils import create_train_state
 from src.utils.partitioning import set_partitions
-from flax.training.common_utils import shard, shard_prng_key
-from flax.jax_utils import replicate
-from optimized_pmap import train_step
 
 os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=4"
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     model = model_getter("small", return_cfg=False)
 
@@ -24,16 +24,16 @@ if __name__ == '__main__':
     param_spec = set_partitions(param_shape)
 
     state = create_train_state(
-                rng,
-                3e-4,
-                weight_decay=0.1,
-                model=model,
-            )
+        rng,
+        3e-4,
+        weight_decay=0.1,
+        model=model,
+    )
 
     state = replicate(state)
 
     global_bs = 128
-    ga_steps = 8 
+    ga_steps = 8
     seq_len = 32
 
     # giving correct init loss, need to try this out in some v2 benchmarks tomorrow!
@@ -41,7 +41,9 @@ if __name__ == '__main__':
     test_batch = jax.random.randint(rng, (global_bs, seq_len), maxval=50257, minval=0)
 
     # shape is ga_steps, local_bs, ctx
-    test_batch = test_batch.reshape(ga_steps, global_bs//ga_steps, seq_len).transpose(1,0,2)
+    test_batch = test_batch.reshape(ga_steps, global_bs // ga_steps, seq_len).transpose(
+        1, 0, 2
+    )
 
     print(test_batch.shape)
 
@@ -53,7 +55,6 @@ if __name__ == '__main__':
     state, metrics = train_step(state, test_batch, rng_sharded, ga_steps)
 
     print(metrics)
-
 
     """"
     

@@ -1,13 +1,19 @@
 """
 Benchmarking my original pmap DP implementation versus a more optimized one. 
 
-The initial 'naive' implementation wraps gradient accumulation through an optax multisteps optimizer. 
+The initial 'naive' implementation wraps gradient accumulation through an 
+optax multisteps optimizer. 
 
-Because of this, for every microbatch (subbatch of full batch), we have to call state.apply_gradients to update the inner
-optimizer step state. This requires syncing of loss and gradients across all devices even if an optimizer gradient step is not performed
+Because of this, for every microbatch (subbatch of full batch), we have to call 
+state.apply_gradients to update the inneroptimizer step state. This requires 
+syncing of loss and gradients across all devices even if an optimizer gradient 
+step is not performed. This communication is redundant and really only needs to 
+be performed once a gradient update. 
 
-In the optimized implementation, we perform the gradient accumulation ourselves and only call jax.lax.pmean at the end of a full batch. In theory this optimized version 
-has accum_steps fewer collective communications so it should be significantly faster. 
+In the optimized implementation, we perform the gradient accumulation ourselves 
+and only call jax.lax.pmean at the end of a full batch. In theory this optimized 
+version has accum_steps fewer collective communications so it should be 
+significantly faster. 
 
 """
 
@@ -148,6 +154,7 @@ if __name__ == "__main__":
         V2-8 Benchmarks
         
         ~125M Params Transformer with ctx = 512
+
             Global BS 512 - accum steps 32 - Num Executions 100 - 40% speedup!
                 Optimized Pmap Step - Global BS 512 - accum steps 32 - Num Executions 100
                 Mean Batch Time 2.0715 Seconds Per Batch
@@ -157,11 +164,10 @@ if __name__ == "__main__":
 
             Global BS 512 - accum steps 64 - Num Executions 100 - 
                 Optimized Pmap Step - Global BS 512 - accum steps 64 - Num Executions 100
+                Mean Batch Time 2.3332 Seconds
 
                 Naive Pmap Step - Global BS 512 - accum steps 64 - Num Executions 100
             
-
-
 
         ~350M Params Transformer with ctx = 512
         
