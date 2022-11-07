@@ -47,12 +47,6 @@ data:
 
 ALiBi (Attention with Linear Biases) modifies the attention matrix by adding in a position-dependant bias matrix before the softmax layer. Empirically, this has been shown to allow GPT-style transformer models to *retain* their performance on sequences longer than what they were trained on (usually you will see minimal PPL improvements when increasing the context length, this is still better than other relative position embeddings and it is quite fast). In your ```model_config``` file, set ```alibi_attn``` to ```True```. **Enabled by default**
 
-## Channel-Split SGU
-
-*I'm unable to find the paper that introduces this idea but I know it exists* Channel split SGU takes each token embedding and splits the total embedding dimensions in two. Half of the embeddings are attented to normally with MHA and the other half of the embeddings are fed through a fixed causal SGU with a relatively small kernel. In theory, the short-range mixing from the SGU kernel should allow the attention part of the embedding to attend to longer-range dependancies as the short range dependances are handled automatically through the SGU. In your ```model_config``` file, set ```use_static_sgu``` to ```True```. **Disabled by default**
-
-## Head-QK Trick
-See [here](https://github.com/BlinkDL/RWKV-LM#the-head-qk-trick-learning-to-copy-and-avoid-tokens) for an explanation. In your ```model_config``` file, set ```head_qk_trick``` to ```True```. **Disabled by default**
 
 ## Parallel Residual Blocks
 
@@ -71,26 +65,6 @@ See ```writeup.md```
 # Acknowledgements
 TPU Development and training supported with Cloud TPUs from Google's TPU Research Cloud (TRC)
 
-# Text Generation
-
-For now, we only support greedy decoding, and temperature-based sampling. Generation is very slow as I haven't implemented caching of past states yet. To sample from a trained model:
-
-```python 
-# load model and state
-tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-sample_text = "This is a sample text sentence that"
-tokenized_text = tokenizer.encode(sample_text)
-generation_rng = jax.random.PRNGKey(23)
-out = model.generate(
-    state_params,
-    tokenized_text,
-    max_length=100,
-    temperature=0.7,
-    sample=True,
-    sample_rng=generation_rng,
-)
-tokenized_text_out = tokenizer.decode(out)
-```
 
 # Testing
 ```bash 
