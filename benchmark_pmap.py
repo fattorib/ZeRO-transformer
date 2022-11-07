@@ -54,7 +54,7 @@ def main_optimized():
         times.append(time() - t0)
     
     print(f"Optimized Pmap Step - Global BS {GLOBAL_BATCH_SIZE} - accum steps {GRADIENT_ACCUMULATION_STEPS} - Num Executions {NUM_PASSES}")
-    print(f"Mean Batch Time {np.mean(times):.4f}")
+    print(f"Mean Batch Time {np.mean(times):.4f} Seconds")
     print()
 
 
@@ -91,12 +91,12 @@ def main_naive():
             test_batch = shard(test_batch)
             rng_sharded = shard_prng_key(rng)
             t0 = time()
-            train_step(state, test_batch, rng_sharded, GRADIENT_ACCUMULATION_STEPS)
+            naive_train_step(state, test_batch, rng_sharded)
             single_batch_times.append(time() - t0)
         times.append(sum(single_batch_times))
     
     print(f"Naive Pmap Step - Global BS {GLOBAL_BATCH_SIZE} - accum steps {GRADIENT_ACCUMULATION_STEPS} - Num Executions {NUM_PASSES}")
-    print(f"Mean Batch Time {np.mean(times):.4f}")
+    print(f"Mean Batch Time {np.mean(times):.4f} Seconds")
 
 
 
@@ -107,10 +107,12 @@ if __name__ == '__main__':
     main_naive()
 
     """
-    V2-8 Benchmarks
+        V2-8 Benchmarks
+        125M Params Transformer with ctx = 512
 
-    Optimized Pmap Step - Global BS 512 - accum steps 16 - Num Executions 100
-    Mean Batch Time 2.0179916334152224 s
+
+
+    
 
 
     """

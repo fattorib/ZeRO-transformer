@@ -64,6 +64,7 @@ def train_step(
 
         return cumul_loss, cumul_grads
 
+    # this logic could probably be movied into cumul_minibatch_step, 
     loss, grads = jax.lax.fori_loop(
         0,
         accum_steps,
