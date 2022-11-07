@@ -7,6 +7,7 @@ from optimized_pmap import naive_train_step, train_step
 from flax.training.common_utils import shard, shard_prng_key
 from flax.jax_utils import replicate
 import numpy as np 
+from tqdm import tqdm 
 
 GLOBAL_BATCH_SIZE = 512
 GRADIENT_ACCUMULATION_STEPS = 8
@@ -40,7 +41,7 @@ def main_optimized():
     train_step(state, test_batch, rng_sharded, GRADIENT_ACCUMULATION_STEPS)
 
     times = []
-    for _ in range(NUM_PASSES):
+    for _ in tqdm(range(NUM_PASSES)):
         rng, batch_rng = jax.random.split(rng, 2)
         test_batch = jax.random.randint(batch_rng, (GLOBAL_BATCH_SIZE, SEQ_LEN), maxval=50257, minval=0)
         test_batch = test_batch.reshape(GRADIENT_ACCUMULATION_STEPS, GLOBAL_BATCH_SIZE//GRADIENT_ACCUMULATION_STEPS, SEQ_LEN).transpose(1,0,2)
@@ -80,7 +81,7 @@ def main_naive():
     naive_train_step(state, test_batch, rng_sharded)
 
     times = []
-    for _ in range(NUM_PASSES):
+    for _ in tqdm(range(NUM_PASSES)):
         rng, batch_rng = jax.random.split(rng, 2)
         single_batch_times = []
         for _ in range(GRADIENT_ACCUMULATION_STEPS):

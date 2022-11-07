@@ -19,12 +19,12 @@ unittest:
   alibi_attn: True
 
 small:
-  embedding_dim: 256
+  embedding_dim: 64
   vocab_size: 50258
   num_head: 8
-  block_size: 64
-  dropout: 0.5
-  N: 4
+  block_size: 32
+  dropout: 0.1
+  N: 2
   fused_residuals: True
   alibi_attn: True
 
