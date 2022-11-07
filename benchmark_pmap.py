@@ -74,7 +74,7 @@ def main_naive():
     #replicate state across devices 
     state = replicate(state)
 
-    # compile optimized train_step by doing single fwd pass 
+    # compile naive train_step by doing single fwd pass 
     rng, batch_rng = jax.random.split(init_rng, 2)
     test_batch = jax.random.randint(batch_rng, (GLOBAL_BATCH_SIZE//GRADIENT_ACCUMULATION_STEPS, SEQ_LEN), maxval=50257, minval=0)
     # shard first dimension across devices
