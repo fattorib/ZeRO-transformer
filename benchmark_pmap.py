@@ -18,7 +18,7 @@ NUM_PASSES = 100
 
 def main_optimized():
     # base model is ~125M params
-    model = model_getter("base", return_cfg=False)
+    model = model_getter("medium", return_cfg=False)
 
     # State Creation, etc 
     init_rng = jax.random.PRNGKey(0)
@@ -110,9 +110,18 @@ if __name__ == '__main__':
         V2-8 Benchmarks
         
         ~125M Params Transformer with ctx = 512
+            Global BS 512 - accum steps 32 - Num Executions 100 - 40% speedup!
+                Optimized Pmap Step - Global BS 512 - accum steps 32 - Num Executions 100
+                Mean Batch Time 2.0715 Seconds Per Batch
 
-            Optimized Pmap Step - Global BS 512 - accum steps 32 - Num Executions 100
-            Mean Batch Time 2.0715 Seconds Per Batch
+                Naive Pmap Step - Global BS 512 - accum steps 32 - Num Executions 100
+                Mean Batch Time 3.4460 Seconds
+
+            Global BS 512 - accum steps 64 - Num Executions 100 - 
+                Optimized Pmap Step - Global BS 512 - accum steps 64 - Num Executions 100
+
+                Naive Pmap Step - Global BS 512 - accum steps 64 - Num Executions 100
+            
 
 
 
