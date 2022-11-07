@@ -12,7 +12,7 @@ from tqdm import tqdm
 # the quantity GLOBAL_BATCH_SIZE must be divisible by 8 (or num local devices)
 
 GLOBAL_BATCH_SIZE = 512
-GRADIENT_ACCUMULATION_STEPS = 8
+GRADIENT_ACCUMULATION_STEPS = 16
 SEQ_LEN = 512
 NUM_PASSES = 100
 
@@ -106,3 +106,9 @@ if __name__ == '__main__':
 
     main_naive()
 
+    """
+    V2-8 Benchmarks
+
+
+
+    """
