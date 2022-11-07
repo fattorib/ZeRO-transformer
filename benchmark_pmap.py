@@ -33,7 +33,7 @@ from src.training.training_utils import create_train_state
 GLOBAL_BATCH_SIZE = 512
 GRADIENT_ACCUMULATION_STEPS = 64
 SEQ_LEN = 512
-NUM_PASSES = 100
+NUM_PASSES = 20
 
 
 def main_optimized():
