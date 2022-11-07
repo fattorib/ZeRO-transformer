@@ -22,20 +22,12 @@ from tqdm import tqdm
 
 import wandb
 from src.models.GPT import model_getter
-from src.training.training_utils import (
-    TrainState,
-    compute_tokens_seen,
-    create_train_state,
-    get_optimizer,
-)
+from src.training.training_utils import (TrainState, compute_tokens_seen,
+                                         create_train_state, get_optimizer)
 from src.utils.configs import flatten_dict
 from src.utils.dataloader import numpy_collate
-from src.utils.partitioning import (
-    create_opt_spec,
-    set_partitions,
-    setup_dp_mesh,
-    setup_mp_mesh,
-)
+from src.utils.partitioning import (create_opt_spec, set_partitions,
+                                    setup_dp_mesh, setup_mp_mesh)
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -589,7 +581,9 @@ def train_step(
 
     grads = with_sharding_constraint(grads, param_spec)
 
-    loss, grads = jax.tree_util.tree_map(lambda x: x / 8, (loss, grads)) # TODO: Unhardcode these
+    loss, grads = jax.tree_util.tree_map(
+        lambda x: x / 8, (loss, grads)
+    )  # TODO: Unhardcode these
 
     grads = with_sharding_constraint(grads, param_spec)
 
