@@ -45,7 +45,7 @@ medium:
   num_head: 16
   block_size: 512
   dropout: 0.1
-  N: 24
+  N: 20
   fused_residuals: True
   alibi_attn: True
 

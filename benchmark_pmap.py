@@ -167,6 +167,7 @@ if __name__ == "__main__":
                 Mean Batch Time 2.3332 Seconds
 
                 Naive Pmap Step - Global BS 512 - accum steps 64 - Num Executions 100
+                Mean Batch Time 5.1833 Seconds
             
 
         ~350M Params Transformer with ctx = 512
