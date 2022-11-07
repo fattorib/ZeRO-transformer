@@ -12,7 +12,7 @@ from tqdm import tqdm
 # the quantity GLOBAL_BATCH_SIZE must be divisible by 8 (or num local devices)
 
 GLOBAL_BATCH_SIZE = 512
-GRADIENT_ACCUMULATION_STEPS = 32
+GRADIENT_ACCUMULATION_STEPS = 64
 SEQ_LEN = 512
 NUM_PASSES = 100
 
@@ -102,17 +102,23 @@ def main_naive():
 
 
 if __name__ == '__main__':
-    # main_optimized()
+    main_optimized()
 
     main_naive()
 
     """
         V2-8 Benchmarks
-        125M Params Transformer with ctx = 512
+        
+        ~125M Params Transformer with ctx = 512
+
+            Optimized Pmap Step - Global BS 512 - accum steps 32 - Num Executions 100
+            Mean Batch Time 2.0715 Seconds Per Batch
 
 
 
-    
+        ~350M Params Transformer with ctx = 512
+        
+
 
 
     """
