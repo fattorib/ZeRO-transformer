@@ -52,6 +52,7 @@ def main_optimized():
     
     print(f"Optimized Pmap Step - Global BS {GLOBAL_BATCH_SIZE} - accum steps {GRADIENT_ACCUMULATION_STEPS} - Num Executions {NUM_PASSES}")
     print(f"Mean Batch Time {np.mean(times)}")
+    print()
 
 
 def main_naive():
