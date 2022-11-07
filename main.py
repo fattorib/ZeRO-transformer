@@ -62,7 +62,7 @@ def parse():
 def save_checkpoint(state, workdir, bucket_path=None, client=None):
     if jax.process_index() == 0:
         step = int(state.step)
-        checkpoints.save_checkpoint(workdir, state, step, keep=3, overwrite=True)
+        checkpoints.save_checkpoint(workdir, state, step, keep=6, overwrite=True)
 
 
 def restore_checkpoint(state, workdir, prefix):
