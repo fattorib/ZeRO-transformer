@@ -54,7 +54,7 @@ def main_optimized():
         times.append(time() - t0)
     
     print(f"Optimized Pmap Step - Global BS {GLOBAL_BATCH_SIZE} - accum steps {GRADIENT_ACCUMULATION_STEPS} - Num Executions {NUM_PASSES}")
-    print(f"Mean Batch Time {np.mean(times)}")
+    print(f"Mean Batch Time {np.mean(times):.4f}")
     print()
 
 
@@ -96,7 +96,7 @@ def main_naive():
         times.append(sum(single_batch_times))
     
     print(f"Naive Pmap Step - Global BS {GLOBAL_BATCH_SIZE} - accum steps {GRADIENT_ACCUMULATION_STEPS} - Num Executions {NUM_PASSES}")
-    print(f"Mean Batch Time {np.mean(times)}")
+    print(f"Mean Batch Time {np.mean(times):.4f}")
 
 
 
@@ -109,6 +109,8 @@ if __name__ == '__main__':
     """
     V2-8 Benchmarks
 
+    Optimized Pmap Step - Global BS 512 - accum steps 16 - Num Executions 100
+    Mean Batch Time 2.0179916334152224 s
 
 
     """

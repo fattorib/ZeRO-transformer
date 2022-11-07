@@ -105,7 +105,7 @@ def naive_train_step(state: Any, batch: jnp.array, rng_key: jax.random.PRNGKey =
         return loss
 
     
-    grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
+    grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
     loss, grads = grad_fn(state.params)
     # NOTE: compute all-reduce mean for gradients and loss
     # Ex: If we have 8 devices, each device takes the gradients from the other 7 and averages them all together
