@@ -102,7 +102,7 @@ def main_naive():
 
 
 if __name__ == '__main__':
-    main_optimized()
+    # main_optimized()
 
     main_naive()
 
