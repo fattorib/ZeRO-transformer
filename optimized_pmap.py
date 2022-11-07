@@ -11,7 +11,7 @@ import jax
 import jax.numpy as jnp
 
 
-@partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=(3,))
+@partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=(3,), donate_argnums = (0,))
 def train_step(
     state: Any,
     batch: jnp.array,
@@ -88,7 +88,7 @@ def train_step(
     return new_state, metrics
 
 
-@partial(jax.pmap, axis_name="batch")
+@partial(jax.pmap, axis_name="batch", donate_argnums = (0,))
 def naive_train_step(state: Any, batch: jnp.array, rng_key: jax.random.PRNGKey = None):
     """Train on a single micro batch of data"""
 
