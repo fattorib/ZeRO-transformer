@@ -54,15 +54,15 @@ def parse():
 
 
 def save_checkpoint(state, workdir, bucket_path=None, client=None):
-    # if jax.process_index() == 0:
-    #     step = int(state.step)
-    #     checkpoints.save_checkpoint(workdir, state, step, keep=3, overwrite=True)
-    pass
+    if jax.process_index() == 0:
+        state = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], state))
+        step = int(state.step)
+        checkpoints.save_checkpoint(workdir, state, step, keep=3, overwrite=True)
+    
 
 
 def restore_checkpoint(state, workdir, prefix):
-    # return checkpoints.restore_checkpoint(workdir, state, prefix=prefix)
-    pass
+    return checkpoints.restore_checkpoint(workdir, state, prefix=prefix)
 
 
 def main():
@@ -176,15 +176,15 @@ def main():
                 f"Running sequence length warmup for {cfg.training.staged_warmup_steps} total steps with stages: {cfg.training.staged_sequences}"
             )
 
-    # if not args.resume:
-    #     if cfg.data.bucket_path is not None:
-    #         # clear bucket
-    #         client = storage.Client()
-    #         if jax.process_index() == 0:
-    #             bucket = storage.Bucket(client, f"{cfg.data.bucket_path}")
-    #             blobs = bucket.list_blobs(prefix=f"{cfg.data.checkpoint_directory}")
-    #             for blob in blobs:
-    #                 blob.delete()
+    if not args.resume:
+        if cfg.data.bucket_path is not None:
+            # clear bucket
+            client = storage.Client()
+            if jax.process_index() == 0:
+                bucket = storage.Bucket(client, f"{cfg.data.bucket_path}")
+                blobs = bucket.list_blobs(prefix=f"{cfg.data.checkpoint_directory}")
+                for blob in blobs:
+                    blob.delete()
 
     local_batch_size = cfg.training.batch_size // (
         jax.local_device_count() // cfg.device.mp_devices
