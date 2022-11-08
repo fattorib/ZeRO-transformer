@@ -239,20 +239,19 @@ def main():
     train_dataset = wds.DataPipeline(
         wds.SimpleShardList(train_shards),
         split_by_jax_process,
-        wds.tarfile_to_samples(handler=wds.ignore_and_continue),
+        wds.tarfile_to_samples(handler=wds.warn_and_continue),
         wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23)),
-        wds.decode(handler=wds.ignore_and_continue),
+        wds.decode(handler=wds.warn_and_continue),
         wds.map(preprocess),
     ).repeat(nepochs=cfg.training.max_epochs)
 
     validation_dataset = wds.DataPipeline(
         wds.SimpleShardList(validation_shards),
         split_by_jax_process,
-        wds.tarfile_to_samples(handler=wds.ignore_and_continue),
+        wds.tarfile_to_samples(handler=wds.warn_and_continue),
         wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23)),
-        wds.decode(handler=wds.ignore_and_continue),
+        wds.decode(handler=wds.warn_and_continue),
         wds.map(preprocess),
-        handler=wds.ignore_and_continue,
     )
 
     tl = DataLoader(
