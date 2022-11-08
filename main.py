@@ -1,5 +1,4 @@
 import argparse
-import io
 import logging
 import random as pyrandom
 import time
@@ -15,21 +14,15 @@ import torch
 import webdataset as wds
 from flax.training import checkpoints
 from flax.training.common_utils import shard, shard_prng_key
-from jax import random
-from jax.experimental import PartitionSpec
-from jax.experimental.pjit import pjit, with_sharding_constraint
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import wandb
 from src.models.GPT import model_getter
-from src.training.training_utils import (TrainState, compute_tokens_seen,
-                                         create_train_state, get_optimizer)
+from src.training.training_utils import compute_tokens_seen, create_train_state
 from src.utils.configs import flatten_dict
 from src.utils.dataloader import numpy_collate
-from src.utils.partitioning import (create_opt_spec, set_partitions,
-                                    setup_dp_mesh, setup_mp_mesh)
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -53,12 +46,11 @@ def parse():
     return args
 
 
-def save_checkpoint(state, workdir, bucket_path=None, client=None):
+def save_checkpoint(state, workdir):
     if jax.process_index() == 0:
         state = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], state))
         step = int(state.step)
         checkpoints.save_checkpoint(workdir, state, step, keep=3, overwrite=True)
-    
 
 
 def restore_checkpoint(state, workdir, prefix):
@@ -76,8 +68,8 @@ def main():
     platform = jax.local_devices()[0].platform
 
     assert (
-        num_devices // (cfg.device.dp_devices * cfg.device.mp_devices) == 1
-    ), f"Incorrect mesh shape specified for {num_devices} devices with mesh shape {(cfg.device.dp_devices,cfg.device.mp_devices)}. Check your device configs"
+        cfg.device.mp_devices == 1
+    ), f"This train script only supports data parallel training through pmap."
 
     if cfg.training.precision == "fp16":
         model_dtype = jnp.float16
@@ -120,12 +112,6 @@ def main():
 
     rng = jax.random.PRNGKey(0)
     rng, init_rng = jax.random.split(rng)
-
-    if cfg.device.mp_devices == 1:
-        mesh = setup_dp_mesh()
-
-    else:
-        mesh = setup_mp_mesh(cfg)
 
     resume_step = None
 
