@@ -6,6 +6,7 @@ import time
 from functools import partial
 from typing import Any
 
+import flax
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -13,11 +14,10 @@ import optax
 import torch
 import webdataset as wds
 from flax.training import checkpoints
+from flax.training.common_utils import shard, shard_prng_key
 from jax import random
 from jax.experimental import PartitionSpec
 from jax.experimental.pjit import pjit, with_sharding_constraint
-from flax.training.common_utils import shard, shard_prng_key
-import flax 
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -54,15 +54,13 @@ def parse():
 
 
 def save_checkpoint(state, workdir, bucket_path=None, client=None):
-    # if jax.process_index() == 0:
-    #     step = int(state.step)
-    #     checkpoints.save_checkpoint(workdir, state, step, keep=3, overwrite=True)
-    pass
+    if jax.process_index() == 0:
+        step = int(state.step)
+        checkpoints.save_checkpoint(workdir, state, step, keep=3, overwrite=True)
 
 
 def restore_checkpoint(state, workdir, prefix):
-    # return checkpoints.restore_checkpoint(workdir, state, prefix=prefix)
-    pass
+    return checkpoints.restore_checkpoint(workdir, state, prefix=prefix)
 
 
 def main():
@@ -154,7 +152,7 @@ def main():
             resume_step = int(state.step)
 
     else:
-        pass 
+        pass
 
     if jax.process_index() == 0:
         logger.debug(f"VM setup with {num_devices} devices.")
@@ -176,15 +174,15 @@ def main():
                 f"Running sequence length warmup for {cfg.training.staged_warmup_steps} total steps with stages: {cfg.training.staged_sequences}"
             )
 
-    # if not args.resume:
-    #     if cfg.data.bucket_path is not None:
-    #         # clear bucket
-    #         client = storage.Client()
-    #         if jax.process_index() == 0:
-    #             bucket = storage.Bucket(client, f"{cfg.data.bucket_path}")
-    #             blobs = bucket.list_blobs(prefix=f"{cfg.data.checkpoint_directory}")
-    #             for blob in blobs:
-    #                 blob.delete()
+    if not args.resume:
+        if cfg.data.bucket_path is not None:
+            # clear bucket
+            client = storage.Client()
+            if jax.process_index() == 0:
+                bucket = storage.Bucket(client, f"{cfg.data.bucket_path}")
+                blobs = bucket.list_blobs(prefix=f"{cfg.data.checkpoint_directory}")
+                for blob in blobs:
+                    blob.delete()
 
     local_batch_size = cfg.training.batch_size // (
         jax.local_device_count() // cfg.device.mp_devices
@@ -307,10 +305,7 @@ def main():
         t0 = time.time()
 
         state, metrics = train_step(
-            state,
-            text,
-            rng_sharded,
-            cfg.training.gradient_accumulation_steps
+            state, text, rng_sharded, cfg.training.gradient_accumulation_steps
         )
 
         metrics["Train Batch Time"] = time.time() - t0
@@ -379,9 +374,7 @@ def main():
                             workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
                         )
                     else:
-                        save_checkpoint(
-                            state, workdir=cfg.data.checkpoint_directory
-                        )
+                        save_checkpoint(state, workdir=cfg.data.checkpoint_directory)
 
         else:
             if jax.process_index() == 0:
@@ -392,7 +385,9 @@ def main():
                 wandb.log(train_metrics_np)
 
 
-@partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=(3,), donate_argnums = (0,))
+@partial(
+    jax.pmap, axis_name="batch", static_broadcasted_argnums=(3,), donate_argnums=(0,)
+)
 def train_step(
     state: Any,
     batch: jnp.array,
@@ -467,6 +462,7 @@ def train_step(
     }
 
     return new_state, metrics
+
 
 @partial(jax.pmap, axis_name="batch")
 def eval_step(state: Any, batch: jnp.array):
