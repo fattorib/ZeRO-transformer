@@ -262,7 +262,7 @@ def main():
 
     for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
-        if (i) > cfg.training.total_steps:
+        if (i+resume_step) > cfg.training.total_steps:
             if jax.process_index() == 0:
                 logger.debug(f"Training has completed.")
 
@@ -308,7 +308,7 @@ def main():
         running_metrics = []
         validation_metrics = []
 
-        absolute_step = i
+        absolute_step = i+resume_step
 
         train_metrics_np["Tokens Seen (B)"] = (
             num_host

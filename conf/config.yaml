@@ -7,7 +7,7 @@ training:
   total_steps: 196000
   end_learning_rate: 2.7e-5
   weight_decay: 0.1
-  # corresponds to full CTX BS of 256 on 4 host TPU -> reshape to 512 CTX BS of 512
+  # corresponds to full CTX BS of 512 on 4 host TPU -> reshape to 512 CTX BS of 1024
   # full batch of 0.5M tokens
   gradient_accumulation_steps: 32
   evaluation_frequency: 500
@@ -24,7 +24,7 @@ data:
   train_shard_urls: "data/processed/sharded/openwebtext_train-{000000..000125}.tar.gz"
   validation_shard_urls: "data/processed/sharded/openwebtext_val-{000000..000008}.tar.gz"
   max_context: 1024
-  full_steps_in_batch: 49117
+  full_steps_in_batch: 24558
   workers: 0
   checkpoint_directory: "checkpoints"
   bucket_path: "bfattoriwebtext2"
