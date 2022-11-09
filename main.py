@@ -268,7 +268,8 @@ def main():
 
             return True
 
-        if resume_step != None and i <= resume_step:
+        if resume_step != None and (i <= resume_step%24558):
+            # since we repeat epochs, just iterate partially through repeated ds
             continue
 
         rng, dropout_rng = jax.random.split(rng, 2)
