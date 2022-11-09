@@ -50,7 +50,7 @@ def save_checkpoint(state, workdir):
     if jax.process_index() == 0:
         state = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], state))
         step = int(state.step)
-        checkpoints.save_checkpoint(workdir, state, step, keep=3, overwrite=True)
+        checkpoints.save_checkpoint(workdir, state, step, keep=5, overwrite=True)
 
 
 def restore_checkpoint(state, workdir, prefix):
