@@ -1,5 +1,4 @@
 import argparse
-import collections
 import logging
 import random as pyrandom
 import time
@@ -14,20 +13,14 @@ import optax
 import torch
 import webdataset as wds
 from flax.training import checkpoints
-from flax.training.common_utils import shard
-from jax import random
+from flax.training.common_utils import shard, shard_prng_key
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import wandb
 from src.models.GPT import model_getter
-from src.training.inspector_utils import (get_embedding_spectrum,
-                                          get_intermediates,
-                                          get_num_components_pca,
-                                          pytree_to_cpu)
-from src.training.training_utils import (compute_tokens_seen,
-                                         create_train_state, step_to_seq_len)
+from src.training.training_utils import compute_tokens_seen, create_train_state
 from src.utils.configs import flatten_dict
 from src.utils.dataloader import numpy_collate
 
@@ -55,14 +48,13 @@ def parse():
 
 def save_checkpoint(state, workdir):
     if jax.process_index() == 0:
-        # get train state from the first replica
         state = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], state))
         step = int(state.step)
-        checkpoints.save_checkpoint(workdir, state, step, keep=2, overwrite=True)
+        checkpoints.save_checkpoint(workdir, state, step, keep=5, overwrite=True)
 
 
-def restore_checkpoint(state, workdir):
-    return checkpoints.restore_checkpoint(workdir, state)
+def restore_checkpoint(state, workdir, prefix):
+    return checkpoints.restore_checkpoint(workdir, state, prefix=prefix)
 
 
 def main():
@@ -75,12 +67,36 @@ def main():
     num_host = num_devices // num_local_devices
     platform = jax.local_devices()[0].platform
 
+    assert (
+        cfg.device.mp_devices == 1
+    ), f"This train script only supports data parallel training through pmap."
+
     if cfg.training.precision == "fp16":
         model_dtype = jnp.float16
     elif cfg.training.precision == "bf16":
         model_dtype = jnp.bfloat16
     else:
         model_dtype = jnp.float32
+
+    # setting up GCP bucket/client info if training on TPU
+    save_to_bucket = False
+    client = None
+    bucket_path = None
+    if platform == "tpu":
+        if cfg.data.bucket_path is not None:
+            # use GCP
+            from google.cloud import storage
+            from google.cloud.exceptions import NotFound
+
+            client = storage.Client()
+            save_to_bucket = True
+            bucket_path = cfg.data.bucket_path
+            train_shards = open(cfg.data.index_path_train).read().splitlines()
+            validation_shards = open(cfg.data.index_path_validation).read().splitlines()
+
+    else:
+        train_shards = cfg.data.train_shard_urls
+        validation_shards = cfg.data.validation_shard_urls
 
     model, model_config = model_getter(
         cfg.model.size, config_path=args.model_cfg, return_cfg=True, dtype=model_dtype
@@ -97,59 +113,57 @@ def main():
     rng = jax.random.PRNGKey(0)
     rng, init_rng = jax.random.split(rng)
 
-    state = create_train_state(
-        init_rng,
-        learning_rate_fn,
-        weight_decay=cfg.training.weight_decay,
-        model=model,
-        grad_accum_steps=cfg.training.gradient_accumulation_steps,
-    )
+    resume_step = 0
+
+    if cfg.device.mp_devices == 1:
+        state = create_train_state(
+            init_rng,
+            learning_rate_fn,
+            weight_decay=cfg.training.weight_decay,
+            model=model,
+        )
+
+        if args.resume:
+            if save_to_bucket:
+                state = restore_checkpoint(
+                    state,
+                    workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                    prefix="checkpoint_",
+                )
+            else:
+                state = restore_checkpoint(state, workdir=cfg.data.checkpoint_directory)
+
+            if jax.process_index() == 0:
+                logger.debug(f"Resuming training from step {int(state.step)}")
+
+            resume_step = int(state.step)
+
+    else:
+        pass
 
     if jax.process_index() == 0:
         logger.debug(f"VM setup with {num_devices} devices.")
         logger.debug(f"Host setup with {num_local_devices} devices.")
         logger.debug(f"Using platform: {platform} with precision {model_dtype}")
+
+        if cfg.device.mp_devices == 1:
+            logger.debug(
+                f"Performing data parallel training only. Model and train state will be replicated across all devices"
+            )
+
+        else:
+            logger.debug(
+                f"Performing DP and MP training with grid shape {(cfg.device.dp_devices, cfg.device.mp_devices)}"
+            )
+
         if len(cfg.training.staged_sequences) > 0:
             logger.debug(
                 f"Running sequence length warmup for {cfg.training.staged_warmup_steps} total steps with stages: {cfg.training.staged_sequences}"
             )
 
-    save_to_bucket = False
-    if platform == "tpu":
+    if not args.resume:
         if cfg.data.bucket_path is not None:
-            # use GCP
-            from google.cloud import storage
-            from google.cloud.exceptions import NotFound
-
-            client = storage.Client()
-            save_to_bucket = True
-
-            train_shards = open(cfg.data.index_path_train).read().splitlines()
-            validation_shards = open(cfg.data.index_path_validation).read().splitlines()
-
-    else:
-        train_shards = cfg.data.train_shard_urls
-        validation_shards = cfg.data.validation_shard_urls
-
-    resume_step = None
-    if args.resume:
-        if save_to_bucket:
-            state = restore_checkpoint(
-                state,
-                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-            )
-        else:
-            state = restore_checkpoint(state, workdir=cfg.data.checkpoint_directory)
-
-        if jax.process_index() == 0:
-            logger.debug(f"Resuming training from step {int(state.step)}")
-
-        # resume step is ga_steps*global steps
-        resume_step = int(state.step)
-
-    else:
-        if cfg.data.bucket_path is not None:
-            # clear bucket here
+            # clear bucket
             client = storage.Client()
             if jax.process_index() == 0:
                 bucket = storage.Bucket(client, f"{cfg.data.bucket_path}")
@@ -157,34 +171,23 @@ def main():
                 for blob in blobs:
                     blob.delete()
 
-    # replicating state across devices
-    state = flax.jax_utils.replicate(state)
+    local_batch_size = cfg.training.batch_size // (
+        jax.local_device_count() // cfg.device.mp_devices
+    )
 
-    local_batch_size = cfg.training.batch_size // jax.local_device_count()
-
-    # This is computed in terms of absolute steps
-    if len(cfg.training.staged_sequences) > 0:
-        total_tokens = num_host * (
-            cfg.training.batch_size
-            * cfg.training.gradient_accumulation_steps
-            * compute_tokens_seen(
-                cfg.training.total_steps,
-                stages=cfg.training.staged_sequences,
-                max_steps=cfg.training.staged_warmup_steps,
-                max_context=cfg.data.max_context,
-            )
+    total_tokens = num_host * (
+        cfg.training.batch_size
+        * compute_tokens_seen(
+            cfg.training.total_steps,
+            stages=cfg.training.staged_sequences,
+            max_steps=cfg.training.staged_warmup_steps,
+            max_context=cfg.data.max_context,
         )
-    else:
-        total_tokens = num_host * (
-            cfg.training.batch_size
-            * cfg.training.gradient_accumulation_steps
-            * cfg.data.max_context
-            * cfg.training.total_steps
-        )
+    )
 
     if jax.process_index() == 0:
         id = wandb.util.generate_id()
-        wandb.init(id=id, resume="allow", project="transformer-inspector")
+        wandb.init(id=id, resume="allow", project="LJX")
         flat_dict = flatten_dict(cfg)
 
         for key in model_config.keys():
@@ -220,18 +223,18 @@ def main():
     train_dataset = wds.DataPipeline(
         wds.SimpleShardList(train_shards),
         split_by_jax_process,
-        wds.tarfile_to_samples(),
-        wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23)),
-        wds.decode(),
+        wds.tarfile_to_samples(handler=wds.warn_and_continue),
+        wds.shuffle(1e7, initial=1e7, rng=pyrandom.Random(23)),
+        wds.decode(handler=wds.warn_and_continue),
         wds.map(preprocess),
     ).repeat(nepochs=cfg.training.max_epochs)
 
     validation_dataset = wds.DataPipeline(
         wds.SimpleShardList(validation_shards),
         split_by_jax_process,
-        wds.tarfile_to_samples(),
+        wds.tarfile_to_samples(handler=wds.warn_and_continue),
         wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23)),
-        wds.decode(),
+        wds.decode(handler=wds.warn_and_continue),
         wds.map(preprocess),
     )
 
@@ -244,149 +247,115 @@ def main():
 
     vl = DataLoader(
         dataset=validation_dataset,
-        batch_size=cfg.training.batch_size,
+        batch_size=cfg.training.batch_size // 8,
         collate_fn=numpy_collate,
         drop_last=True,
     )
 
     running_metrics = []
-    running_intermediates = []
 
-    if len(cfg.training.staged_sequences) > 0:
+    step_to_seq = lambda x: cfg.training.train_context
 
-        step_to_seq = partial(
-            step_to_seq_len,
-            stages=cfg.training.staged_sequences,
-            max_steps=cfg.training.gradient_accumulation_steps
-            * cfg.training.staged_warmup_steps,
-            max_context=cfg.data.max_context,
-        )
-
-    else:
-        step_to_seq = lambda x: cfg.data.max_context
+    state = flax.jax_utils.replicate(state)
 
     for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
-        if (i // cfg.training.gradient_accumulation_steps) > cfg.training.total_steps:
+        if (i + resume_step) > cfg.training.total_steps:
             if jax.process_index() == 0:
                 logger.debug(f"Training has completed.")
 
             return True
 
-        if resume_step != None and i <= resume_step:
+        if resume_step > 0 and (i <= resume_step % 24558):
+            # since we repeat epochs, just iterate partially through repeated ds
             continue
 
-        seq_len = step_to_seq(i)
+        rng, dropout_rng = jax.random.split(rng, 2)
 
-        text = text[:, :seq_len]
+        seq_len = step_to_seq(i + resume_step)
 
-        # sharding batch
-        sharded_batch = shard(text)
+        if cfg.training.train_context < cfg.data.max_context: 
+            text = text.reshape(-1, seq_len)
+
+        # we add a 'grad_accum' batch dimension which we then iterate through in train_step
+        text = text.reshape(
+            cfg.training.gradient_accumulation_steps,
+            text.shape[0] // cfg.training.gradient_accumulation_steps,
+            seq_len,
+        ).transpose(1, 0, 2)
+
+        text = shard(text)
+
+        rng_sharded = shard_prng_key(dropout_rng)
 
         t0 = time.time()
 
-        state, metrics, inspector_statistics = train_step(
-            state,
-            sharded_batch,
+        state, metrics = train_step(
+            state, text, rng_sharded, cfg.training.gradient_accumulation_steps
         )
 
         metrics["Train Batch Time"] = time.time() - t0
         metrics["Train Sequence Length"] = seq_len
 
         running_metrics.append(metrics)
-        running_intermediates.append(inspector_statistics)
 
-        if (i) % cfg.training.gradient_accumulation_steps == 0:
-            # we've completed a full batch of data, log the metrics
+        train_metrics_np = {
+            k: np.mean([metrics[k] for metrics in running_metrics])
+            for k in running_metrics[0]
+        }
 
-            train_metrics_np = {
-                k: np.mean([metrics[k] for metrics in running_metrics])
-                for k in running_metrics[0]
+        running_metrics = []
+        validation_metrics = []
+
+        absolute_step = i + resume_step
+
+        train_metrics_np["Tokens Seen (B)"] = (
+            num_host
+            * (
+                cfg.training.batch_size
+                * compute_tokens_seen(
+                    absolute_step,
+                    stages=cfg.training.staged_sequences,
+                    max_steps=cfg.training.staged_warmup_steps,
+                    max_context=cfg.data.max_context,
+                )
+            )
+            / 1e9
+        )
+
+        if (i) % (cfg.training.evaluation_frequency) == 0:
+            for val_it, val_text in enumerate(
+                tqdm(vl, disable=not jax.process_index() == 0)
+            ):
+                val_text = val_text[:, :512]
+                val_text = shard(val_text)
+
+                if val_it < cfg.training.maximum_evaluation_steps:
+                    metrics = eval_step(state, val_text)
+                    validation_metrics.append(metrics)
+                else:
+                    break
+
+            validation_metrics_np = {
+                k: np.mean([metrics[k] for metrics in validation_metrics])
+                for k in validation_metrics[0]
             }
 
-            intermediates_dict = collections.defaultdict(list)
-            # this actually sends a lot of data, to avoid hangs on slow connection,
-            # only take one minibatch of the total activations
-            out_chunk = get_intermediates(running_intermediates[0]["Activation PyTree"])
-            for key in out_chunk.keys():
-                intermediates_dict[key] += out_chunk[key]
+            if jax.process_index() == 0:
+                train_metrics_np.update(validation_metrics_np)
+                train_metrics_np.pop("Train Batch Time")
+                wandb.log(train_metrics_np)
 
-            # TODO: Log Gradients
-
-            # embedding_rank = get_embedding_spectrum(state.params)
-            # train_metrics_np.update({"Rank(Emb)": embedding_rank})
-
-            embedding_pca = get_num_components_pca(state.params)
-            train_metrics_np.update({"Fraction of Dims to explain 90 percent of Embedding Variance": embedding_pca})            
-
-            intermediates_hist = {}
-            for key in intermediates_dict.keys():
-                intermediates_hist[key] = wandb.Histogram(intermediates_dict[key])
-
-            train_metrics_np.update(intermediates_hist)
-
-            running_metrics = []
-            running_intermediates = []
-            validation_metrics = []
-
-            if (i) % (
-                cfg.training.evaluation_frequency
-                * cfg.training.gradient_accumulation_steps
-            ) == 0:
-                for val_it, val_text in enumerate(
-                    tqdm(vl, disable=not jax.process_index() == 0)
-                ):
-                    if val_it < cfg.training.maximum_evaluation_steps:
-                        sharded_batch = shard(val_text)
-                        metrics = eval_step(state, sharded_batch)
-                        validation_metrics.append(metrics)
-                    else:
-                        break
-
-                validation_metrics_np = {
-                    k: np.mean([metrics[k] for metrics in validation_metrics])
-                    for k in validation_metrics[0]
-                }
-
-                if jax.process_index() == 0:
-                    train_metrics_np.update(validation_metrics_np)
-                    train_metrics_np["Train Step Time"] = (
-                        cfg.training.gradient_accumulation_steps
-                        * train_metrics_np["Train Batch Time"]
+                if cfg.device.mp_devices > 1:
+                    device_state = jax.device_get(
+                        state
+                    )  # pull a copy of the sharded state to CPU and save
+                    save_checkpoint(
+                        device_state,
+                        workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
                     )
 
-                    absolute_step = i // cfg.training.gradient_accumulation_steps
-                    if len(cfg.training.staged_sequences) > 0:
-                        train_metrics_np["Tokens Seen (B)"] = (
-                            num_host
-                            * (
-                                cfg.training.batch_size
-                                * cfg.training.gradient_accumulation_steps
-                                * compute_tokens_seen(
-                                    absolute_step,
-                                    stages=cfg.training.staged_sequences,
-                                    max_steps=cfg.training.staged_warmup_steps,
-                                    max_context=cfg.data.max_context,
-                                )
-                            )
-                            / 1e9
-                        )
-                    else:
-                        train_metrics_np["Tokens Seen (B)"] = (
-                            num_host
-                            * (
-                                cfg.training.batch_size
-                                * cfg.training.gradient_accumulation_steps
-                                * absolute_step
-                                * cfg.data.max_context
-                            )
-                            / 1e9
-                        )
-
-                    train_metrics_np.pop("Train Batch Time")
-
-                    wandb.log(train_metrics_np)
-
+                else:
                     if save_to_bucket:
                         save_checkpoint(
                             state,
@@ -395,106 +364,91 @@ def main():
                     else:
                         save_checkpoint(state, workdir=cfg.data.checkpoint_directory)
 
-            else:
-                if jax.process_index() == 0:
-                    train_metrics_np["Train Step Time"] = (
-                        cfg.training.gradient_accumulation_steps
-                        * train_metrics_np["Train Batch Time"]
-                    )
-
-                    absolute_step = i // cfg.training.gradient_accumulation_steps
-                    if len(cfg.training.staged_sequences) > 0:
-                        train_metrics_np["Tokens Seen (B)"] = (
-                            num_host
-                            * (
-                                cfg.training.batch_size
-                                * cfg.training.gradient_accumulation_steps
-                                * compute_tokens_seen(
-                                    absolute_step,
-                                    stages=cfg.training.staged_sequences,
-                                    max_steps=cfg.training.staged_warmup_steps,
-                                    max_context=cfg.data.max_context,
-                                )
-                            )
-                            / 1e9
-                        )
-                    else:
-                        train_metrics_np["Tokens Seen (B)"] = (
-                            num_host
-                            * (
-                                cfg.training.batch_size
-                                * cfg.training.gradient_accumulation_steps
-                                * absolute_step
-                                * cfg.data.max_context
-                            )
-                            / 1e9
-                        )
-
-                    train_metrics_np.pop("Train Batch Time")
-                    wandb.log(train_metrics_np)
+        else:
+            if jax.process_index() == 0:
+                train_metrics_np["Train Step Time"] = train_metrics_np[
+                    "Train Batch Time"
+                ]
+                train_metrics_np.pop("Train Batch Time")
+                wandb.log(train_metrics_np)
 
 
-@partial(jax.pmap, axis_name="batch")
-def train_step(state: Any, batch: jnp.array, rng_key: random.PRNGKey = None):
-    """Train on a single batch"""
+@partial(
+    jax.pmap, axis_name="batch", static_broadcasted_argnums=(3,), donate_argnums=(0,)
+)
+def train_step(
+    state: Any,
+    batch: jnp.array,
+    rng_key: jax.random.PRNGKey = None,
+    accum_steps: int = 8,
+):
+    """
+    Train on a single batch
+    This means that the batch will be size (local_bs*grad_accum, ctx) instead of (local_bs, ctx)
 
-    def loss_fn(params):
-        (_, loss), intermediates = state.apply_fn(
+    Designed to perform gradient and loss communication once per _batch_ instead of once per mini batch
+    """
+
+    def get_minibatch(batch, grad_idx):
+        return jax.tree_util.tree_map(
+            lambda x: jax.lax.dynamic_index_in_dim(x, grad_idx, keepdims=False, axis=1),
+            batch,
+        )
+
+    def loss_fn(params, batch):
+        _, loss = state.apply_fn(
             {"params": params["params"]},
             x=batch,
             labels=batch,
-            train=False,
-            mutable="intermediates",
+            train=True,
+            rngs={"dropout": rng_key},
+        )
+        return loss
+
+    grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
+
+    def loss_and_grad(grad_idx):
+        minibatch = get_minibatch(batch, grad_idx) if grad_idx is not None else batch
+
+        loss, grads = grad_fn(state.params, minibatch)
+
+        return loss, grads
+
+    init_minibatch = (0.0, jax.tree_util.tree_map(jnp.zeros_like, state.params))
+
+    # accumulate gradients
+    def cumul_minibatch_step(grad_idx, cumul_loss_grad):
+        cumul_loss, cumul_grads = cumul_loss_grad
+        loss, grads = loss_and_grad(grad_idx)
+        cumul_loss, cumul_grads = jax.tree_util.tree_map(
+            jnp.add, (cumul_loss, cumul_grads), (loss, grads)
         )
 
-        return loss, intermediates
+        return cumul_loss, cumul_grads
 
-    dynamic_scale = state.dynamic_scale
-    if dynamic_scale:
-        grad_fn = dynamic_scale.value_and_grad(loss_fn, has_aux=True, axis_name="batch")
-        dynamic_scale, is_fin, (loss, intermediates), grads = grad_fn(state.params)
-        state = state.replace(dynamic_scale=dynamic_scale)
+    loss, grads = jax.lax.fori_loop(
+        0,
+        accum_steps,
+        cumul_minibatch_step,
+        init_minibatch,
+    )
 
+    loss, grads = jax.tree_util.tree_map(lambda x: x / accum_steps, (loss, grads))
 
-    else:
-        grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
-        (loss, intermediates), grads = grad_fn(state.params)
-        # NOTE: compute all-reduce mean for gradients and loss
-        # Ex: If we have 8 devices, each device takes the gradients from the other 7 and averages them all together
-        # that way, all device replicas have the same gradients and optimization step can occur in parallel
-        loss = jax.lax.pmean(loss, axis_name="batch")
-        grads = jax.lax.pmean(grads, axis_name="batch")
+    loss = jax.lax.pmean(loss, axis_name="batch")
+    grads = jax.lax.pmean(grads, axis_name="batch")
 
+    # only update train_state at the end of a single full batch
     new_state = state.apply_gradients(
         grads=grads,
     )
 
-    if dynamic_scale:
-        # if is_fin == False the gradients contain Inf/NaNs and optimizer state and
-        # params should be restored (= skip this step).
-        new_state = new_state.replace(
-            opt_state=jax.tree_util.tree_map(
-                partial(jnp.where, is_fin), new_state.opt_state, state.opt_state
-            ),
-            params=jax.tree_util.tree_map(
-                partial(jnp.where, is_fin), new_state.params, state.params
-            ),
-            dynamic_scale=dynamic_scale,
-        )
-
     metrics = {
         "Train LM Loss": loss,
         "Train LM PPL": jnp.exp(loss),
-        "Loss Scale": dynamic_scale.scale,
     }
 
-    # NOTE: by default all PyTrees will stay on default device (not your CPU) which can eat up a lot of memory
-    # so we transfer them to CPU immediately to prevent them accumulating on device memory
-    inspector_statistics = {
-        "Activation PyTree": pytree_to_cpu(intermediates),
-    }
-
-    return new_state, metrics, inspector_statistics
+    return new_state, metrics
 
 
 @partial(jax.pmap, axis_name="batch")
@@ -507,6 +461,7 @@ def eval_step(state: Any, batch: jnp.array):
         labels=batch,
         train=False,
     )
+
     loss = jax.lax.pmean(loss, axis_name="batch")
 
     metrics = {"Validation LM Loss": loss, "Validation LM PPL": jnp.exp(loss)}
@@ -516,7 +471,7 @@ def eval_step(state: Any, batch: jnp.array):
 
 if __name__ == "__main__":
     # try:
-    #     main()
+    # main()
     # except Exception as e:
-    #     print(f"Error encountered: {e}")
+    # print(f"Error encountered: {e}")
     main()

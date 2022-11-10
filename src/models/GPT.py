@@ -1,236 +1,18 @@
 """ 
 Replication of GPT2 transformers in Flax
 """
-import math
 from functools import partial
-from typing import Any, List, Tuple, Union
+from typing import Any, Tuple, Union
 
 import flax
 import flax.linen as nn
 import jax
 import jax.nn.initializers as initializers
 import jax.numpy as jnp
-from einops import rearrange
 from omegaconf import OmegaConf
 
+from src.models.layers import CausalAttention, MLPBlock
 from src.utils.losses import cross_entropy_loss
-
-
-def get_slopes(n: int) -> List:
-    def get_slopes_power_of_2(n):
-        start = 2 ** (-(2 ** -(math.log2(n) - 3)))
-        ratio = start
-        return [start * ratio**i for i in range(n)]
-
-    if math.log2(n).is_integer():
-        return get_slopes_power_of_2(n)
-    else:
-        closest_power_of_2 = 2 ** math.floor(math.log2(n))
-        return (
-            get_slopes_power_of_2(closest_power_of_2)
-            + get_slopes(2 * closest_power_of_2)[0::2][: n - closest_power_of_2]
-        )
-
-
-class MLPBlock(nn.Module):
-    """Standard MLP Block"""
-
-    embedding_dim: int
-    dimension_multiplier: int = 4
-    dropout: float = 0.0
-    N: int = None
-
-    dtype: Any = jnp.float32
-
-    @nn.compact
-    def __call__(self, x: jnp.array, train: bool) -> jnp.array:
-        dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
-        x = nn.Dense(
-            features=self.dimension_multiplier * self.embedding_dim,
-            name="fc_in",
-            kernel_init=initializers.normal(stddev=0.02),
-            bias_init=initializers.zeros,
-            dtype=self.dtype,
-        )(x)
-        x = nn.gelu(x)
-        out = nn.Dense(
-            features=self.embedding_dim,
-            name="fc_residual",
-            kernel_init=initializers.normal(stddev=(0.02 / jnp.sqrt(2 * self.N))),
-            bias_init=initializers.zeros,
-            dtype=self.dtype,
-        )(x)
-        self.sow("intermediates", "mlp_out", x)
-        return dropout()(out)
-
-class SGU(nn.Module):
-    """Static SGU module"""
-
-    block_size: int
-    embedding_dim: int
-    kernel_size: int
-
-    def setup(self):
-        k = jnp.triu(
-            jnp.tril(
-                jnp.ones((self.block_size, self.block_size)), -1 * self.kernel_size
-            )
-        )
-        k = k / (k.cumsum(-2) + 1)
-        self.kernel = k
-
-    @nn.compact
-    def __call__(self, x: jnp.array) -> jnp.array:
-
-        B, T, C = x.shape[:3]
-
-        x = jax.lax.stop_gradient(x)
-
-        x = rearrange(x, "b n d -> b d n")
-        x = x @ (self.kernel.T[:T, :T])
-        x = rearrange(x, "b d n -> b n d")
-
-        return x
-
-
-class CausalAttention(nn.Module):
-    """Standard causal multi-headed attention
-
-    Supports ALiBi attention biasing from
-    `Train Short, Test Long: Attention with Linear Biases Enables Input
-    Length Extrapolation <https://ofir.io/train_short_test_long.pdf>`
-
-    """
-
-    embedding_dim: int
-    num_head: int
-    block_size: int
-    dropout: float = 0.0
-    N: int = None
-    alibi_attn: bool = False
-
-    dtype: Any = jnp.float32
-
-    def setup(self):
-        self.slopes = jnp.array(get_slopes(self.num_head))
-
-    @nn.compact
-    def __call__(
-        self,
-        x: jnp.array,
-        train: bool,
-        alibi_mask: jnp.array = None,
-        use_cache: bool = False,
-        layer_past: Tuple[jnp.array, jnp.array] = None,
-        pad_mask: jnp.array = None,
-    ) -> Tuple[jnp.array, jnp.array]:
-        dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
-        B, T, C = x.shape[:3]
-
-        # Shape is (B, nh, T, h_dim)
-        key = (
-            nn.Dense(
-                name="key_proj",
-                features=self.embedding_dim,
-                kernel_init=initializers.normal(stddev=0.02),
-                bias_init=initializers.zeros,
-                dtype=self.dtype,
-            )(x)
-            .reshape(B, T, self.num_head, self.embedding_dim // self.num_head)
-            .transpose(0, 2, 1, 3)
-        )
-
-        # Shape is (B, nh, T, h_dim)
-        value = (
-            nn.Dense(
-                name="value_proj",
-                features=self.embedding_dim,
-                kernel_init=initializers.normal(stddev=0.02),
-                bias_init=initializers.zeros,
-                dtype=self.dtype,
-            )(x)
-            .reshape(B, T, self.num_head, self.embedding_dim // self.num_head)
-            .transpose(0, 2, 1, 3)
-        )
-
-        # Shape is (B, nh, T, h_dim)
-        query = (
-            nn.Dense(
-                name="query_proj",
-                features=self.embedding_dim,
-                kernel_init=initializers.normal(stddev=0.02),
-                bias_init=initializers.zeros,
-                dtype=self.dtype,
-            )(x)
-            .reshape(B, T, self.num_head, self.embedding_dim // self.num_head)
-            .transpose(0, 2, 1, 3)
-        )
-
-        present = None
-        if use_cache:
-            if layer_past is not None:
-                past_keys, past_values = layer_past  # (1, nh, T, h_dim)
-                # get shape here, we only keep the past block_size values so lax.scan is happy that we are passing stuff with a fixed size over
-                key = jnp.concatenate((past_keys, key), axis=-2)[
-                    :, :, -self.block_size :, :
-                ]
-                value = jnp.concatenate((past_values, value), axis=-2)[
-                    :, :, -self.block_size :, :
-                ]
-
-            present = jnp.stack((key, value))
-
-        # get raw attention scores
-        attn_full = (query @ key.transpose(0, 1, 3, 2)) / jnp.sqrt(
-            key.shape[-1]
-        )  # Shape is (B, nh, sq, sk)
-
-        if self.alibi_attn:
-
-            seq_len_k, seq_len_q = key.shape[-2], query.shape[-2]
-
-            if alibi_mask is None:
-
-                a = -jnp.tril(
-                    jnp.tile(
-                        jnp.arange(seq_len_k).reshape(seq_len_k, 1), (1, seq_len_k)
-                    )
-                    + jnp.arange(0, -seq_len_k, step=-1)
-                )
-
-                a = a * (self.slopes.reshape(self.slopes.shape[0], 1, 1))
-
-                alibi_mask = a[:, seq_len_k - 1, :].reshape(a.shape[0], 1, a.shape[2])
-
-                attn_full = attn_full + alibi_mask
-
-        mask = jnp.tril(jnp.ones((T, T), dtype=jnp.int8)).reshape(1, 1, T, T)
-        if pad_mask is None:
-            masked_attn = jnp.where(mask, attn_full, jnp.finfo(self.dtype).min)
-
-        else:
-            combined_mask = mask * pad_mask
-            masked_attn = jnp.where(combined_mask, attn_full, jnp.finfo(self.dtype).min)
-
-        attn_scores = nn.softmax(masked_attn, axis=-1)
-        attn_out = (attn_scores @ value).transpose(
-            0, 2, 1, 3
-        )  # Shape is (B, T, nh, h_dim)
-
-        attn_out = attn_out.reshape(B, T, C)
-        out = nn.Dense(
-            name="residual_out",
-            features=self.embedding_dim,
-            kernel_init=jax.nn.initializers.normal(
-                stddev=(0.02 / jnp.sqrt(2 * self.N))
-            ),
-            bias_init=initializers.zeros,
-            dtype=self.dtype,
-        )(attn_out)
-
-        self.sow("intermediates", "attn_out", out)
-
-        return dropout()(out), present
 
 
 class TransformerBlock(nn.Module):
@@ -244,7 +26,7 @@ class TransformerBlock(nn.Module):
     dtype: Any = jnp.float32
     fused_residuals: bool = False
     alibi_attn: bool = False
-    use_static_sgu: bool = False
+    qk_norm: bool = False
 
     @nn.compact
     def __call__(
@@ -253,66 +35,31 @@ class TransformerBlock(nn.Module):
         train: bool = False,
         use_cache: bool = False,
         layer_past: Tuple[jnp.array, jnp.array] = None,
-        pad_mask: jnp.array = None,
-    ) -> Tuple[jnp.array, jnp.array]:
+    ) -> jnp.array:
 
         if self.fused_residuals:
-            if self.use_static_sgu:
-                norm = nn.LayerNorm(dtype=self.dtype)
-
-                split_arr = jnp.split(norm(x), indices_or_sections=2, axis=-1)
-                x_sgu, x_attn = split_arr[0], split_arr[1]
-
-                attn_out = CausalAttention(
-                    self.embedding_dim//2,
-                    self.num_head,
-                    self.block_size,
-                    self.residual_dropout,
-                    self.N,
-                    self.alibi_attn,
-                    self.dtype,
-                )(x_attn, train, None, use_cache, layer_past, pad_mask)
-                
-                sgu_out = SGU(
-                    self.block_size, self.embedding_dim // 2, kernel_size=128
-                )(x_sgu)
-                
-                fused_out = jnp.concatenate((sgu_out, attn_out[0]), axis=-1)
-
-                return (
-                    x
-                    + fused_out
-                    + MLPBlock(
-                        self.embedding_dim,
-                        dropout=self.residual_dropout,
-                        N=self.N,
-                        dtype=self.dtype,
-                    )(norm(x), train),
-                    attn_out[1],
-                )
-
-            else:
-                norm = nn.LayerNorm(dtype=self.dtype)
-                attn_out = CausalAttention(
+            norm = nn.LayerNorm(dtype=self.dtype)
+            attn_out = CausalAttention(
+                self.embedding_dim,
+                self.num_head,
+                self.block_size,
+                self.residual_dropout,
+                self.N,
+                self.alibi_attn,
+                self.dtype,
+                self.qk_norm,
+            )(norm(x), train, None, use_cache, layer_past)
+            return (
+                x
+                + attn_out
+                + MLPBlock(
                     self.embedding_dim,
-                    self.num_head,
-                    self.block_size,
-                    self.residual_dropout,
-                    self.N,
-                    self.alibi_attn,
-                    self.dtype,
-                )(norm(x), train, None, use_cache, layer_past, pad_mask)
-                return (
-                    x
-                    + attn_out[0]
-                    + MLPBlock(
-                        self.embedding_dim,
-                        dropout=self.residual_dropout,
-                        N=self.N,
-                        dtype=self.dtype,
-                    )(norm(x), train),
-                    attn_out[1],
-                )
+                    dropout=self.residual_dropout,
+                    N=self.N,
+                    dtype=self.dtype,
+                )(norm(x), train)
+            )
+
         else:
             attn_out = CausalAttention(
                 self.embedding_dim,
@@ -322,15 +69,16 @@ class TransformerBlock(nn.Module):
                 self.N,
                 self.alibi_attn,
                 self.dtype,
-            )(nn.LayerNorm(dtype=self.dtype)(x), train, use_cache, layer_past, pad_mask)
-            x = x + attn_out[0]
+                self.qk_norm,
+            )(nn.LayerNorm(dtype=self.dtype)(x), train, None, use_cache, layer_past)
+            x = x + attn_out
             x = x + MLPBlock(
                 self.embedding_dim,
                 dropout=self.residual_dropout,
                 N=self.N,
                 dtype=self.dtype,
             )(nn.LayerNorm(dtype=self.dtype)(x), train)
-            return x, attn_out[1]
+            return x
 
 
 class Transformer(nn.Module):
@@ -347,7 +95,7 @@ class Transformer(nn.Module):
     dtype: Any = jnp.float32
     fused_residuals: bool = False
     alibi_attn: bool = False
-    use_static_sgu: bool = False
+    qk_norm: bool = False
 
     def generate(
         self,
@@ -417,10 +165,10 @@ class Transformer(nn.Module):
         train: bool = False,
         use_cache: bool = False,
         past_states: Tuple[jnp.array, jnp.array] = None,
-        pad_mask: jnp.array = None,
     ) -> Union[jnp.array, Tuple[jnp.array, jnp.array]]:
-
         B, T = x.shape[0:2]
+
+        dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
 
         embed = nn.Embed(
             name="wte",
@@ -444,16 +192,11 @@ class Transformer(nn.Module):
 
             out += wpe
 
-        present_states = []
-        if not use_cache:
-            past_states = [None] * self.N
+        out = dropout()(out)
 
-        if past_states is None:
-            past_states = [None] * self.N
+        for i in range(self.N):
 
-        for i, past_state in zip(range(self.N), past_states):
-
-            out, layer_past = TransformerBlock(
+            out = TransformerBlock(
                 self.embedding_dim,
                 self.num_head,
                 self.block_size,
@@ -462,20 +205,15 @@ class Transformer(nn.Module):
                 self.dtype,
                 self.fused_residuals,
                 self.alibi_attn,
-                self.use_static_sgu
-            )(out, train, use_cache, past_state, pad_mask)
-
-            present_states.append(layer_past)
+                self.qk_norm,
+            )(out, train)
 
         out = nn.LayerNorm(dtype=self.dtype)(out)
 
         logits = embed.attend(out)
 
         if labels is None:
-            if use_cache:
-                return logits, present_states
-            else:
-                return logits
+            return logits
         else:
             labels_shifted = labels[..., 1:].reshape(-1)
             logits_shifted = logits[..., :-1, :].reshape(-1, logits.shape[-1])

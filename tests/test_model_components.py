@@ -4,8 +4,8 @@ import jax
 import jax.numpy as jnp
 import jax.random as random
 
-from src.models.GPT import (CausalAttention, MLPBlock, Transformer,
-                            TransformerBlock)
+from src.models.GPT import Transformer, TransformerBlock
+from src.models.layers import CausalAttention, MLPBlock
 from src.utils.losses import cross_entropy_loss
 
 
@@ -73,7 +73,7 @@ class TestAttn(unittest.TestCase):
             batch_cts,
             train=True,
             rngs={"dropout": self.rng},
-        )[0]
+        )
         self.assertEqual(out.shape, batch_cts.shape)
 
         out = attn.apply(
@@ -81,7 +81,7 @@ class TestAttn(unittest.TestCase):
             batch_cts,
             train=False,
             rngs={"dropout": self.rng},
-        )[0]
+        )
         self.assertEqual(out.shape, batch_cts.shape)
 
     def test_attn_fwd_ALiBi(self):
@@ -101,7 +101,7 @@ class TestAttn(unittest.TestCase):
             batch_cts,
             train=True,
             rngs={"dropout": self.rng},
-        )[0]
+        )
         self.assertEqual(out.shape, batch_cts.shape)
 
         out = attn.apply(
@@ -109,17 +109,8 @@ class TestAttn(unittest.TestCase):
             batch_cts,
             train=False,
             rngs={"dropout": self.rng},
-        )[0]
+        )
         self.assertEqual(out.shape, batch_cts.shape)
-
-        batch_cts_longer_ctx = random.normal(self.rng, shape=(1, 768, 128))
-        out = attn.apply(
-            {"params": params["params"]},
-            batch_cts_longer_ctx,
-            train=False,
-            rngs={"dropout": self.rng},
-        )[0]
-        self.assertEqual(out.shape, batch_cts_longer_ctx.shape)
 
 
 class TestTransformerBlock(unittest.TestCase):
@@ -163,7 +154,7 @@ class TestTransformerBlock(unittest.TestCase):
             batch_cts,
             train=True,
             rngs={"dropout": self.rng},
-        )[0]
+        )
         self.assertEqual(out.shape, batch_cts.shape)
 
         block = TransformerBlock(
@@ -184,7 +175,7 @@ class TestTransformerBlock(unittest.TestCase):
             batch_cts,
             train=True,
             rngs={"dropout": self.rng},
-        )[0]
+        )
         self.assertEqual(out.shape, batch_cts.shape)
 
     def test_block_create_standard(self):
@@ -220,7 +211,7 @@ class TestTransformerBlock(unittest.TestCase):
             batch_cts,
             train=True,
             rngs={"dropout": self.rng},
-        )[0]
+        )
         self.assertEqual(out.shape, batch_cts.shape)
 
         block = TransformerBlock(
@@ -241,7 +232,7 @@ class TestTransformerBlock(unittest.TestCase):
             batch_cts,
             train=True,
             rngs={"dropout": self.rng},
-        )[0]
+        )
         self.assertEqual(out.shape, batch_cts.shape)
 
 

@@ -1,9 +1,8 @@
 """ 
 Helper methods used during training setup. 
 """
-from typing import Any, Callable, List, Union
+from typing import Any, Callable, List, Tuple, Union
 
-import flax
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
@@ -19,7 +18,7 @@ def to_precision(t, dtype: jnp.dtype):
     )
 
 
-def initialized(key: random.PRNGKey, model: nn.Module):
+def initialized(key: random.PRNGKey, model: nn.Module, input_shape: Tuple[int, int]):
     """Initializes param dict for a model
     Args:
         key (_type_): _description_
@@ -28,21 +27,14 @@ def initialized(key: random.PRNGKey, model: nn.Module):
     Returns:
         _type_: _description_
     """
-    rng_init, batch_init = jax.random.split(key, num=2)
 
-    init_batch = random.randint(
-        batch_init,
-        shape=(1, model.block_size),
-        maxval=model.vocab_size,
-        minval=0,
-    )
+    init_batch = jnp.ones((input_shape), dtype=jnp.int32)
 
     def init(rng, init_batch):
         return model.init(rng, init_batch, None, False)
 
     jit_apply = jax.jit(init, backend="cpu")
-    variables = jit_apply(rng=rng_init, init_batch=init_batch)
-    # variables = to_precision(variables, dtype)
+    variables = jit_apply(rng=key, init_batch=init_batch)
     return variables
 
 
@@ -55,10 +47,9 @@ def create_train_state(
     learning_rate_fn: Union[float, Callable],
     weight_decay: float,
     model: nn.Module,
-    grad_accum_steps: int,
 ):
     """Creates initial `TrainState` for model."""
-    params = initialized(rng, model)
+    params = initialized(rng, model, input_shape=(1, 512))
 
     # This mask turns off weight decay for bias terms, LN terms and position embeddings
     mask = jax.tree_map(
@@ -75,13 +66,6 @@ def create_train_state(
             b2=0.95,
         ),
     )
-
-    if grad_accum_steps > 1:
-        tx = optax.MultiSteps(
-            tx,
-            every_k_schedule=grad_accum_steps,
-            should_skip_update_fn=optax.skip_not_finite,
-        )
 
     state = TrainState.create(
         apply_fn=model.apply,
@@ -122,7 +106,7 @@ def step_to_seq_len(
         return stages[stage_idx]
 
 
-def compute_tokens_seen(
+def compute_tokens_seen_with_warmup(
     current_step: int, stages: List, max_steps: int, max_context=1024
 ) -> int:
     """Compute the number of tokens seen by the model. Requires scaling by batch size after
@@ -159,3 +143,42 @@ def compute_tokens_seen(
     else:
         # end is scaled by BS - This is constant
         return stages[0] * remainder
+
+
+def compute_tokens_seen(absolute_step, stages, max_steps, max_context):
+
+    if len(stages) > 0:
+        return compute_tokens_seen_with_warmup(
+            absolute_step, stages, max_steps, max_context
+        )
+    else:
+        return absolute_step * max_context
+
+
+def get_optimizer(
+    learning_rate_fn: Union[float, Callable],
+    weight_decay: float,
+    model: nn.Module,
+    param_shape: Any,
+):
+    """
+    We just use this for returning optax optimizer class in the case where we are sharding the TrainState (mp > 1). Removes a bit
+    of boilerplate code from the main training script
+    """
+
+    mask = jax.tree_map(
+        lambda x: x.ndim != 1 and x.shape != (model.block_size, model.embedding_dim),
+        param_shape,
+    )
+
+    tx = optax.chain(
+        optax.clip(1.0),
+        optax.adamw(
+            learning_rate=learning_rate_fn,
+            weight_decay=weight_decay,
+            mask=mask,
+            b2=0.95,
+        ),
+    )
+
+    return tx

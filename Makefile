@@ -3,4 +3,4 @@ style:
 	isort .
 
 test:
-	python -m pytest
+	python -m pytest tests
