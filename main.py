@@ -113,7 +113,7 @@ def main():
     rng = jax.random.PRNGKey(0)
     rng, init_rng = jax.random.split(rng)
 
-    resume_step = None
+    resume_step = 0
 
     if cfg.device.mp_devices == 1:
         state = create_train_state(
@@ -268,13 +268,13 @@ def main():
 
             return True
 
-        if resume_step != None and (i <= resume_step%24558):
+        if resume_step > 0 and (i <= resume_step%24558):
             # since we repeat epochs, just iterate partially through repeated ds
             continue
 
         rng, dropout_rng = jax.random.split(rng, 2)
 
-        seq_len = step_to_seq(i)
+        seq_len = step_to_seq(i+resume_step)
 
         text = text.reshape(-1, seq_len)
 
