@@ -30,9 +30,9 @@ from src.models.GPT import model_getter
 from src.training.training_utils import create_train_state
 
 # the quantity GLOBAL_BATCH_SIZE must be divisible by 8 (or num local devices)
-GLOBAL_BATCH_SIZE = 1024
+GLOBAL_BATCH_SIZE = 512
 GRADIENT_ACCUMULATION_STEPS = 16
-SEQ_LEN = 512
+SEQ_LEN = 1024
 NUM_PASSES = 20
 
 
@@ -173,6 +173,8 @@ if __name__ == "__main__":
         ~350M Params Transformer with ctx = 512
         
 
-
+        V2-8 - 50M param transformer
+            Optimized Pmap Step - Global BS 1024 - accum steps 16 - Num Executions 20
+            Mean Batch Time 0.0399 Seconds
 
     """
