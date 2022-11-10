@@ -26,13 +26,13 @@ data:
   full_steps_in_batch: 24558
   workers: 0
   checkpoint_directory: "checkpoints"
-  bucket_path: "bfattoriwebtext2"
-  # bucket_path: "bfattoribooks2"
+  # bucket_path: "bfattoriwebtext2"
+  bucket_path: "bfattoribooks2"
   # bucket_path: 
-  index_path_train: "data/index/openwebtext_useast.train.index"
-  index_path_validation: "data/index/openwebtext_useast.val.index"
-  # index_path_train: "data/index/openwebtext.train.index"
-  # index_path_validation: "data/index/openwebtext.val.index"
+  # index_path_train: "data/index/openwebtext_useast.train.index"
+  # index_path_validation: "data/index/openwebtext_useast.val.index"
+  index_path_train: "data/index/openwebtext.train.index"
+  index_path_validation: "data/index/openwebtext.val.index"
 
 
 device:
