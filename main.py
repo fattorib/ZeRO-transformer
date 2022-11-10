@@ -136,7 +136,6 @@ def main():
             if jax.process_index() == 0:
                 logger.debug(f"Resuming training from step {int(state.step)}")
 
-            # resume step is ga_steps*global steps
             resume_step = int(state.step)
 
     else:
@@ -176,7 +175,6 @@ def main():
         jax.local_device_count() // cfg.device.mp_devices
     )
 
-    # This is computed in terms of absolute steps
     total_tokens = num_host * (
         cfg.training.batch_size
         * compute_tokens_seen(
@@ -226,7 +224,7 @@ def main():
         wds.SimpleShardList(train_shards),
         split_by_jax_process,
         wds.tarfile_to_samples(handler=wds.warn_and_continue),
-        wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23)),
+        wds.shuffle(1e7, initial=1e7, rng=pyrandom.Random(23)),
         wds.decode(handler=wds.warn_and_continue),
         wds.map(preprocess),
     ).repeat(nepochs=cfg.training.max_epochs)
@@ -256,7 +254,7 @@ def main():
 
     running_metrics = []
 
-    step_to_seq = lambda x: 512
+    step_to_seq = lambda x: cfg.training.train_context
 
     state = flax.jax_utils.replicate(state)
 
@@ -276,7 +274,8 @@ def main():
 
         seq_len = step_to_seq(i + resume_step)
 
-        text = text.reshape(-1, seq_len)
+        if cfg.training.train_context < cfg.data.max_context: 
+            text = text.reshape(-1, seq_len)
 
         # we add a 'grad_accum' batch dimension which we then iterate through in train_step
         text = text.reshape(
@@ -427,7 +426,6 @@ def train_step(
 
         return cumul_loss, cumul_grads
 
-    # this logic could probably be movied into cumul_minibatch_step,
     loss, grads = jax.lax.fori_loop(
         0,
         accum_steps,
