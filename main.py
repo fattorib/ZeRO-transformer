@@ -266,7 +266,7 @@ def main():
 
             return True
 
-        if resume_step > 0 and (i <= resume_step % 24558):
+        if resume_step > 0 and (i <= resume_step % 24558): # THIS ONLY WORKS FOR SINGLE NODE TRAINING??? #IS ORIGINAL TRAINING RESUME VALID THOUGH?
             # since we repeat epochs, just iterate partially through repeated ds
             continue
 
