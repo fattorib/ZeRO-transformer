@@ -274,7 +274,7 @@ def main():
 
         seq_len = step_to_seq(i + resume_step)
 
-        if cfg.training.train_context < cfg.data.max_context: 
+        if seq_len < cfg.data.max_context: 
             text = text.reshape(-1, seq_len)
 
         # we add a 'grad_accum' batch dimension which we then iterate through in train_step
@@ -327,7 +327,7 @@ def main():
             for val_it, val_text in enumerate(
                 tqdm(vl, disable=not jax.process_index() == 0)
             ):
-                val_text = val_text[:, :512]
+                val_text = val_text[:, :seq_len]
                 val_text = shard(val_text)
 
                 if val_it < cfg.training.maximum_evaluation_steps:
