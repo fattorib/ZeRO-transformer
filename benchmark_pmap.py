@@ -176,8 +176,8 @@ if __name__ == "__main__":
         V2-8 - 50M param transformer
             512 CTX
             Optimized Pmap Step - Global BS 1024 - accum steps 16 - Num Executions 20
-            Mean Batch Time 0.0399 Seconds (will take an hour for 4 epochs LOL)
-
+            Mean Batch Time 0.0399 Seconds
+            
             1024 CTX
             Optimized Pmap Step - Global BS 512 - accum steps 16 - Num Executions 20
             Mean Batch Time 2.0866 Seconds
