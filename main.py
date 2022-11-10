@@ -262,19 +262,19 @@ def main():
 
     for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
-        if (i+resume_step) > cfg.training.total_steps:
+        if (i + resume_step) > cfg.training.total_steps:
             if jax.process_index() == 0:
                 logger.debug(f"Training has completed.")
 
             return True
 
-        if resume_step > 0 and (i <= resume_step%24558):
+        if resume_step > 0 and (i <= resume_step % 24558):
             # since we repeat epochs, just iterate partially through repeated ds
             continue
 
         rng, dropout_rng = jax.random.split(rng, 2)
 
-        seq_len = step_to_seq(i+resume_step)
+        seq_len = step_to_seq(i + resume_step)
 
         text = text.reshape(-1, seq_len)
 
@@ -308,7 +308,7 @@ def main():
         running_metrics = []
         validation_metrics = []
 
-        absolute_step = i+resume_step
+        absolute_step = i + resume_step
 
         train_metrics_np["Tokens Seen (B)"] = (
             num_host
