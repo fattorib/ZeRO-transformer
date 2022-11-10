@@ -1,66 +1,30 @@
 # Transformer - JAX
 
-Experimental codebase for TPU/GPU training of GPT-style transformers in JAX. A JAX successor to [Little-GPT](https://github.com/fattorib/Little-GPT).
+JAX codebase for distributed training of language models in flax using ```pmap``` or ```pjit```.
 
-## Setup
 
-### GPU:
+## Training 
 
-```bash
-git clone https://github.com/fattorib/transformer.git
-cd transformer 
-# download your data and unpack it 
-pip install --upgrade pip
-pip install "jax[cuda11_cudnn805]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-pip install -r requirements
+```pmap```:
+
+```bash 
+python main.py
 ```
 
-### TPU:
+```pjit``` (unoptimized):
+
+```bash 
+python main_pjit.py 
+```
+
+
+## TPU Setup
 
 ```bash
 git clone https://github.com/fattorib/transformer.git
 cd transformer 
 bash prepareTPUVM.sh
 ```
-
-### Dataset
-
-The dataset scripts here assume your dataset has been processed into a collection of tar archives that can be read with [webdataset](https://github.com/webdataset/webdataset). Once that is done change the required paths in ```conf/config.yaml```:
-
-```yaml
-data:
-    corpus: "openwebtext" #for logging corpus name in Weights and Biases
-    train_shard_urls: "data/processed/books_train-{000000..000013}.tar.gz" # required if not using TPUs. This is the path where you unpacked your dataset from above
-    validation_shard_urls: "data/processed/bookcorpus_val-{000000..000002}.tar.gz" # required if not using TPUs. This is the path where you unpacked your dataset from above
-    max_context: 1024 # maximum sequence length in tokens
-    full_steps_in_batch: 24558 # Number of individual steps required to complete an epoch
-    workers: 1 # number of workers for PyTorch dataloader 
-    checkpoint_directory: "checkpoints"
-    bucket_path: "bfattoribooks2" #bucket path if training with TPUs
-    index_path_train: "data/index/openwebtext.train.index" # list of all shards + GCP urls
-    index_path_validation: "data/index/openwebtext.val.index" # list of all shards + GCP urls
-```
-
-# Supported Features
-
-## ALiBi
-
-ALiBi (Attention with Linear Biases) modifies the attention matrix by adding in a position-dependant bias matrix before the softmax layer. Empirically, this has been shown to allow GPT-style transformer models to *retain* their performance on sequences longer than what they were trained on (usually you will see minimal PPL improvements when increasing the context length, this is still better than other relative position embeddings and it is quite fast). In your ```model_config``` file, set ```alibi_attn``` to ```True```. **Enabled by default**
-
-
-## Parallel Residual Blocks
-
-Introduced in [GPT-J](https://github.com/kingoflolz/mesh-transformer-jax). Training and inference throughput increase at the cost of minor performance degradation. In your ```model_config``` file, set ```fused_residuals``` to ```True```. **Enabled by default**
-
-# Experiments:
-
-See ```writeup.md```
-
-# Training 
-
-# TODOS:
-1. Ability to port weights from [Little-GPT](https://github.com/fattorib/Little-GPT)
-2. Extend training to use [```pjit```](https://jax.readthedocs.io/en/latest/jax-101/08-pjit.html?highlight=pjit#introduction-to-pjit)
 
 # Acknowledgements
 TPU Development and training supported with Cloud TPUs from Google's TPU Research Cloud (TRC)
