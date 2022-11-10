@@ -13,6 +13,7 @@ training:
   precision: 'bf16'
   staged_sequences: []
   staged_warmup_steps: 1000
+  train_context: 512
 
 model:
   size: "base"
