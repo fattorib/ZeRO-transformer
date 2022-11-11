@@ -47,7 +47,6 @@ class TransformerBlock(nn.Module):
                 self.N,
                 self.alibi_attn,
                 self.dtype,
-                self.qk_norm,
             )(norm(x), train, None, use_cache, layer_past)
             return (
                 x
@@ -207,6 +206,9 @@ class Transformer(nn.Module):
                 self.alibi_attn,
                 self.qk_norm,
             )(out, train)
+
+        # grab final layer activations
+        self.sow('intermediates', 'activations', x)
 
         out = nn.LayerNorm(dtype=self.dtype)(out)
 
