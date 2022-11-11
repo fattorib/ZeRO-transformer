@@ -266,8 +266,8 @@ def main():
 
             return True
 
-        if resume_step > 0 and (i <= resume_step % 24558): 
-            # THIS ONLY WORKS FOR SINGLE NODE TRAINING??? 
+        if resume_step > 0 and (i <= resume_step % 24558):
+            # THIS ONLY WORKS FOR SINGLE NODE TRAINING???
             # #IS ORIGINAL TRAINING RESUME VALID THOUGH?
             # since we repeat epochs, just iterate partially through repeated ds
             continue
@@ -276,7 +276,7 @@ def main():
 
         seq_len = step_to_seq(i + resume_step)
 
-        if seq_len < cfg.data.max_context: 
+        if seq_len < cfg.data.max_context:
             text = text.reshape(-1, seq_len)
 
         # we add a 'grad_accum' batch dimension which we then iterate through in train_step
@@ -375,9 +375,7 @@ def main():
                 wandb.log(train_metrics_np)
 
 
-@partial(
-    jax.pmap, axis_name="batch", static_broadcasted_argnums=(3,)
-)
+@partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=(3,))
 def train_step(
     state: Any,
     batch: jnp.array,
