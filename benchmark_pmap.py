@@ -172,7 +172,6 @@ if __name__ == "__main__":
 
         ~350M Params Transformer with ctx = 512
         
-
         V2-8 - 50M param transformer
             512 CTX
             Optimized Pmap Step - Global BS 1024 - accum steps 16 - Num Executions 20
