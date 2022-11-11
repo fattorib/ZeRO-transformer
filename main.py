@@ -267,7 +267,7 @@ def main():
             return True
 
         if resume_step > 0 and (i <= resume_step % 24558):
-            # THIS ONLY WORKS FOR SINGLE NODE TRAINING???
+            # THIS ONLY WORKS FOR SINGLE NODE TRAINING?
             # #IS ORIGINAL TRAINING RESUME VALID THOUGH?
             # since we repeat epochs, just iterate partially through repeated ds
             continue
@@ -278,7 +278,7 @@ def main():
 
         if seq_len < cfg.data.max_context:
             text = text.reshape(-1, seq_len)
-
+        
         # we add a 'grad_accum' batch dimension which we then iterate through in train_step
         text = text.reshape(
             cfg.training.gradient_accumulation_steps,
@@ -296,8 +296,14 @@ def main():
             state, text, rng_sharded, cfg.training.gradient_accumulation_steps
         )
 
+        if (i % 50) == 0:
+            # log l2 norm every 50 steps
+            l2_metrics = get_activations(state, text)
+            metrics["l2 activation norm"] = l2_metrics['activation l2 norm']
+
         metrics["Train Batch Time"] = time.time() - t0
         metrics["Train Sequence Length"] = seq_len
+        
 
         running_metrics.append(metrics)
 
@@ -468,6 +474,39 @@ def eval_step(state: Any, batch: jnp.array):
 
     return metrics
 
+@partial(jax.pmap, axis_name="batch")
+def get_activations(
+    state: Any,
+    batch: jnp.array,
+):
+    """
+    Gets pmapped-activations for a single batch 
+    """
+
+    def get_minibatch(batch, grad_idx):
+        return jax.tree_util.tree_map(
+            lambda x: jax.lax.dynamic_index_in_dim(x, grad_idx, keepdims=False, axis=1),
+            batch,
+        )
+
+    batch = get_minibatch(batch, 0)
+
+    out = state.apply_fn(
+            {"params": state.params["params"]},
+            x=batch,
+            labels=batch,
+            train=False,
+            mutable='intermediates'
+        )
+    
+    # get square of local l2 norm
+    local_l2_squared = jnp.sum(jnp.power(out[1]['intermediates']['activations'][0],2))
+
+    # sum up squared l2 norms on other devices
+    l2_norm =  jax.lax.psum(local_l2_squared, axis_name = 'batch')
+
+    metric = {'activation l2 norm': jnp.sqrt(l2_norm)}
+    return metric
 
 if __name__ == "__main__":
     # try:
