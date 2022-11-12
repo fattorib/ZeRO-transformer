@@ -299,7 +299,7 @@ def main():
             # log l2 norm every 50 steps
             l2_metrics = get_activations(state, text)
             metrics["l2 activation norm"] = l2_metrics['activation l2 norm'][0].astype(jnp.float32)
-            print(l2_metrics['activation l2 norm'][0])
+            print(f"Activation l2 norm: {l2_metrics['activation l2 norm'][0]}")
 
         metrics["Train Batch Time"] = time.time() - t0
         metrics["Train Sequence Length"] = seq_len
