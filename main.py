@@ -244,17 +244,23 @@ def main():
 
     running_metrics = []
 
-    step_to_seq = lambda x: cfg.training.train_context if x < cfg.training.staged_warmup_steps else 1024
+    step_to_seq = (
+        lambda x: cfg.training.train_context
+        if x < cfg.training.staged_warmup_steps
+        else 1024
+    )
 
-    accum_steps = lambda x: 8 if x < cfg.training.staged_warmup_steps else 32 #TODO: Determine ranges here
+    accum_steps = (
+        lambda x: 8 if x < cfg.training.staged_warmup_steps else 32
+    )  # TODO: Determine ranges here
 
     state = flax.jax_utils.replicate(state)
 
-    rng = jax.random.fold_in(rng, resume_step) # fold in resume step to create new rng
+    rng = jax.random.fold_in(rng, resume_step)  # fold in resume step to create new rng
 
     for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
-        if (i+resume_step) > cfg.training.total_steps:
+        if (i + resume_step) > cfg.training.total_steps:
             if jax.process_index() == 0:
                 logger.debug(f"Training has completed.")
 
@@ -265,9 +271,9 @@ def main():
 
             continue
 
-        seq_len = step_to_seq(i+resume_step)
+        seq_len = step_to_seq(i + resume_step)
 
-        gradient_accumulation_steps = accum_steps(i+resume_step)
+        gradient_accumulation_steps = accum_steps(i + resume_step)
 
         if seq_len < cfg.data.max_context:
             text = text.reshape(-1, seq_len)
@@ -308,7 +314,7 @@ def main():
         running_metrics = []
         validation_metrics = []
 
-        absolute_step = i+resume_step
+        absolute_step = i + resume_step
 
         train_metrics_np["Tokens Seen (B)"] = (
             num_host
