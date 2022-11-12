@@ -151,11 +151,6 @@ def main():
                 f"Performing data parallel training only. Model and train state will be replicated across all devices"
             )
 
-        if len(cfg.training.staged_sequences) > 0:
-            logger.debug(
-                f"Running sequence length warmup for {cfg.training.staged_warmup_steps} total steps with stages: {cfg.training.staged_sequences}"
-            )
-
     if not args.resume:
         if cfg.data.bucket_path is not None:
             # clear bucket
@@ -249,31 +244,38 @@ def main():
 
     running_metrics = []
 
-    step_to_seq = lambda x: cfg.training.train_context
+    step_to_seq = lambda x: cfg.training.train_context if x < cfg.training.staged_warmup_steps else 1024
+
+    accum_steps = lambda x: 8 if x < cfg.training.staged_warmup_steps else 32 #TODO: Determine ranges here
 
     state = flax.jax_utils.replicate(state)
 
+    rng = jax.random.fold_in(rng, resume_step) # fold in resume step to create new rng
+
     for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
-        if (i) > cfg.training.total_steps:
+        if (i+resume_step) > cfg.training.total_steps:
             if jax.process_index() == 0:
                 logger.debug(f"Training has completed.")
 
             return True
 
         rng, dropout_rng = jax.random.split(rng, 2)
-        if resume_step > 0 and (i <= resume_step):
+        if resume_step > 0 and (i <= (resume_step % 24558)):
+
             continue
 
-        seq_len = step_to_seq(i)
+        seq_len = step_to_seq(i+resume_step)
+
+        gradient_accumulation_steps = accum_steps(i+resume_step)
 
         if seq_len < cfg.data.max_context:
             text = text.reshape(-1, seq_len)
 
         # we add a 'grad_accum' batch dimension which we then iterate through in train_step
         text = text.reshape(
-            cfg.training.gradient_accumulation_steps,
-            text.shape[0] // cfg.training.gradient_accumulation_steps,
+            gradient_accumulation_steps,
+            text.shape[0] // gradient_accumulation_steps,
             seq_len,
         ).transpose(1, 0, 2)
 
@@ -284,7 +286,7 @@ def main():
         t0 = time.time()
 
         state, metrics = train_step(
-            state, text, rng_sharded, cfg.training.gradient_accumulation_steps
+            state, text, rng_sharded, gradient_accumulation_steps
         )
 
         if (i % cfg.norm_log_frequency) == 0:
@@ -306,7 +308,7 @@ def main():
         running_metrics = []
         validation_metrics = []
 
-        absolute_step = i
+        absolute_step = i+resume_step
 
         train_metrics_np["Tokens Seen (B)"] = (
             num_host
@@ -326,7 +328,6 @@ def main():
             for val_it, val_text in enumerate(
                 tqdm(vl, disable=not jax.process_index() == 0)
             ):
-                val_text = val_text[:, :seq_len]
                 val_text = shard(val_text)
 
                 if val_it < cfg.training.maximum_evaluation_steps:
@@ -372,7 +373,7 @@ def main():
                 wandb.log(train_metrics_np)
 
 
-@partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=(3,))
+@partial(jax.pmap, axis_name="batch")
 def train_step(
     state: Any,
     batch: jnp.array,

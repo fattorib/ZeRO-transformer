@@ -22,7 +22,7 @@ small:
   embedding_dim: 64
   vocab_size: 50258
   num_head: 8
-  block_size: 32
+  block_size: 512
   dropout: 0.1
   N: 2
   fused_residuals: True
@@ -54,7 +54,7 @@ large:
   embedding_dim: 1536
   vocab_size: 50260
   num_head: 12
-  block_size: 512
+  block_size: 1024
   dropout: 0.1
   N: 18
   fused_residuals: True
