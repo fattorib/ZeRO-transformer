@@ -151,11 +151,6 @@ def main():
                 f"Performing data parallel training only. Model and train state will be replicated across all devices"
             )
 
-        else:
-            logger.debug(
-                f"Performing DP and MP training with grid shape {(cfg.device.dp_devices, cfg.device.mp_devices)}"
-            )
-
         if len(cfg.training.staged_sequences) > 0:
             logger.debug(
                 f"Running sequence length warmup for {cfg.training.staged_warmup_steps} total steps with stages: {cfg.training.staged_sequences}"
@@ -268,16 +263,13 @@ def main():
 
         rng, dropout_rng = jax.random.split(rng, 2)
         if resume_step > 0 and (i <= resume_step):
-            # THIS ONLY WORKS FOR SINGLE NODE TRAINING?
-            # #IS ORIGINAL TRAINING RESUME VALID THOUGH?
-            # since we repeat epochs, just iterate partially through repeated ds
             continue
 
         seq_len = step_to_seq(i)
 
         if seq_len < cfg.data.max_context:
             text = text.reshape(-1, seq_len)
-        
+
         # we add a 'grad_accum' batch dimension which we then iterate through in train_step
         text = text.reshape(
             cfg.training.gradient_accumulation_steps,
@@ -295,14 +287,14 @@ def main():
             state, text, rng_sharded, cfg.training.gradient_accumulation_steps
         )
 
-        if (i % 50) == 0:
-            # log l2 norm every 50 steps
+        if (i % cfg.norm_log_frequency) == 0:
             l2_metrics = get_activations(state, text)
-            metrics["l2 activation norm"] = l2_metrics['activation l2 norm'][0].astype(jnp.float32)
+            metrics["l2 activation norm"] = l2_metrics["activation l2 norm"][0].astype(
+                jnp.float32
+            )
 
         metrics["Train Batch Time"] = time.time() - t0
         metrics["Train Sequence Length"] = seq_len
-        
 
         running_metrics.append(metrics)
 
@@ -388,10 +380,13 @@ def train_step(
     accum_steps: int = 8,
 ):
     """
-    Train on a single batch
-    This means that the batch will be size (local_bs*grad_accum, ctx) instead of (local_bs, ctx)
+    Train on a single batch of data. Designed to perform gradient and loss
+    communication once per _batch_ instead of once per mini batch
 
-    Designed to perform gradient and loss communication once per _batch_ instead of once per mini batch
+    NOTE: This means that the batch will be size
+    (local_bs*grad_accum, ctx) instead of (local_bs, ctx)
+
+
     """
 
     def get_minibatch(batch, grad_idx):
@@ -473,13 +468,15 @@ def eval_step(state: Any, batch: jnp.array):
 
     return metrics
 
+
 @partial(jax.pmap, axis_name="batch")
 def get_activations(
     state: Any,
     batch: jnp.array,
 ):
     """
-    Gets pmapped-activations for a single batch 
+    Logs the $\ell^2$ norm of the final layer's activations, before layernorm.
+
     """
 
     def get_minibatch(batch, grad_idx):
@@ -491,21 +488,21 @@ def get_activations(
     batch = get_minibatch(batch, 0)
 
     out = state.apply_fn(
-            {"params": state.params["params"]},
-            x=batch,
-            labels=batch,
-            train=False,
-            mutable='intermediates'
-        )
-    
-    # get square of local l2 norm
-    local_l2_squared = jnp.sum(jnp.power(out[1]['intermediates']['activations'][0],2))
+        {"params": state.params["params"]},
+        x=batch,
+        labels=batch,
+        train=False,
+        mutable="intermediates",
+    )
+
+    # get square of local norm
+    local_l2_squared = jnp.sum(jnp.power(out[1]["intermediates"]["activations"][0], 2))
 
     # sum up squared l2 norms on other devices
-    l2_norm =  jax.lax.psum(local_l2_squared, axis_name = 'batch')
+    l2_norm = jax.lax.psum(local_l2_squared, axis_name="batch")
 
-    metric = {'activation l2 norm': jnp.sqrt(l2_norm)}
-    return metric
+    return {"activation l2 norm": jnp.sqrt(l2_norm)}
+
 
 if __name__ == "__main__":
     # try:
