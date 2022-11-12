@@ -266,13 +266,12 @@ def main():
 
             return True
 
+        rng, dropout_rng = jax.random.split(rng, 2)
         if resume_step > 0 and (i <= resume_step % 24558):
             # THIS ONLY WORKS FOR SINGLE NODE TRAINING?
             # #IS ORIGINAL TRAINING RESUME VALID THOUGH?
             # since we repeat epochs, just iterate partially through repeated ds
             continue
-
-        rng, dropout_rng = jax.random.split(rng, 2)
 
         seq_len = step_to_seq(i + resume_step)
 
