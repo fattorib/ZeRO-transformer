@@ -181,6 +181,7 @@ class CausalAttention(nn.Module):
 
         return dropout()(out)
 
+
 # Work in progress code, not currently used in src/models/GPT.py
 class ShardedCausalAttention(nn.Module):
     """Standard causal multi-headed attention modified to support sharding

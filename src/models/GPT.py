@@ -208,7 +208,7 @@ class Transformer(nn.Module):
             )(out, train)
 
         # grab final layer activations
-        self.sow('intermediates', 'activations', out)
+        self.sow("intermediates", "activations", out)
 
         out = nn.LayerNorm(dtype=self.dtype)(out)
 
