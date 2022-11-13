@@ -38,7 +38,7 @@ NUM_PASSES = 10
 
 def main_optimized():
     # base model is ~125M params
-    model = model_getter("base", return_cfg=False)
+    model = model_getter("large", return_cfg=False)
 
     # State Creation, etc
     init_rng = jax.random.PRNGKey(0)
@@ -148,7 +148,7 @@ def main_naive():
 if __name__ == "__main__":
     main_optimized()
 
-    main_naive()
+    # main_naive()
 
     """
         V2-8 Benchmarks
