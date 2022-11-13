@@ -251,7 +251,9 @@ def main():
     )
 
     accum_steps = (
-        lambda x: 16 if x < cfg.training.staged_warmup_steps else cfg.training.gradient_accumulation_steps
+        lambda x: 16
+        if x < cfg.training.staged_warmup_steps
+        else cfg.training.gradient_accumulation_steps
     )
 
     state = flax.jax_utils.replicate(state)
@@ -333,8 +335,8 @@ def main():
         if (i) % (cfg.training.evaluation_frequency) == 0:
             for val_it, val_text in enumerate(
                 tqdm(vl, disable=not jax.process_index() == 0)
-            ):  
-                val_text = val_text[:,:512]
+            ):
+                val_text = val_text[:, :512]
                 val_text = shard(val_text)
 
                 if val_it < cfg.training.maximum_evaluation_steps:

@@ -82,7 +82,9 @@ def main_optimized():
         test_batch = shard(test_batch)
         rng_sharded = shard_prng_key(rng)
         t0 = time()
-        state, metrics = train_step(state, test_batch, rng_sharded, GRADIENT_ACCUMULATION_STEPS)
+        state, metrics = train_step(
+            state, test_batch, rng_sharded, GRADIENT_ACCUMULATION_STEPS
+        )
         times.append(time() - t0)
 
     print(
