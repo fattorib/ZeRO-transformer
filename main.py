@@ -297,7 +297,7 @@ def main():
             state, text, rng_sharded, gradient_accumulation_steps
         )
 
-        if (i % cfg.norm_log_frequency) == 0:
+        if (i % cfg.training.norm_log_frequency) == 0:
             l2_metrics = get_activations(state, text)
             metrics["l2 activation norm"] = l2_metrics["activation l2 norm"][0].astype(
                 jnp.float32
