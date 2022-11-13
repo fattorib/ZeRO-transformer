@@ -3,20 +3,20 @@ training:
   batch_size: 128
   peak_learning_rate: 2.5e-4
   warmup_steps: 2000
-  decay_steps: 176400
-  total_steps: 196000
+  decay_steps: 220000
+  total_steps: 245000
   end_learning_rate: 2.5e-5
   weight_decay: 0.1
-  gradient_accumulation_steps: 8
+  gradient_accumulation_steps: 32
   evaluation_frequency: 500
   maximum_evaluation_steps: 500
   norm_log_frequency: 100
   precision: 'bf16'
-  staged_warmup_steps: 147000
+  staged_warmup_steps: 98000
   train_context: 128
 
 model:
-  size: "base"
+  size: "large"
 
 data:
   corpus: "openwebtext"

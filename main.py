@@ -237,7 +237,7 @@ def main():
 
     vl = DataLoader(
         dataset=validation_dataset,
-        batch_size=cfg.training.batch_size // 8,
+        batch_size=cfg.training.batch_size // 4,
         collate_fn=numpy_collate,
         drop_last=True,
     )
@@ -247,12 +247,12 @@ def main():
     step_to_seq = (
         lambda x: cfg.training.train_context
         if x < cfg.training.staged_warmup_steps
-        else 1024
+        else 512
     )
 
     accum_steps = (
-        lambda x: 8 if x < cfg.training.staged_warmup_steps else 32
-    )  # TODO: Determine ranges here
+        lambda x: 16 if x < cfg.training.staged_warmup_steps else cfg.training.gradient_accumulation_steps
+    )
 
     state = flax.jax_utils.replicate(state)
 
@@ -333,7 +333,8 @@ def main():
         if (i) % (cfg.training.evaluation_frequency) == 0:
             for val_it, val_text in enumerate(
                 tqdm(vl, disable=not jax.process_index() == 0)
-            ):
+            ):  
+                val_text = val_text[:,:512]
                 val_text = shard(val_text)
 
                 if val_it < cfg.training.maximum_evaluation_steps:
