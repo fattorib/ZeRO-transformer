@@ -182,7 +182,7 @@ if __name__ == '__main__':
             rng, batch_rng = jax.random.split(rng, 2)
             
             # Create a test batch of data
-            test_batch = jax.random.randint(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32,maxval=50257, minval=0)
+            test_batch = jax.random.randint(key = rng, shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32,maxval=50257, minval=0)
             test_batch = jax.tree_util.tree_map(
                             lambda x: x.reshape((GRAD_ACCUM_STEPS,)+ (x.shape[0]//GRAD_ACCUM_STEPS,) + x.shape[1:]),
                             test_batch,
