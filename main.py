@@ -264,7 +264,7 @@ def main():
 
     for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
-        if (i + resume_step) > cfg.training.total_steps:
+        if (i + new_steps) > cfg.training.total_steps:
             if jax.process_index() == 0:
                 logger.debug(f"Training has completed.")
 
