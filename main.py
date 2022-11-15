@@ -260,7 +260,9 @@ def main():
 
     rng = jax.random.fold_in(rng, resume_step)  # fold in resume step to create new rng
 
-    new_steps = 0 #simplest way to track the global step count
+    new_steps = 0 #simplest way to track the global step count when resuming
+    # tracking i would work except we only slice partially into first epoch to get the data as 
+    # it is quicker than iterating out for 100-200k steps
 
     for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
