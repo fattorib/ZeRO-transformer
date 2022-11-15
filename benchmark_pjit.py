@@ -174,6 +174,9 @@ if __name__ == '__main__':
                             init_batch,
                         ).transpose(1, 0, 2)
         
+        #compile first 
+        state, metrics = train_step_pjit(state, batch, dropout_rng)
+        
         times = []
         for _ in tqdm(range(NUM_PASSES)):
             rng, batch_rng = jax.random.split(rng, 2)
@@ -186,7 +189,7 @@ if __name__ == '__main__':
                         ).transpose(1, 0, 2)
 
             t0 = time()
-            state, metrics = train_step_pjit(state, batch, dropout_rng)
+            state, metrics = train_step_pjit(state, test_batch, dropout_rng)
             times.append(time() - t0)
 
 
