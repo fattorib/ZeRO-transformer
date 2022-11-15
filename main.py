@@ -243,7 +243,9 @@ def main():
     )
 
     running_metrics = []
-
+    
+    #NOTE: We just need to comment these out and replace with 
+    # step_to_seq = lambda x: 512 and accum_steps = lambda x: 32
     step_to_seq = (
         lambda x: cfg.training.train_context
         if x < cfg.training.staged_warmup_steps
@@ -266,7 +268,7 @@ def main():
 
     for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
-        if (i + new_steps) > cfg.training.total_steps:
+        if (resume_step + new_steps) > cfg.training.total_steps:
             if jax.process_index() == 0:
                 logger.debug(f"Training has completed.")
 
