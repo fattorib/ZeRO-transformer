@@ -260,6 +260,8 @@ def main():
 
     rng = jax.random.fold_in(rng, resume_step)  # fold in resume step to create new rng
 
+    new_steps = 0 #simplest way to track the global step count
+
     for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
         if (i + resume_step) > cfg.training.total_steps:
@@ -273,9 +275,9 @@ def main():
 
             continue
 
-        seq_len = step_to_seq(i + resume_step)
+        seq_len = step_to_seq(resume_step + new_steps)
 
-        gradient_accumulation_steps = accum_steps(i + resume_step)
+        gradient_accumulation_steps = accum_steps(resume_step + new_steps)
 
         if seq_len < cfg.data.max_context:
             text = text.reshape(-1, seq_len)
@@ -316,7 +318,7 @@ def main():
         running_metrics = []
         validation_metrics = []
 
-        absolute_step = i + resume_step
+        absolute_step = resume_step + new_steps
 
         train_metrics_np["Tokens Seen (B)"] = (
             num_host
@@ -331,6 +333,8 @@ def main():
             )
             / 1e9
         )
+
+        new_steps += 1
 
         if (i) % (cfg.training.evaluation_frequency) == 0:
             for val_it, val_text in enumerate(
