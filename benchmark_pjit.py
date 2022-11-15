@@ -19,7 +19,7 @@ from tqdm import tqdm
 
 if __name__ == '__main__':
     # CONSTANTS
-    GRAD_ACCUM_STEPS = 32
+    GRAD_ACCUM_STEPS = 128
     BATCH_SIZE = 512
     CTX_LEN = 1024
 
