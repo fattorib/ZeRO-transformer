@@ -33,7 +33,7 @@ if __name__ == '__main__':
     mesh = Mesh(devices, ("dp", "mp"))
 
     # Setting up model + param spec
-    model = model_getter("test", return_cfg=False)
+    model = model_getter("base", return_cfg=False)
     rng = jax.random.PRNGKey(23)
     batch_tok = jax.random.randint(rng, shape=(1, CTX_LEN), maxval=50257, minval=0)
     param_shape = jax.eval_shape(model.init, rng, batch_tok)
