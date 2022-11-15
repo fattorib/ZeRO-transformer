@@ -245,24 +245,26 @@ def main():
     running_metrics = []
     
     #NOTE: We just need to comment these out and replace with 
-    # step_to_seq = lambda x: 512 and accum_steps = lambda x: 32
-    step_to_seq = (
-        lambda x: cfg.training.train_context
-        if x < cfg.training.staged_warmup_steps
-        else 512
-    )
+    # 
+    step_to_seq = lambda x: 512
+    accum_steps = lambda x: 32
+    # step_to_seq = (
+    #     lambda x: cfg.training.train_context
+    #     if x < cfg.training.staged_warmup_steps
+    #     else 512
+    # )
 
-    accum_steps = (
-        lambda x: 16
-        if x < cfg.training.staged_warmup_steps
-        else cfg.training.gradient_accumulation_steps
-    )
+    # accum_steps = (
+    #     lambda x: 16
+    #     if x < cfg.training.staged_warmup_steps
+    #     else cfg.training.gradient_accumulation_steps
+    # )
 
     state = flax.jax_utils.replicate(state)
 
     rng = jax.random.fold_in(rng, resume_step)  # fold in resume step to create new rng
 
-    new_steps = 0 #simplest way to track the global step count when resuming
+    new_steps = 0 #simplest way to track the global step count when resuming. We only update this during _training_
     # tracking i would work except we only slice partially into first epoch to get the data as 
     # it is quicker than iterating out for 100-200k steps
 
