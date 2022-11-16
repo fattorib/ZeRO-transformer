@@ -167,7 +167,7 @@ class Transformer(nn.Module):
     ) -> Union[jnp.array, Tuple[jnp.array, jnp.array]]:
         B, T = x.shape[0:2]
 
-        dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
+        dropout = partial(nn.Dropout, rate=self.dropout, deterministic=True)
 
         embed = nn.Embed(
             name="wte",
