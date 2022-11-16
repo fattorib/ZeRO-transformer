@@ -347,7 +347,7 @@ def main():
             for val_it, val_text in enumerate(
                 tqdm(vl, disable=not jax.process_index() == 0)
             ):
-                val_text = val_text[:, :512]
+                # val_text = val_text[:, :512]
                 val_text = shard(val_text)
 
                 if val_it < cfg.training.maximum_evaluation_steps:
