@@ -387,7 +387,7 @@ def main():
 
                 else:
                     if save_to_bucket:
-                        if validation_metrics_np['Validation LM Loss'] < best_validation_loss:
+                        if validation_metrics_np['Validation LM Loss'] == best_validation_loss:
                             save_checkpoint_best(
                                 state,
                                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
