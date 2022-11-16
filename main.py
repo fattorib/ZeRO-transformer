@@ -220,7 +220,7 @@ def main():
         wds.SimpleShardList(train_shards),
         split_by_jax_process,
         wds.tarfile_to_samples(handler=wds.warn_and_continue),
-        wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23+resume_step)),
+        wds.shuffle(1e7, initial=1e7, rng=pyrandom.Random(23+resume_step)),
         wds.decode(handler=wds.warn_and_continue),
         wds.map(preprocess),
     ).repeat(nepochs=cfg.training.max_epochs)
@@ -285,9 +285,10 @@ def main():
             return True
 
         rng, dropout_rng = jax.random.split(rng, 2)
-        if resume_step > 0 and (i <= (resume_step % 24558)):
 
-            continue
+        #TODO: Comment out this logic by replacing the shard shuffle elsewhere
+        # if resume_step > 0 and (i <= (resume_step % 24558)):
+        #     continue
 
         seq_len = step_to_seq(resume_step + new_steps)
 
@@ -368,8 +369,7 @@ def main():
                 for k in validation_metrics[0]
             }
 
-            if validation_metrics_np['Validation LM Loss'] < best_validation_loss:
-                best_validation_loss = validation_metrics_np['Validation LM Loss']
+            
 
             if jax.process_index() == 0:
                 train_metrics_np.update(validation_metrics_np)
@@ -387,7 +387,8 @@ def main():
 
                 else:
                     if save_to_bucket:
-                        if validation_metrics_np['Validation LM Loss'] == best_validation_loss:
+                        if validation_metrics_np['Validation LM Loss'] < best_validation_loss:
+                            best_validation_loss = validation_metrics_np['Validation LM Loss']
                             save_checkpoint_best(
                                 state,
                                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
