@@ -52,6 +52,12 @@ def save_checkpoint(state, workdir):
         step = int(state.step)
         checkpoints.save_checkpoint(workdir, state, step, keep=5, overwrite=True)
 
+def save_checkpoint_best(state, workdir):
+    if jax.process_index() == 0:
+        state = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], state))
+        step = int(state.step)
+        checkpoints.save_checkpoint(workdir, state, step, keep=1, overwrite=True, prefix = 'checkpoint_best_')
+
 
 def restore_checkpoint(state, workdir, prefix):
     return checkpoints.restore_checkpoint(workdir, state, prefix=prefix)
@@ -268,6 +274,8 @@ def main():
     # tracking i would work except we only slice partially into first epoch to get the data as 
     # it is quicker than iterating out for 100-200k steps
 
+    best_validation_loss = 1e6 # Might have to be manually set/reset at a future resume
+
     for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
         if (resume_step + new_steps) > cfg.training.total_steps:
@@ -360,6 +368,9 @@ def main():
                 for k in validation_metrics[0]
             }
 
+            if validation_metrics_np['Validation LM Loss'] < best_validation_loss:
+                best_validation_loss = validation_metrics_np['Validation LM Loss']
+
             if jax.process_index() == 0:
                 train_metrics_np.update(validation_metrics_np)
                 train_metrics_np.pop("Train Batch Time")
@@ -376,10 +387,16 @@ def main():
 
                 else:
                     if save_to_bucket:
-                        save_checkpoint(
-                            state,
-                            workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                        )
+                        if validation_metrics_np['Validation LM Loss'] < best_validation_loss:
+                            save_checkpoint_best(
+                                state,
+                                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                            )
+                        else:
+                            save_checkpoint(
+                                state,
+                                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                            )
                     else:
                         save_checkpoint(state, workdir=cfg.data.checkpoint_directory)
 
