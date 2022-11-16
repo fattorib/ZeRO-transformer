@@ -246,7 +246,7 @@ def main():
     #NOTE: We just need to comment these out and replace with 
     # 
     step_to_seq = lambda x: 1024
-    accum_steps = lambda x: 32
+    accum_steps = lambda x: 16
     # step_to_seq = (
     #     lambda x: cfg.training.train_context
     #     if x < cfg.training.staged_warmup_steps
