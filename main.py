@@ -313,6 +313,7 @@ def main():
 
         metrics["Train Batch Time"] = time.time() - t0
         metrics["Train Sequence Length"] = seq_len
+        metrics["Learning Rate"] = learning_rate_fn(resume_step + new_steps)
 
         running_metrics.append(metrics)
 
