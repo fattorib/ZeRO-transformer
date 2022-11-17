@@ -220,6 +220,7 @@ class ShardedCausalAttention(nn.Module):
         train: bool,
     ) -> jnp.array:
         raise NotImplementedError
+
     #     dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
     #     seq_len = x.shape[1]
 

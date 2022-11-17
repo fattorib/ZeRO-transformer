@@ -52,6 +52,7 @@ def save_checkpoint(state, workdir):
         step = int(state.step)
         checkpoints.save_checkpoint(workdir, state, step, keep=5, overwrite=True)
 
+
 def restore_checkpoint(state, workdir, prefix):
     return checkpoints.restore_checkpoint(workdir, state, prefix=prefix)
 
@@ -80,7 +81,6 @@ def main():
     # setting up GCP bucket/client info if training on TPU
     save_to_bucket = False
     client = None
-    bucket_path = None
     if platform == "tpu":
         if cfg.data.bucket_path is not None:
             # use GCP
@@ -114,31 +114,27 @@ def main():
 
     resume_step = 0
 
-    if cfg.device.mp_devices == 1:
-        state = create_train_state(
-            init_rng,
-            learning_rate_fn,
-            weight_decay=cfg.training.weight_decay,
-            model=model,
-        )
+    state = create_train_state(
+        init_rng,
+        learning_rate_fn,
+        weight_decay=cfg.training.weight_decay,
+        model=model,
+    )
 
-        if args.resume:
-            if save_to_bucket:
-                state = restore_checkpoint(
-                    state,
-                    workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                    prefix="checkpoint_",
-                )
-            else:
-                state = restore_checkpoint(state, workdir=cfg.data.checkpoint_directory)
+    if args.resume:
+        if save_to_bucket:
+            state = restore_checkpoint(
+                state,
+                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                prefix="checkpoint_",
+            )
+        else:
+            state = restore_checkpoint(state, workdir=cfg.data.checkpoint_directory)
 
-            if jax.process_index() == 0:
-                logger.debug(f"Resuming training from step {int(state.step)}")
+        if jax.process_index() == 0:
+            logger.debug(f"Resuming training from step {int(state.step)}")
 
-            resume_step = int(state.step)
-
-    else:
-        pass
+        resume_step = int(state.step)
 
     if jax.process_index() == 0:
         logger.debug(f"VM setup with {num_devices} devices.")
@@ -213,7 +209,7 @@ def main():
         wds.SimpleShardList(train_shards),
         split_by_jax_process,
         wds.tarfile_to_samples(handler=wds.warn_and_continue),
-        wds.shuffle(1e7, initial=1e7, rng=pyrandom.Random(23+resume_step)),
+        wds.shuffle(1e7, initial=1e7, rng=pyrandom.Random(23 + resume_step)),
         wds.decode(handler=wds.warn_and_continue),
         wds.map(preprocess),
     ).repeat(nepochs=cfg.training.max_epochs)
@@ -222,7 +218,7 @@ def main():
         wds.SimpleShardList(validation_shards),
         split_by_jax_process,
         wds.tarfile_to_samples(handler=wds.warn_and_continue),
-        wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23+resume_step)),
+        wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23 + resume_step)),
         wds.decode(handler=wds.warn_and_continue),
         wds.map(preprocess),
     )
@@ -242,30 +238,25 @@ def main():
     )
 
     running_metrics = []
-    
-    #NOTE: We just need to comment these out and replace with 
-    # 
-    step_to_seq = lambda x: 1024
-    accum_steps = lambda x: 16
-    # step_to_seq = (
-    #     lambda x: cfg.training.train_context
-    #     if x < cfg.training.staged_warmup_steps
-    #     else 512
-    # )
 
-    # accum_steps = (
-    #     lambda x: 16
-    #     if x < cfg.training.staged_warmup_steps
-    #     else cfg.training.gradient_accumulation_steps
-    # )
+    step_to_seq = (
+        lambda x: cfg.training.train_context
+        if x < cfg.training.staged_warmup_steps
+        else 512
+    )
+
+    accum_steps = (
+        lambda x: 16
+        if x < cfg.training.staged_warmup_steps
+        else cfg.training.gradient_accumulation_steps
+    )
 
     state = flax.jax_utils.replicate(state)
 
     rng = jax.random.fold_in(rng, resume_step)  # fold in resume step to create new rng
 
-    new_steps = 0 #simplest way to track the global step count when resuming. We only update this during _training_
-    # tracking i would work except we only slice partially into first epoch to get the data as 
-    # it is quicker than iterating out for 100-200k steps
+    # quick way to track global step count when resuming a run
+    new_steps = 0
 
     for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
@@ -276,10 +267,6 @@ def main():
             return True
 
         rng, dropout_rng = jax.random.split(rng, 2)
-
-        #TODO: Comment out this logic by replacing the shard shuffle elsewhere
-        # if resume_step > 0 and (i <= (resume_step % 24558)):
-        #     continue
 
         seq_len = step_to_seq(resume_step + new_steps)
 
@@ -304,12 +291,6 @@ def main():
         state, metrics = train_step(
             state, text, rng_sharded, gradient_accumulation_steps
         )
-
-        # if (i % cfg.training.norm_log_frequency) == 0:
-        #     l2_metrics = get_activations(state, text)
-        #     metrics["l2 activation norm"] = l2_metrics["activation l2 norm"][0].astype(
-        #         jnp.float32
-        #     )
 
         metrics["Train Batch Time"] = time.time() - t0
         metrics["Train Sequence Length"] = seq_len
@@ -347,7 +328,6 @@ def main():
             for val_it, val_text in enumerate(
                 tqdm(vl, disable=not jax.process_index() == 0)
             ):
-                # val_text = val_text[:, :512]
                 val_text = shard(val_text)
 
                 if val_it < cfg.training.maximum_evaluation_steps:
@@ -360,8 +340,6 @@ def main():
                 k: np.mean([metrics[k] for metrics in validation_metrics])
                 for k in validation_metrics[0]
             }
-
-            
 
             if jax.process_index() == 0:
                 train_metrics_np.update(validation_metrics_np)
@@ -492,44 +470,5 @@ def eval_step(state: Any, batch: jnp.array):
     return metrics
 
 
-@partial(jax.pmap, axis_name="batch")
-def get_activations(
-    state: Any,
-    batch: jnp.array,
-):
-    """
-    Logs the $\ell^2$ norm of the final layer's activations, before layernorm.
-
-    """
-
-    def get_minibatch(batch, grad_idx):
-        return jax.tree_util.tree_map(
-            lambda x: jax.lax.dynamic_index_in_dim(x, grad_idx, keepdims=False, axis=1),
-            batch,
-        )
-
-    batch = get_minibatch(batch, 0)
-
-    out = state.apply_fn(
-        {"params": state.params["params"]},
-        x=batch,
-        labels=batch,
-        train=False,
-        mutable="intermediates",
-    )
-
-    # get square of local norm
-    local_l2_squared = jnp.sum(jnp.power(out[1]["intermediates"]["activations"][0], 2))
-
-    # sum up squared l2 norms on other devices
-    l2_norm = jax.lax.psum(local_l2_squared, axis_name="batch")
-
-    return {"activation l2 norm": jnp.sqrt(l2_norm)}
-
-
 if __name__ == "__main__":
-    # try:
-    # main()
-    # except Exception as e:
-    # print(f"Error encountered: {e}")
     main()
