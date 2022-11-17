@@ -21,13 +21,13 @@ if __name__ == "__main__":
     GRAD_ACCUM_STEPS = 128
     BATCH_SIZE = 512
     CTX_LEN = 1024
-    MODEL_SIZE = "base"
+    MODEL_SIZE = "medium"
 
     # Benchmarking Constants
     NUM_PASSES = 10
 
     # Setting up device mesh
-    mesh_shape = (8, 1)
+    mesh_shape = (1, 8)
     devices = np.asarray(jax.devices()).reshape(*mesh_shape)
     mesh = Mesh(devices, ("dp", "mp"))
 
