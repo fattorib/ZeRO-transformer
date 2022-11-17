@@ -53,7 +53,7 @@ medium:
   embedding_dim: 1024
   vocab_size: 50264
   num_head: 16
-  block_size: 512
+  block_size: 1024
   dropout: 0.1
   N: 20
   fused_residuals: True
