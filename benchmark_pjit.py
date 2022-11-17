@@ -1,4 +1,5 @@
 import functools
+from time import time
 from typing import Any
 
 import jax
@@ -8,21 +9,18 @@ from flax.training.train_state import TrainState
 from jax.experimental import PartitionSpec
 from jax.experimental.maps import Mesh
 from jax.experimental.pjit import pjit, with_sharding_constraint
+from tqdm import tqdm
 
 from main import train_step
 from src.models.GPT import model_getter
 from src.training.training_utils import TrainState, get_optimizer
 from src.utils.partitioning import create_opt_spec, set_partitions
-from time import time
-from tqdm import tqdm 
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     # CONSTANTS
     GRAD_ACCUM_STEPS = 128
     BATCH_SIZE = 512
     CTX_LEN = 1024
-
 
     # Benchmarking Constants
     NUM_PASSES = 50
@@ -63,18 +61,25 @@ if __name__ == '__main__':
     )
 
     def train_step(
-        state: Any, batch: jnp.array, rng_key: jax.random.PRNGKey = None, param_spec: Any = None, grad_accum_steps: int = None
+        state: Any,
+        batch: jnp.array,
+        rng_key: jax.random.PRNGKey = None,
+        param_spec: Any = None,
+        grad_accum_steps: int = None,
     ):
         """Train on a single Gradient-Accumulation batch
         This means that the batch will be size (local_bs*grad_accum, ctx) instead of (local_bs, ctx)
 
         """
+
         def get_minibatch(batch, grad_idx):
             return jax.tree_util.tree_map(
-                lambda x: jax.lax.dynamic_index_in_dim(x, grad_idx, keepdims=False, axis=1),
+                lambda x: jax.lax.dynamic_index_in_dim(
+                    x, grad_idx, keepdims=False, axis=1
+                ),
                 batch,
             )
-        
+
         def loss_fn(params, batch):
             _, loss = state.apply_fn(
                 {"params": params["params"]},
@@ -83,32 +88,32 @@ if __name__ == '__main__':
                 train=True,
                 rngs={"dropout": rng_key},
             )
-            return loss 
+            return loss
 
         grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
 
         def loss_and_grad(grad_idx):
             minibatch = (
-                    get_minibatch(batch, grad_idx) if grad_idx is not None else batch
-                )
-            minibatch = with_sharding_constraint(minibatch, PartitionSpec('dp'))
+                get_minibatch(batch, grad_idx) if grad_idx is not None else batch
+            )
+            minibatch = with_sharding_constraint(minibatch, PartitionSpec("dp"))
 
             loss, grads = grad_fn(state.params, minibatch)
 
             grads = with_sharding_constraint(grads, param_spec)
 
-            return loss, grads 
+            return loss, grads
 
         init_minibatch = (
-            0.0, 
+            0.0,
             with_sharding_constraint(
-                        jax.tree_util.tree_map(jnp.zeros_like, state.params), param_spec
-            )
+                jax.tree_util.tree_map(jnp.zeros_like, state.params), param_spec
+            ),
         )
 
         # accumulate gradients
         def cumul_minibatch_step(grad_idx, cumul_loss_grad):
-            cumul_loss, cumul_grads= cumul_loss_grad
+            cumul_loss, cumul_grads = cumul_loss_grad
             loss, grads = loss_and_grad(grad_idx)
             cumul_loss, cumul_grads = jax.tree_util.tree_map(
                 jnp.add, (cumul_loss, cumul_grads), (loss, grads)
@@ -117,11 +122,11 @@ if __name__ == '__main__':
             return cumul_loss, cumul_grads
 
         loss, grads = jax.lax.fori_loop(
-                    0,
-                    grad_accum_steps,
-                    cumul_minibatch_step,
-                    init_minibatch,
-                )
+            0,
+            grad_accum_steps,
+            cumul_minibatch_step,
+            init_minibatch,
+        )
         grads = with_sharding_constraint(grads, param_spec)
         # sum -> mean
         loss, grads = jax.tree_util.tree_map(
@@ -130,7 +135,7 @@ if __name__ == '__main__':
 
         grads = with_sharding_constraint(grads, param_spec)
 
-        # only update train_state at the end of a single full batch 
+        # only update train_state at the end of a single full batch
         new_state = state.apply_gradients(
             grads=grads,
         )
@@ -142,11 +147,11 @@ if __name__ == '__main__':
 
         return new_state, metrics
 
-
-
     with mesh:
         train_step_pjit = pjit(
-            functools.partial(train_step, param_spec=param_spec, grad_accum_steps = GRAD_ACCUM_STEPS),
+            functools.partial(
+                train_step, param_spec=param_spec, grad_accum_steps=GRAD_ACCUM_STEPS
+            ),
             in_axis_resources=(state_spec, PartitionSpec("dp"), None),
             out_axis_resources=(state_spec, None),
         )
@@ -170,28 +175,39 @@ if __name__ == '__main__':
         print("State Sharded Sucessfully")
 
         batch = jax.tree_util.tree_map(
-                            lambda x: x.reshape((GRAD_ACCUM_STEPS,)+ (x.shape[0]//GRAD_ACCUM_STEPS,) + x.shape[1:]),
-                            init_batch,
-                        ).transpose(1, 0, 2)
-        
-        #compile first 
+            lambda x: x.reshape(
+                (GRAD_ACCUM_STEPS,) + (x.shape[0] // GRAD_ACCUM_STEPS,) + x.shape[1:]
+            ),
+            init_batch,
+        ).transpose(1, 0, 2)
+
+        # compile first
         state, metrics = train_step_pjit(state, batch, dropout_rng)
-        
+
         times = []
         for _ in tqdm(range(NUM_PASSES)):
             rng, batch_rng = jax.random.split(rng, 2)
-            
+
             # Create a test batch of data
-            test_batch = jax.random.randint(key = rng, shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32,maxval=50257, minval=0)
+            test_batch = jax.random.randint(
+                key=rng,
+                shape=(BATCH_SIZE, CTX_LEN),
+                dtype=jax.numpy.int32,
+                maxval=50257,
+                minval=0,
+            )
             test_batch = jax.tree_util.tree_map(
-                            lambda x: x.reshape((GRAD_ACCUM_STEPS,)+ (x.shape[0]//GRAD_ACCUM_STEPS,) + x.shape[1:]),
-                            test_batch,
-                        ).transpose(1, 0, 2)
+                lambda x: x.reshape(
+                    (GRAD_ACCUM_STEPS,)
+                    + (x.shape[0] // GRAD_ACCUM_STEPS,)
+                    + x.shape[1:]
+                ),
+                test_batch,
+            ).transpose(1, 0, 2)
 
             t0 = time()
             state, metrics = train_step_pjit(state, test_batch, dropout_rng)
             times.append(time() - t0)
-
 
     print(
         f"Optimized Pmap Step - Global BS {BATCH_SIZE} - accum steps {GRAD_ACCUM_STEPS} - Num Executions {NUM_PASSES}"
@@ -199,7 +215,6 @@ if __name__ == '__main__':
     print(f"Mesh Layout (dp,mp): {mesh_shape}")
     print(f"Mean Batch Time {np.mean(times):.4f} Seconds")
     print()
-
 
     """
     
