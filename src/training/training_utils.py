@@ -141,12 +141,7 @@ def compute_tokens_seen_with_warmup(
 
 def compute_tokens_seen(absolute_step, stages, max_steps, max_context):
 
-    if len(stages) > 0:
-        return compute_tokens_seen_with_warmup(
-            absolute_step, stages, max_steps, max_context
-        )
-    else:
-        return absolute_step * max_context
+    return absolute_step * max_context
 
 
 def get_optimizer(

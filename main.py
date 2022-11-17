@@ -164,7 +164,6 @@ def main():
         cfg.training.batch_size
         * compute_tokens_seen(
             cfg.training.total_steps,
-            stages=cfg.training.staged_sequences,
             max_steps=cfg.training.staged_warmup_steps,
             max_context=cfg.data.max_context,
         )
@@ -239,9 +238,9 @@ def main():
 
     running_metrics = []
 
-    if cfg.training.train_context < cfg.training.max_context:
+    if cfg.training.warmup_train_context < cfg.training.max_context:
         step_to_seq = (
-            lambda x: cfg.training.train_context
+            lambda x: cfg.training.warmup_train_context
             if x < cfg.training.staged_warmup_steps
             else cfg.training.max_context
         )
