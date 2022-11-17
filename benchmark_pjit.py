@@ -21,6 +21,7 @@ if __name__ == "__main__":
     GRAD_ACCUM_STEPS = 128
     BATCH_SIZE = 512
     CTX_LEN = 1024
+    MODEL_SIZE = "base"
 
     # Benchmarking Constants
     NUM_PASSES = 50
@@ -31,7 +32,7 @@ if __name__ == "__main__":
     mesh = Mesh(devices, ("dp", "mp"))
 
     # Setting up model + param spec
-    model = model_getter("base", return_cfg=False)
+    model = model_getter(MODEL_SIZE, return_cfg=False)
     rng = jax.random.PRNGKey(23)
     batch_tok = jax.random.randint(rng, shape=(1, CTX_LEN), maxval=50257, minval=0)
     param_shape = jax.eval_shape(model.init, rng, batch_tok)
@@ -213,6 +214,7 @@ if __name__ == "__main__":
         f"Optimized Pmap Step - Global BS {BATCH_SIZE} - accum steps {GRAD_ACCUM_STEPS} - Num Executions {NUM_PASSES}"
     )
     print(f"Mesh Layout (dp,mp): {mesh_shape}")
+    print(f"Model Size: {MODEL_SIZE}")
     print(f"Mean Batch Time {np.mean(times):.4f} Seconds")
     print()
 
