@@ -47,7 +47,7 @@ class TransformerBlock(nn.Module):
                 self.N,
                 self.alibi_attn,
                 self.dtype,
-            )(norm(x), train, None, use_cache, layer_past)
+            )(norm(x), train)
             return (
                 x
                 + attn_out
@@ -68,8 +68,7 @@ class TransformerBlock(nn.Module):
                 self.N,
                 self.alibi_attn,
                 self.dtype,
-                self.qk_norm,
-            )(nn.LayerNorm(dtype=self.dtype)(x), train, None, use_cache, layer_past)
+            )(nn.LayerNorm(dtype=self.dtype)(x), train)
             x = x + attn_out
             x = x + MLPBlock(
                 self.embedding_dim,
@@ -94,7 +93,6 @@ class Transformer(nn.Module):
     dtype: Any = jnp.float32
     fused_residuals: bool = False
     alibi_attn: bool = False
-    qk_norm: bool = False
 
     def generate(
         self,
@@ -162,8 +160,6 @@ class Transformer(nn.Module):
         x: jnp.array,
         labels: jnp.array = None,
         train: bool = False,
-        use_cache: bool = False,
-        past_states: Tuple[jnp.array, jnp.array] = None,
     ) -> Union[jnp.array, Tuple[jnp.array, jnp.array]]:
         B, T = x.shape[0:2]
 
@@ -204,11 +200,7 @@ class Transformer(nn.Module):
                 self.dtype,
                 self.fused_residuals,
                 self.alibi_attn,
-                self.qk_norm,
             )(out, train)
-
-        # grab final layer activations
-        self.sow("intermediates", "activations", out)
 
         out = nn.LayerNorm(dtype=self.dtype)(out)
 

@@ -103,9 +103,6 @@ class CausalAttention(nn.Module):
         self,
         x: jnp.array,
         train: bool,
-        alibi_mask: jnp.array = None,
-        use_cache: bool = False,
-        layer_past: Tuple[jnp.array, jnp.array] = None,
     ) -> jnp.array:
         dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
         B, T, C = x.shape[:3]
@@ -182,7 +179,7 @@ class CausalAttention(nn.Module):
         return dropout()(out)
 
 
-# Work in progress code, not currently used in src/models/GPT.py
+# TODO: Work in progress code, not currently used in src/models/GPT.py
 class ShardedCausalAttention(nn.Module):
     """Standard causal multi-headed attention modified to support sharding
 
@@ -222,90 +219,91 @@ class ShardedCausalAttention(nn.Module):
         x: jnp.array,
         train: bool,
     ) -> jnp.array:
-        dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
-        seq_len = x.shape[1]
+        raise NotImplementedError
+    #     dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
+    #     seq_len = x.shape[1]
 
-        # Shape is (bs, seq_len, d_embed)
-        key = nn.Dense(
-            name="key_proj",
-            features=self.embedding_dim,
-            kernel_init=initializers.normal(stddev=0.02),
-            use_bias=False,
-            dtype=self.dtype,
-        )(x)
+    #     # Shape is (bs, seq_len, d_embed)
+    #     key = nn.Dense(
+    #         name="key_proj",
+    #         features=self.embedding_dim,
+    #         kernel_init=initializers.normal(stddev=0.02),
+    #         use_bias=False,
+    #         dtype=self.dtype,
+    #     )(x)
 
-        # Shape is (bs, seq_len, d_embed)
-        value = nn.Dense(
-            name="value_proj",
-            features=self.embedding_dim,
-            kernel_init=initializers.normal(stddev=0.02),
-            use_bias=False,
-            dtype=self.dtype,
-        )(x)
+    #     # Shape is (bs, seq_len, d_embed)
+    #     value = nn.Dense(
+    #         name="value_proj",
+    #         features=self.embedding_dim,
+    #         kernel_init=initializers.normal(stddev=0.02),
+    #         use_bias=False,
+    #         dtype=self.dtype,
+    #     )(x)
 
-        # Shape is (bs, seq_len, d_embed)
-        query = nn.Dense(
-            name="query_proj",
-            features=self.embedding_dim,
-            kernel_init=initializers.normal(stddev=0.02),
-            use_bias=False,
-            dtype=self.dtype,
-        )(x)
+    #     # Shape is (bs, seq_len, d_embed)
+    #     query = nn.Dense(
+    #         name="query_proj",
+    #         features=self.embedding_dim,
+    #         kernel_init=initializers.normal(stddev=0.02),
+    #         use_bias=False,
+    #         dtype=self.dtype,
+    #     )(x)
 
-        query = shard_noop(
-            query, PartitionSpec("dp", None, "mp")
-        )  # ensure sharding along batch dimension for dp and head dimension for mp
-        key = shard_noop(
-            key, PartitionSpec("dp", None, "mp")
-        )  # ensure sharding along batch dimension for dp and head dimension for mp
-        value = shard_noop(
-            value, PartitionSpec("dp", None, "mp")
-        )  # ensure sharding along batch dimension for dp and head dimension for mp
+    #     query = shard_noop(
+    #         query, PartitionSpec("dp", None, "mp")
+    #     )  # ensure sharding along batch dimension for dp and head dimension for mp
+    #     key = shard_noop(
+    #         key, PartitionSpec("dp", None, "mp")
+    #     )  # ensure sharding along batch dimension for dp and head dimension for mp
+    #     value = shard_noop(
+    #         value, PartitionSpec("dp", None, "mp")
+    #     )  # ensure sharding along batch dimension for dp and head dimension for mp
 
-        query = jnp.reshape(query, query.shape[:-1] + (self.model_shards, -1))
-        key = jnp.reshape(key, key.shape[:-1] + (self.model_shards, -1))
-        value = jnp.reshape(value, value.shape[:-1] + (self.model_shards, -1))
+    #     query = jnp.reshape(query, query.shape[:-1] + (self.model_shards, -1))
+    #     key = jnp.reshape(key, key.shape[:-1] + (self.model_shards, -1))
+    #     value = jnp.reshape(value, value.shape[:-1] + (self.model_shards, -1))
 
-        query = shard_noop(query, PartitionSpec("dp", None, "mp", None))
-        key = shard_noop(key, PartitionSpec("dp", None, "mp", None))
-        value = shard_noop(value, PartitionSpec("dp", None, "mp", None))
+    #     query = shard_noop(query, PartitionSpec("dp", None, "mp", None))
+    #     key = shard_noop(key, PartitionSpec("dp", None, "mp", None))
+    #     value = shard_noop(value, PartitionSpec("dp", None, "mp", None))
 
-        attn_full = jnp.einsum(
-            "bthd,bThd->bhtT", query, key
-        )  # Shape is (bs, h_per_shard, seq_len, seq_len)
+    #     attn_full = jnp.einsum(
+    #         "bthd,bThd->bhtT", query, key
+    #     )  # Shape is (bs, h_per_shard, seq_len, seq_len)
 
-        attn_full = shard_noop(attn_full, PartitionSpec("dp", "mp", None, None))
+    #     attn_full = shard_noop(attn_full, PartitionSpec("dp", "mp", None, None))
 
-        attn_full = attn_full / key.shape[-1]
+    #     attn_full = attn_full / key.shape[-1]
 
-        if self.alibi_attn:
-            attn_full = attn_full + self.alibi_mask[:, :seq_len, :seq_len]
+    #     if self.alibi_attn:
+    #         attn_full = attn_full + self.alibi_mask[:, :seq_len, :seq_len]
 
-        masked_attn = jnp.where(self.mask, attn_full, jnp.finfo(self.dtype).min)
+    #     masked_attn = jnp.where(self.mask, attn_full, jnp.finfo(self.dtype).min)
 
-        attn_scores = nn.softmax(masked_attn, axis=-1)
-        attn_scores = dropout()(attn_scores)
-        attn_out = jnp.einsum("bhtT,bThd->bthd", attn_scores, value)
-        attn_out = shard_noop(attn_out, PartitionSpec("dp", None, "mp", None))
-        attn_out = attn_out.reshape(
-            attn_out.shape[:2] + (self.model_shards, self.heads_per_shard, -1)
-        )  # Shape is (bs, seq_len, model_shards, h_per_shard, h_dim)
-        attn_out = shard_noop(attn_out, PartitionSpec("dp", None, "mp", None, None))
+    #     attn_scores = nn.softmax(masked_attn, axis=-1)
+    #     attn_scores = dropout()(attn_scores)
+    #     attn_out = jnp.einsum("bhtT,bThd->bthd", attn_scores, value)
+    #     attn_out = shard_noop(attn_out, PartitionSpec("dp", None, "mp", None))
+    #     attn_out = attn_out.reshape(
+    #         attn_out.shape[:2] + (self.model_shards, self.heads_per_shard, -1)
+    #     )  # Shape is (bs, seq_len, model_shards, h_per_shard, h_dim)
+    #     attn_out = shard_noop(attn_out, PartitionSpec("dp", None, "mp", None, None))
 
-        attn_out = attn_out.reshape(
-            attn_out.shape[:2] + (self.model_shards, -1)
-        )  # # Shape is (bs, seq_len, model_shards, d_embed)
+    #     attn_out = attn_out.reshape(
+    #         attn_out.shape[:2] + (self.model_shards, -1)
+    #     )  # # Shape is (bs, seq_len, model_shards, d_embed)
 
-        attn_out = shard_noop(attn_out, PartitionSpec("dp", None, "mp", None))
+    #     attn_out = shard_noop(attn_out, PartitionSpec("dp", None, "mp", None))
 
-        out = nn.Dense(
-            name="residual_out",
-            features=self.embedding_dim,
-            kernel_init=jax.nn.initializers.normal(
-                stddev=(0.02 / jnp.sqrt(2 * self.N))
-            ),
-            use_bias=False,
-            dtype=self.dtype,
-        )(attn_out)
+    #     out = nn.Dense(
+    #         name="residual_out",
+    #         features=self.embedding_dim,
+    #         kernel_init=jax.nn.initializers.normal(
+    #             stddev=(0.02 / jnp.sqrt(2 * self.N))
+    #         ),
+    #         use_bias=False,
+    #         dtype=self.dtype,
+    #     )(attn_out)
 
-        return dropout()(out)
+    #     return dropout()(out)

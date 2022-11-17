@@ -1,7 +1,13 @@
 # Transformer - JAX
 
-JAX codebase for distributed training of language models in flax using ```pmap``` or ```pjit```.
+JAX codebase for distributed training of language models in flax using ```pmap``` or ```pjit```. This repo is currently a work in progress. The end goal is a well-documented and efficient training script for Transformers.
 
+# Todos
+- Clean up current code
+- Extend ```main_pjit.py```
+- Optimized GPT model class for better sharding 
+- Write everything up in ```articles```
+- Type annotation with [jaxtyping](https://github.com/google/jaxtyping)
 
 ## Training 
 
@@ -34,3 +40,4 @@ TPU Development and training supported with Cloud TPUs from Google's TPU Researc
 ```bash 
 python -m pytest
 ```
+
