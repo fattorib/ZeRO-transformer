@@ -171,7 +171,7 @@ def main():
 
     if jax.process_index() == 0:
         id = wandb.util.generate_id()
-        wandb.init(id=id, resume="allow", project="LJX")
+        wandb.init(id=id, resume="allow", project=cfg.data.wandb_project)
         flat_dict = flatten_dict(cfg)
 
         for key in model_config.keys():
