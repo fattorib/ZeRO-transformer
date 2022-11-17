@@ -24,10 +24,10 @@ if __name__ == "__main__":
     MODEL_SIZE = "base"
 
     # Benchmarking Constants
-    NUM_PASSES = 50
+    NUM_PASSES = 10
 
     # Setting up device mesh
-    mesh_shape = (1, 8)
+    mesh_shape = (2, 4)
     devices = np.asarray(jax.devices()).reshape(*mesh_shape)
     mesh = Mesh(devices, ("dp", "mp"))
 
@@ -211,7 +211,7 @@ if __name__ == "__main__":
             times.append(time() - t0)
 
     print(
-        f"Optimized Pmap Step - Global BS {BATCH_SIZE} - accum steps {GRAD_ACCUM_STEPS} - Num Executions {NUM_PASSES}"
+        f"Optimized Pjit Step - Global BS {BATCH_SIZE} - accum steps {GRAD_ACCUM_STEPS} - Num Executions {NUM_PASSES}"
     )
     print(f"Mesh Layout (dp,mp): {mesh_shape}")
     print(f"Model Size: {MODEL_SIZE}")
