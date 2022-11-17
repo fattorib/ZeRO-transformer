@@ -7,7 +7,6 @@ JAX codebase for distributed training of language models in flax using ```pmap``
 - Extend ```main_pjit.py```
 - Optimized GPT model class for better sharding 
 - Write everything up in ```articles```
-- Type annotation with [jaxtyping](https://github.com/google/jaxtyping)
 
 ## Training 
 

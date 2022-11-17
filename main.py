@@ -239,11 +239,14 @@ def main():
 
     running_metrics = []
 
-    step_to_seq = (
-        lambda x: cfg.training.train_context
-        if x < cfg.training.staged_warmup_steps
-        else 512
-    )
+    if cfg.training.train_context < cfg.training.max_context:
+        step_to_seq = (
+            lambda x: cfg.training.train_context
+            if x < cfg.training.staged_warmup_steps
+            else cfg.training.max_context
+        )
+    else:
+        step_to_seq = lambda x: cfg.training.max_context
 
     accum_steps = (
         lambda x: 16
