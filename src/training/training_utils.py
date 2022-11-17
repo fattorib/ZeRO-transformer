@@ -12,12 +12,6 @@ from flax.training import train_state
 from jax import random
 
 
-def to_precision(t, dtype: jnp.dtype):
-    return jax.tree_map(
-        lambda x: x.astype(dtype) if x.dtype != dtype and x.ndim > 1 else x, t
-    )
-
-
 def initialized(key: random.PRNGKey, model: nn.Module, input_shape: Tuple[int, int]):
     """Initializes param dict for a model
     Args:
@@ -147,12 +141,7 @@ def compute_tokens_seen_with_warmup(
 
 def compute_tokens_seen(absolute_step, stages, max_steps, max_context):
 
-    if len(stages) > 0:
-        return compute_tokens_seen_with_warmup(
-            absolute_step, stages, max_steps, max_context
-        )
-    else:
-        return absolute_step * max_context
+    return absolute_step * max_context
 
 
 def get_optimizer(

@@ -81,7 +81,6 @@ def main():
     # setting up GCP bucket/client info if training on TPU
     save_to_bucket = False
     client = None
-    bucket_path = None
     if platform == "tpu":
         if cfg.data.bucket_path is not None:
             # use GCP
@@ -115,31 +114,27 @@ def main():
 
     resume_step = 0
 
-    if cfg.device.mp_devices == 1:
-        state = create_train_state(
-            init_rng,
-            learning_rate_fn,
-            weight_decay=cfg.training.weight_decay,
-            model=model,
-        )
+    state = create_train_state(
+        init_rng,
+        learning_rate_fn,
+        weight_decay=cfg.training.weight_decay,
+        model=model,
+    )
 
-        if args.resume:
-            if save_to_bucket:
-                state = restore_checkpoint(
-                    state,
-                    workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                    prefix="checkpoint_",
-                )
-            else:
-                state = restore_checkpoint(state, workdir=cfg.data.checkpoint_directory)
+    if args.resume:
+        if save_to_bucket:
+            state = restore_checkpoint(
+                state,
+                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                prefix="checkpoint_",
+            )
+        else:
+            state = restore_checkpoint(state, workdir=cfg.data.checkpoint_directory)
 
-            if jax.process_index() == 0:
-                logger.debug(f"Resuming training from step {int(state.step)}")
+        if jax.process_index() == 0:
+            logger.debug(f"Resuming training from step {int(state.step)}")
 
-            resume_step = int(state.step)
-
-    else:
-        pass
+        resume_step = int(state.step)
 
     if jax.process_index() == 0:
         logger.debug(f"VM setup with {num_devices} devices.")
@@ -149,16 +144,6 @@ def main():
         if cfg.device.mp_devices == 1:
             logger.debug(
                 f"Performing data parallel training only. Model and train state will be replicated across all devices"
-            )
-
-        else:
-            logger.debug(
-                f"Performing DP and MP training with grid shape {(cfg.device.dp_devices, cfg.device.mp_devices)}"
-            )
-
-        if len(cfg.training.staged_sequences) > 0:
-            logger.debug(
-                f"Running sequence length warmup for {cfg.training.staged_warmup_steps} total steps with stages: {cfg.training.staged_sequences}"
             )
 
     if not args.resume:
@@ -179,7 +164,6 @@ def main():
         cfg.training.batch_size
         * compute_tokens_seen(
             cfg.training.total_steps,
-            stages=cfg.training.staged_sequences,
             max_steps=cfg.training.staged_warmup_steps,
             max_context=cfg.data.max_context,
         )
@@ -187,7 +171,7 @@ def main():
 
     if jax.process_index() == 0:
         id = wandb.util.generate_id()
-        wandb.init(id=id, resume="allow", project="LJX")
+        wandb.init(id=id, resume="allow", project=cfg.data.wandb_project)
         flat_dict = flatten_dict(cfg)
 
         for key in model_config.keys():
@@ -224,7 +208,7 @@ def main():
         wds.SimpleShardList(train_shards),
         split_by_jax_process,
         wds.tarfile_to_samples(handler=wds.warn_and_continue),
-        wds.shuffle(1e7, initial=1e7, rng=pyrandom.Random(23)),
+        wds.shuffle(1e7, initial=1e7, rng=pyrandom.Random(23 + resume_step)),
         wds.decode(handler=wds.warn_and_continue),
         wds.map(preprocess),
     ).repeat(nepochs=cfg.training.max_epochs)
@@ -233,7 +217,7 @@ def main():
         wds.SimpleShardList(validation_shards),
         split_by_jax_process,
         wds.tarfile_to_samples(handler=wds.warn_and_continue),
-        wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23)),
+        wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23 + resume_step)),
         wds.decode(handler=wds.warn_and_continue),
         wds.map(preprocess),
     )
@@ -247,40 +231,56 @@ def main():
 
     vl = DataLoader(
         dataset=validation_dataset,
-        batch_size=cfg.training.batch_size // 8,
+        batch_size=cfg.training.batch_size // 4,
         collate_fn=numpy_collate,
         drop_last=True,
     )
 
     running_metrics = []
 
-    step_to_seq = lambda x: cfg.training.train_context
+    if cfg.training.warmup_train_context < cfg.training.max_context:
+        step_to_seq = (
+            lambda x: cfg.training.warmup_train_context
+            if x < cfg.training.staged_warmup_steps
+            else cfg.training.max_context
+        )
+    else:
+        step_to_seq = lambda x: cfg.training.max_context
+
+    accum_steps = (
+        lambda x: 16
+        if x < cfg.training.staged_warmup_steps
+        else cfg.training.gradient_accumulation_steps
+    )
 
     state = flax.jax_utils.replicate(state)
 
+    rng = jax.random.fold_in(rng, resume_step)  # fold in resume step to create new rng
+
+    # quick way to track global step count when resuming a run
+    new_steps = 0
+
     for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
-        if (i + resume_step) > cfg.training.total_steps:
+        if (resume_step + new_steps) > cfg.training.total_steps:
             if jax.process_index() == 0:
                 logger.debug(f"Training has completed.")
 
             return True
 
-        if resume_step > 0 and (i <= resume_step % 24558):
-            # since we repeat epochs, just iterate partially through repeated ds
-            continue
-
         rng, dropout_rng = jax.random.split(rng, 2)
 
-        seq_len = step_to_seq(i + resume_step)
+        seq_len = step_to_seq(resume_step + new_steps)
 
-        if cfg.training.train_context < cfg.data.max_context: 
+        gradient_accumulation_steps = accum_steps(resume_step + new_steps)
+
+        if seq_len < cfg.data.max_context:
             text = text.reshape(-1, seq_len)
 
         # we add a 'grad_accum' batch dimension which we then iterate through in train_step
         text = text.reshape(
-            cfg.training.gradient_accumulation_steps,
-            text.shape[0] // cfg.training.gradient_accumulation_steps,
+            gradient_accumulation_steps,
+            text.shape[0] // gradient_accumulation_steps,
             seq_len,
         ).transpose(1, 0, 2)
 
@@ -291,11 +291,12 @@ def main():
         t0 = time.time()
 
         state, metrics = train_step(
-            state, text, rng_sharded, cfg.training.gradient_accumulation_steps
+            state, text, rng_sharded, gradient_accumulation_steps
         )
 
         metrics["Train Batch Time"] = time.time() - t0
         metrics["Train Sequence Length"] = seq_len
+        metrics["Learning Rate"] = learning_rate_fn(resume_step + new_steps)
 
         running_metrics.append(metrics)
 
@@ -307,7 +308,7 @@ def main():
         running_metrics = []
         validation_metrics = []
 
-        absolute_step = i + resume_step
+        absolute_step = resume_step + new_steps
 
         train_metrics_np["Tokens Seen (B)"] = (
             num_host
@@ -323,11 +324,12 @@ def main():
             / 1e9
         )
 
+        new_steps += 1
+
         if (i) % (cfg.training.evaluation_frequency) == 0:
             for val_it, val_text in enumerate(
                 tqdm(vl, disable=not jax.process_index() == 0)
             ):
-                val_text = val_text[:, :512]
                 val_text = shard(val_text)
 
                 if val_it < cfg.training.maximum_evaluation_steps:
@@ -373,9 +375,7 @@ def main():
                 wandb.log(train_metrics_np)
 
 
-@partial(
-    jax.pmap, axis_name="batch", static_broadcasted_argnums=(3,), donate_argnums=(0,)
-)
+@partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=(3,))
 def train_step(
     state: Any,
     batch: jnp.array,
@@ -383,10 +383,13 @@ def train_step(
     accum_steps: int = 8,
 ):
     """
-    Train on a single batch
-    This means that the batch will be size (local_bs*grad_accum, ctx) instead of (local_bs, ctx)
+    Train on a single batch of data. Designed to perform gradient and loss
+    communication once per _batch_ instead of once per mini batch
 
-    Designed to perform gradient and loss communication once per _batch_ instead of once per mini batch
+    NOTE: This means that the batch will be size
+    (local_bs*grad_accum, ctx) instead of (local_bs, ctx)
+
+
     """
 
     def get_minibatch(batch, grad_idx):
@@ -470,8 +473,4 @@ def eval_step(state: Any, batch: jnp.array):
 
 
 if __name__ == "__main__":
-    # try:
-    # main()
-    # except Exception as e:
-    # print(f"Error encountered: {e}")
     main()

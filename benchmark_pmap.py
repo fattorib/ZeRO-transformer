@@ -30,15 +30,15 @@ from src.models.GPT import model_getter
 from src.training.training_utils import create_train_state
 
 # the quantity GLOBAL_BATCH_SIZE must be divisible by 8 (or num local devices)
-GLOBAL_BATCH_SIZE = 512
-GRADIENT_ACCUMULATION_STEPS = 64
-SEQ_LEN = 512
-NUM_PASSES = 20
+GLOBAL_BATCH_SIZE = 128
+GRADIENT_ACCUMULATION_STEPS = 16
+SEQ_LEN = 1024
+NUM_PASSES = 10
 
 
 def main_optimized():
     # base model is ~125M params
-    model = model_getter("medium", return_cfg=False)
+    model = model_getter("large", return_cfg=False)
 
     # State Creation, etc
     init_rng = jax.random.PRNGKey(0)
@@ -82,7 +82,9 @@ def main_optimized():
         test_batch = shard(test_batch)
         rng_sharded = shard_prng_key(rng)
         t0 = time()
-        train_step(state, test_batch, rng_sharded, GRADIENT_ACCUMULATION_STEPS)
+        state, metrics = train_step(
+            state, test_batch, rng_sharded, GRADIENT_ACCUMULATION_STEPS
+        )
         times.append(time() - t0)
 
     print(
@@ -148,7 +150,7 @@ def main_naive():
 if __name__ == "__main__":
     main_optimized()
 
-    main_naive()
+    # main_naive()
 
     """
         V2-8 Benchmarks
@@ -172,7 +174,15 @@ if __name__ == "__main__":
 
         ~350M Params Transformer with ctx = 512
         
+        V2-8 - 50M param transformer
+            512 CTX
+            Optimized Pmap Step - Global BS 1024 - accum steps 16 - Num Executions 20
+            Mean Batch Time 0.0399 Seconds
+            
+            1024 CTX
+            Optimized Pmap Step - Global BS 512 - accum steps 16 - Num Executions 20
+            Mean Batch Time 2.0866 Seconds
 
-
+            
 
     """

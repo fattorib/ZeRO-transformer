@@ -1,40 +1,36 @@
 training:
-  max_epochs: 8
+  max_epochs: 10
   batch_size: 128
-  peak_learning_rate: 6e-4
+  peak_learning_rate: 1.3e-4
   warmup_steps: 2000
-  decay_steps: 176400
-  total_steps: 196000
-  end_learning_rate: 6e-5
+  decay_steps: 160000
+  total_steps: 180000
+  end_learning_rate: 2.5e-5
   weight_decay: 0.1
-  gradient_accumulation_steps: 16
+  gradient_accumulation_steps: 32
   evaluation_frequency: 500
   maximum_evaluation_steps: 500
+  norm_log_frequency: 100
   precision: 'bf16'
-  staged_sequences: []
-  staged_warmup_steps: 1000
-  train_context: 512
+  staged_warmup_steps: 98000
+  warmup_train_context: 128
 
 model:
-  size: "base"
+  size: "large"
 
 data:
-  corpus: "openwebtext"
-  train_shard_urls: "data/processed/sharded/openwebtext_train-{000000..000125}.tar.gz"
-  validation_shard_urls: "data/processed/sharded/openwebtext_val-{000000..000008}.tar.gz"
-  max_context: 1024
-  full_steps_in_batch: 24558
-  workers: 0
-  checkpoint_directory: "checkpoints"
-  bucket_path: "bfattoriwebtext2"
-  # bucket_path: "bfattoribooks2"
-  # bucket_path: 
-  index_path_train: "data/index/openwebtext_useast.train.index"
-  index_path_validation: "data/index/openwebtext_useast.val.index"
-  # index_path_train: "data/index/openwebtext.train.index"
-  # index_path_validation: "data/index/openwebtext.val.index"
+  corpus: 
+  train_shard_urls:
+  validation_shard_urls: 
+  max_context: 
+  full_steps_in_batch:
+  checkpoint_directory: 
+  bucket_path: 
+  index_path_train: 
+  index_path_validation: 
+  wandb_project: 
 
 
-device:
-  dp_devices: 32
-  mp_devices: 1
+device: 
+  dp_devices: 
+  mp_devices: 

@@ -11,9 +11,7 @@ import jax
 import jax.numpy as jnp
 
 
-@partial(
-    jax.pmap, axis_name="batch", static_broadcasted_argnums=(3,), donate_argnums=(0,)
-)
+@partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=(3,))
 def train_step(
     state: Any,
     batch: jnp.array,

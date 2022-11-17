@@ -22,18 +22,28 @@ small:
   embedding_dim: 64
   vocab_size: 50258
   num_head: 8
+  block_size: 512
+  dropout: 0.1
+  N: 2
+  fused_residuals: True
+  alibi_attn: True
+
+test:
+  embedding_dim: 128
+  vocab_size: 50264
+  num_head: 4
   block_size: 32
   dropout: 0.1
   N: 2
   fused_residuals: True
   alibi_attn: True
 
-  
+
 base:
   embedding_dim: 768
-  vocab_size: 50258
+  vocab_size: 50257
   num_head: 12
-  block_size: 512
+  block_size: 1024
   dropout: 0.1
   N: 12
   fused_residuals: True
@@ -54,8 +64,8 @@ large:
   embedding_dim: 1536
   vocab_size: 50260
   num_head: 12
-  block_size: 512
+  block_size: 1024
   dropout: 0.1
-  N: 18
+  N: 14
   fused_residuals: True
   alibi_attn: True
