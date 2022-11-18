@@ -43,7 +43,7 @@ def create_train_state(
     model: nn.Module,
 ):
     """Creates initial `TrainState` for model."""
-    params = initialized(rng, model, input_shape=(1, 512))
+    params = initialized(rng, model, input_shape=(1, model.block_size))
 
     # This mask turns off weight decay for bias terms, LN terms and position embeddings
     mask = jax.tree_map(
