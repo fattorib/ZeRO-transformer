@@ -110,10 +110,11 @@ if __name__ == "__main__":
 
             loss, grads = grad_fn(state.params, minibatch)
 
-            # grads = with_sharding_constraint(grads, param_spec)
+            grads = with_sharding_constraint(grads, param_spec)
 
             return loss, grads
 
+        # tuple of loss, grads
         init_minibatch = (
             0.0,
             with_sharding_constraint(
