@@ -30,15 +30,15 @@ from src.models.GPT import model_getter
 from src.training.training_utils import create_train_state
 
 # the quantity GLOBAL_BATCH_SIZE must be divisible by 8 (or num local devices)
-GLOBAL_BATCH_SIZE = 128
-GRADIENT_ACCUMULATION_STEPS = 16
-SEQ_LEN = 1024
+GLOBAL_BATCH_SIZE = 512
+GRADIENT_ACCUMULATION_STEPS = 8
+SEQ_LEN = 512
 NUM_PASSES = 10
 
 
 def main_optimized():
     # base model is ~125M params
-    model = model_getter("large", return_cfg=False)
+    model = model_getter("base", return_cfg=False)
 
     # State Creation, etc
     init_rng = jax.random.PRNGKey(0)
