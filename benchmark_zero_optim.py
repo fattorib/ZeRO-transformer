@@ -110,7 +110,7 @@ if __name__ == "__main__":
 
             loss, grads = grad_fn(state.params, minibatch)
 
-            grads = with_sharding_constraint(grads, param_spec)
+            # grads = with_sharding_constraint(grads, param_spec)
 
             return loss, grads
 
@@ -128,7 +128,7 @@ if __name__ == "__main__":
             cumul_loss, cumul_grads = jax.tree_util.tree_map(
                 jnp.add, (cumul_loss, cumul_grads), (loss, grads)
             )
-            cumul_grads = with_sharding_constraint(cumul_grads, param_spec)
+            # cumul_grads = with_sharding_constraint(cumul_grads, param_spec)
             return cumul_loss, cumul_grads
 
         loss, grads = jax.lax.fori_loop(
@@ -137,13 +137,13 @@ if __name__ == "__main__":
             cumul_minibatch_step,
             init_minibatch,
         )
-        grads = with_sharding_constraint(grads, param_spec)
+        # grads = with_sharding_constraint(grads, param_spec)
         # sum -> mean
         loss, grads = jax.tree_util.tree_map(
             lambda x: x / grad_accum_steps, (loss, grads)
         )
 
-        grads = with_sharding_constraint(grads, param_spec)
+        # grads = with_sharding_constraint(grads, param_spec)
 
         # only update train_state at the end of a single full batch
         new_state = state.apply_gradients(
