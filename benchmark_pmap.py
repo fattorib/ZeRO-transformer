@@ -49,6 +49,8 @@ def main_optimized():
         model=model,
     )
 
+    print("State Created")
+
     # replicate state across devices
     state = replicate(state)
 
