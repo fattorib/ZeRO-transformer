@@ -161,7 +161,7 @@ if __name__ == "__main__":
     with mesh:
         train_step_pjit = pjit(
             functools.partial(
-                train_step, param_spec=param_spec, grad_accum_steps=GRAD_ACCUM_STEPS
+                train_step, param_spec=opt_state_spec, grad_accum_steps=GRAD_ACCUM_STEPS
             ),
             in_axis_resources=(state_spec, PartitionSpec("dp"), None),
             out_axis_resources=(state_spec, None),
