@@ -198,6 +198,7 @@ if __name__ == "__main__":
 
         print("State Sharded Sucessfully")
 
+        init_batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
         batch = jax.tree_util.tree_map(
             lambda x: x.reshape(
                 (GRAD_ACCUM_STEPS,) + (x.shape[0] // GRAD_ACCUM_STEPS,) + x.shape[1:]
