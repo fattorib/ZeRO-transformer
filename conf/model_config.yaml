@@ -45,7 +45,7 @@ smol:
   block_size: 2048
   dropout: 0.1
   N: 6
-  fused_residuals: True
+  fused_residuals: False
   alibi_attn: True
 
 base:
