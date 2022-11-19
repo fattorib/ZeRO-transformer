@@ -20,8 +20,8 @@ if __name__ == "__main__":
     # CONSTANTS
     GRAD_ACCUM_STEPS = 128
     BATCH_SIZE = 512
-    CTX_LEN = 1024
-    MODEL_SIZE = "medium"
+    CTX_LEN = 512
+    MODEL_SIZE = "base"
 
     # Benchmarking Constants
     NUM_PASSES = 10
