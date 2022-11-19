@@ -12,7 +12,6 @@ from jax.experimental.maps import Mesh
 from jax.experimental.pjit import pjit, with_sharding_constraint
 from tqdm import tqdm
 
-from main import train_step
 from src.models.GPT import model_getter
 from src.training.training_utils import TrainState, get_optimizer
 from src.utils.partitioning import create_opt_spec, set_partitions_zero
