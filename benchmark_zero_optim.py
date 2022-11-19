@@ -189,7 +189,7 @@ if __name__ == "__main__":
         rng, dropout_rng = jax.random.split(rng, 2)
         init_batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
 
-        params = model.init(rng, init_batch, train = False)
+        params = model.init(rng, init_batch, train=False)
 
         state = pjit(
             init_state,

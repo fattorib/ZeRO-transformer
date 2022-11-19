@@ -231,7 +231,7 @@ def main():
 
     vl = DataLoader(
         dataset=validation_dataset,
-        batch_size=cfg.training.batch_size // 4,
+        batch_size=cfg.training.batch_size,
         collate_fn=numpy_collate,
         drop_last=True,
     )
@@ -248,7 +248,7 @@ def main():
         step_to_seq = lambda x: cfg.training.max_context
 
     accum_steps = (
-        lambda x: 16
+        lambda x: 2
         if x < cfg.training.staged_warmup_steps
         else cfg.training.gradient_accumulation_steps
     )
