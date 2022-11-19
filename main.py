@@ -315,8 +315,6 @@ def main():
                 cfg.training.batch_size
                 * compute_tokens_seen(
                     absolute_step,
-                    stages=cfg.training.staged_sequences,
-                    max_steps=cfg.training.staged_warmup_steps,
                     max_context=cfg.data.max_context,
                 )
             )
