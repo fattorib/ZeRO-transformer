@@ -27,7 +27,7 @@ if __name__ == "__main__":
     NUM_PASSES = 10
 
     # Setting up device mesh
-    mesh_shape = (4, 2)
+    mesh_shape = (1, 8)
     devices = np.asarray(jax.devices()).reshape(*mesh_shape)
     mesh = Mesh(devices, ("dp", "mp"))
 
