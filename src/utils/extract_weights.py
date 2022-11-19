@@ -1,10 +1,8 @@
 import jax
 from flax.core.frozen_dict import unfreeze
-from flax.serialization import msgpack_restore, msgpack_serialize
+from flax.serialization import msgpack_serialize
 from flax.training import checkpoints
 
-from src.models.GPT import model_getter
-from src.training.training_utils import create_train_state
 
 state = checkpoints.restore_checkpoint(
     ckpt_dir="checkpoints",
