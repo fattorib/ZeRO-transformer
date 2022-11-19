@@ -1,3 +1,4 @@
+import argparse
 import functools
 from time import time
 from typing import Any
@@ -15,7 +16,6 @@ from main import train_step
 from src.models.GPT import model_getter
 from src.training.training_utils import TrainState, get_optimizer
 from src.utils.partitioning import create_opt_spec, set_partitions_zero
-import os 
 
 """
 Experimental support for a ZeRO style optimizer partition:
@@ -24,15 +24,29 @@ Experimental support for a ZeRO style optimizer partition:
 """
 
 
+def parse():
+    parser = argparse.ArgumentParser(description="Pjit benchmarking code")
+
+    parser.add_argument("--grad-accum", default=32, type=int)
+
+    parser.add_argument("--batch-size", default=512, type=int)
+
+    parser.add_argument("--ctx", default=512, type=int)
+
+    args = parser.parse_args()
+    return args
+
+
 if __name__ == "__main__":
+
+    args = parse()
+
     # CONSTANTS
-    GRAD_ACCUM_STEPS = 32
-    BATCH_SIZE = 512
-    CTX_LEN = 512
+    GRAD_ACCUM_STEPS = args.grad_accum
+    BATCH_SIZE = args.batch_size
+    CTX_LEN = args.ctx
     MODEL_SIZE = "base"
     NUM_PASSES = 10
-
-
 
     # Setting up device mesh (dp, mp axes)
     mesh_shape = (8, 1)
@@ -44,8 +58,10 @@ if __name__ == "__main__":
     rng = jax.random.PRNGKey(23)
     batch_tok = jax.random.randint(rng, shape=(1, CTX_LEN), maxval=50257, minval=0)
     param_shape = jax.eval_shape(model.init, rng, batch_tok)
-    
-    param_spec = set_partitions_zero(param_shape) #creating spec we will use for the optimizer states
+
+    param_spec = set_partitions_zero(
+        param_shape
+    )  # creating spec we will use for the optimizer states
 
     # Setting up optimizer + opt spec
     tx = get_optimizer(3e-4, 0.01, model, param_shape)
@@ -110,7 +126,9 @@ if __name__ == "__main__":
 
             loss, grads = grad_fn(state.params, minibatch)
 
-            grads = with_sharding_constraint(grads, param_spec) # gradients are partitioned too, requires extra comms
+            grads = with_sharding_constraint(
+                grads, param_spec
+            )  # gradients are partitioned too, requires extra comms
 
             return loss, grads
 
