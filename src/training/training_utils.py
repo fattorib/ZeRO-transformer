@@ -139,7 +139,7 @@ def compute_tokens_seen_with_warmup(
         return stages[0] * remainder
 
 
-def compute_tokens_seen(absolute_step, stages, max_steps, max_context):
+def compute_tokens_seen(absolute_step, max_context):
 
     return absolute_step * max_context
 
