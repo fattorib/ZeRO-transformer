@@ -162,9 +162,6 @@ class Transformer(nn.Module):
         train: bool = False,
     ) -> Union[jnp.array, Tuple[jnp.array, jnp.array]]:
         B, T = x.shape[0:2]
-
-        dropout = partial(nn.Dropout, rate=self.dropout, deterministic=True)
-
         embed = nn.Embed(
             name="wte",
             num_embeddings=self.vocab_size,
@@ -186,8 +183,6 @@ class Transformer(nn.Module):
             )(jnp.ones((B, T), dtype=jnp.uint8))
 
             out += wpe
-
-        out = dropout()(out)
 
         for i in range(self.N):
 
