@@ -244,7 +244,7 @@ def main():
             else cfg.training.max_context
         )
     else:
-        step_to_seq = lambda x: cfg.training.max_context
+        step_to_seq = lambda x: cfg.data.max_context
 
     accum_steps = (
         lambda x: 2
