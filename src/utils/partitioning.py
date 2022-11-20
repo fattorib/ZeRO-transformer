@@ -91,6 +91,7 @@ def _get_partition_rules():
         ),
     ]
 
+
 def _get_partition_rules_zero():
     """
     Follows Megatron-LM partition rules from
@@ -107,22 +108,23 @@ def _get_partition_rules_zero():
         # attention
         (("(query_proj|key_proj|value_proj)", "kernel"), PartitionSpec(None, "dp")),
         (("residual_out", "kernel"), PartitionSpec("dp", None)),
-        (("(query_proj|key_proj|value_proj)", "bias"), PartitionSpec(None)),
-        (("residual_out", "bias"), PartitionSpec(None)),
+        (("(query_proj|key_proj|value_proj)", "bias"), PartitionSpec("dp")),
+        (("residual_out", "bias"), PartitionSpec("dp")),
         # MLP
         (("fc_in", "kernel"), PartitionSpec(None, "dp")),
         (("fc_residual", "kernel"), PartitionSpec("dp", None)),
-        (("fc_in", "bias"), PartitionSpec(None)),
-        (("fc_residual", "bias"), PartitionSpec(None)),
+        (("fc_in", "bias"), PartitionSpec("dp")),
+        (("fc_residual", "bias"), PartitionSpec("dp")),
         # layer norms
         (
             (
                 "LayerNorm_0",
                 "(bias|scale)",
             ),
-            PartitionSpec(None),
+            PartitionSpec("dp"),
         ),
     ]
+
 
 def set_partitions(in_dict):
     """
