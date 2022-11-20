@@ -28,15 +28,32 @@ from tqdm import tqdm
 from optimized_pmap import naive_train_step, train_step
 from src.models.GPT import model_getter
 from src.training.training_utils import create_train_state
+import argparse
 
-# the quantity GLOBAL_BATCH_SIZE must be divisible by 8 (or num local devices)
-GLOBAL_BATCH_SIZE = 512
-GRADIENT_ACCUMULATION_STEPS = 32
-SEQ_LEN = 512
-NUM_PASSES = 10
+def parse():
+    parser = argparse.ArgumentParser(description="Pjit benchmarking code")
+
+    parser.add_argument("--grad-accum", default=32, type=int)
+
+    parser.add_argument("--batch-size", default=512, type=int)
+
+    parser.add_argument("--ctx", default=512, type=int)
+
+    args = parser.parse_args()
+    return args
 
 
 def main_optimized():
+    args = parse()
+
+    # the quantity GLOBAL_BATCH_SIZE must be divisible by 8 (or num local devices)
+    GLOBAL_BATCH_SIZE = args.batch_size
+    GRADIENT_ACCUMULATION_STEPS = args.grad_accum
+    SEQ_LEN = args.ctx
+    NUM_PASSES = 10
+
+
+
     # base model is ~125M params
     model = model_getter("base", return_cfg=False)
 
