@@ -50,7 +50,7 @@ def main_optimized():
     GLOBAL_BATCH_SIZE = args.batch_size
     GRADIENT_ACCUMULATION_STEPS = args.grad_accum
     SEQ_LEN = args.ctx
-    NUM_PASSES = 10
+    NUM_PASSES = 100
 
 
 
