@@ -56,7 +56,7 @@ if __name__ == "__main__":
     model = model_getter(MODEL_SIZE, return_cfg=False)
     rng = jax.random.PRNGKey(23)
     batch_tok = jax.random.randint(rng, shape=(1, CTX_LEN), maxval=50257, minval=0)
-
+    param_shape = jax.eval_shape(model.init, rng, batch_tok)
     # Setting up optimizer + opt spec
     tx = get_optimizer(3e-4, 0.01, model, param_shape)
 
