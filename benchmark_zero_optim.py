@@ -48,9 +48,7 @@ if __name__ == "__main__":
     NUM_PASSES = 10
 
     # Setting up device mesh (dp, mp axes)
-    mesh_shape = (8, 1)
-    devices = np.asarray(jax.devices()).reshape(*mesh_shape)
-    mesh = Mesh(devices, ("dp", "mp"))
+    mesh = Mesh(np.asarray(jax.devices(), dtype=object).reshape(jax.local_device_count(),), ['dp']) 
 
     # Setting up model + param spec
     model = model_getter(MODEL_SIZE, return_cfg=False)
