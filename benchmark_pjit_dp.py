@@ -205,7 +205,7 @@ if __name__ == "__main__":
     print(
         f"ZeRO Step - Global BS {BATCH_SIZE} - accum steps {GRAD_ACCUM_STEPS} - Num Executions {NUM_PASSES}"
     )
-    print(f"Mesh Layout (dp,mp): {mesh_shape}")
+    print(f"Mesh Layout (dp): (8)")
     print(f"Model Size: {MODEL_SIZE}")
     print(f"Mean Batch Time {np.mean(times):.4f} Seconds")
     print()
