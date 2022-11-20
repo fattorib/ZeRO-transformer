@@ -50,12 +50,10 @@ def main_optimized():
     GLOBAL_BATCH_SIZE = args.batch_size
     GRADIENT_ACCUMULATION_STEPS = args.grad_accum
     SEQ_LEN = args.ctx
-    NUM_PASSES = 100
-
-
+    NUM_PASSES = 10
 
     # base model is ~125M params
-    model = model_getter("base", return_cfg=False)
+    model = model_getter("large", return_cfg=False)
 
     # State Creation, etc
     init_rng = jax.random.PRNGKey(0)
