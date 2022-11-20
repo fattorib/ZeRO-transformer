@@ -44,7 +44,7 @@ if __name__ == "__main__":
     GRAD_ACCUM_STEPS = args.grad_accum
     BATCH_SIZE = args.batch_size
     CTX_LEN = args.ctx
-    MODEL_SIZE = "base"
+    MODEL_SIZE = "large"
     NUM_PASSES = 10
 
     # Setting up device mesh (dp, mp axes)
