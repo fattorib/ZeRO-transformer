@@ -90,6 +90,7 @@ if __name__ == "__main__":
         batch: jnp.array,
         rng_key: jax.random.PRNGKey = None,
         param_spec: Any = None,
+        state_spec: Any = None, 
         grad_accum_steps: int = None,
     ):
         """Train on a single Gradient-Accumulation batch
@@ -125,19 +126,19 @@ if __name__ == "__main__":
 
             loss, grads = grad_fn(state.params, minibatch)
 
-            # grads = with_sharding_constraint(
-            #     grads, param_spec
-            # )  # gradients are partitioned too, requires extra comms
+            grads = with_sharding_constraint(
+                grads, param_spec
+            )  
 
             return loss, grads
 
         # tuple of loss, grads
         init_minibatch = (
             0.0,
-            # with_sharding_constraint(
-            #     jax.tree_util.tree_map(jnp.zeros_like, state.params), param_spec
-            # ),
-            jax.tree_util.tree_map(jnp.zeros_like, state.params)
+            with_sharding_constraint(
+                jax.tree_util.tree_map(jnp.zeros_like, state.params), param_spec
+            ),
+            # jax.tree_util.tree_map(jnp.zeros_like, state.params)
         )
 
         # accumulate gradients
@@ -147,7 +148,7 @@ if __name__ == "__main__":
             cumul_loss, cumul_grads = jax.tree_util.tree_map(
                 jnp.add, (cumul_loss, cumul_grads), (loss, grads)
             )
-            # cumul_grads = with_sharding_constraint(cumul_grads, param_spec)
+            cumul_grads = with_sharding_constraint(cumul_grads, param_spec)
             return cumul_loss, cumul_grads
 
         loss, grads = jax.lax.fori_loop(
@@ -156,13 +157,15 @@ if __name__ == "__main__":
             cumul_minibatch_step,
             init_minibatch,
         )
-        # grads = with_sharding_constraint(grads, param_spec)
+
+        state = with_sharding_constraint(state, state_spec)
+        grads = with_sharding_constraint(grads, param_spec)
         # sum -> mean
         loss, grads = jax.tree_util.tree_map(
             lambda x: x / grad_accum_steps, (loss, grads)
         )
 
-        # grads = with_sharding_constraint(grads, param_spec)
+        grads = with_sharding_constraint(grads, param_spec)
 
         # only update train_state at the end of a single full batch
         new_state = state.apply_gradients(
@@ -179,7 +182,7 @@ if __name__ == "__main__":
     with mesh:
         train_step_pjit = pjit(
             functools.partial(
-                train_step, param_spec=param_spec, grad_accum_steps=GRAD_ACCUM_STEPS
+                train_step, param_spec=param_spec, state_spec = state_spec, grad_accum_steps=GRAD_ACCUM_STEPS
             ),
             in_axis_resources=(state_spec, PartitionSpec("dp"), None),
             out_axis_resources=(state_spec, None),
