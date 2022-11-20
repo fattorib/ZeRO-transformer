@@ -202,7 +202,7 @@ if __name__ == "__main__":
 
         state = pjit(
             init_state,
-            in_axis_resources=(param_spec),
+            in_axis_resources=(param_spec,),
             out_axis_resources=(state_spec),
         )(params)
 
