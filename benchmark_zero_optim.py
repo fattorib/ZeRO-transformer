@@ -19,6 +19,7 @@ from src.utils.partitioning import create_opt_spec, set_partitions_zero
 """
 Experimental support for a ZeRO style optimizer partition:
     - Optimizer States are partitioned across devices
+    - Gradients are also partitioned across devices
 
 """
 
@@ -51,7 +52,7 @@ if __name__ == "__main__":
     mesh = Mesh(np.asarray(jax.devices(), dtype=object).reshape(jax.local_device_count(),), ['dp']) 
 
     # Setting up model + param spec
-    model = model_getter(MODEL_SIZE, return_cfg=False)
+    model = model_getter(MODEL_SIZE, return_cfg=False, dtype=jnp.bfloat16)
     rng = jax.random.PRNGKey(23)
     batch_tok = jax.random.randint(rng, shape=(1, CTX_LEN), maxval=50257, minval=0)
     param_shape = jax.eval_shape(model.init, rng, batch_tok)

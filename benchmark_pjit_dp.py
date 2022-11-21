@@ -51,7 +51,7 @@ if __name__ == "__main__":
     mesh = Mesh(np.asarray(jax.devices(), dtype=object).reshape(jax.local_device_count(),), ['dp']) 
 
     # Setting up model + param spec
-    model = model_getter(MODEL_SIZE, return_cfg=False)
+    model = model_getter(MODEL_SIZE, return_cfg=False, dtype=jnp.bfloat16)
     rng = jax.random.PRNGKey(23)
     batch_tok = jax.random.randint(rng, shape=(1, CTX_LEN), maxval=50257, minval=0)
     param_shape = jax.eval_shape(model.init, rng, batch_tok)
@@ -135,11 +135,12 @@ if __name__ == "__main__":
         )
 
 
-
         # sum -> mean
         loss, grads = jax.tree_util.tree_map(
             lambda x: x / grad_accum_steps, (loss, grads)
         )
+
+        grads = with_sharding_constraint(grads, PartitionSpec("dp"))
 
         # only update train_state at the end of a single full batch
         new_state = state.apply_gradients(
