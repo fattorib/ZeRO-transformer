@@ -53,7 +53,7 @@ def main_optimized():
     NUM_PASSES = 10
 
     # base model is ~125M params
-    model = model_getter("large", return_cfg=False)
+    model = model_getter("base", return_cfg=False)
 
     # State Creation, etc
     init_rng = jax.random.PRNGKey(0)
