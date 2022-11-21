@@ -101,9 +101,11 @@ if __name__ == "__main__":
             minibatch = (
                 get_minibatch(batch, grad_idx) if grad_idx is not None else batch
             )
-            minibatch = with_sharding_constraint(minibatch, PartitionSpec(None,"dp"))
+            minibatch = with_sharding_constraint(minibatch, PartitionSpec("dp",None))
 
             loss, grads = grad_fn(state.params, minibatch)
+
+            grads = with_sharding_constraint(grads, PartitionSpec("dp"))
 
             return loss, grads
 
@@ -120,6 +122,7 @@ if __name__ == "__main__":
             cumul_loss, cumul_grads = jax.tree_util.tree_map(
                 jnp.add, (cumul_loss, cumul_grads), (loss, grads)
             )
+            cumul_grads = with_sharding_constraint(cumul_grads, PartitionSpec("dp"))
             return cumul_loss, cumul_grads
 
         loss, grads = jax.lax.fori_loop(
@@ -153,7 +156,7 @@ if __name__ == "__main__":
             functools.partial(
                 train_step, grad_accum_steps=GRAD_ACCUM_STEPS
             ),
-            in_axis_resources=(None, PartitionSpec(None,"dp"), None),
+            in_axis_resources=(None, PartitionSpec("dp",None), None),
             out_axis_resources=(None, None),
         )
 
