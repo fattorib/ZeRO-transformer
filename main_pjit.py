@@ -33,6 +33,8 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+from jax.experimental.compilation_cache import compilation_cache as cc
+cc.initialize_cache("jax_cache")
 
 def parse():
     parser = argparse.ArgumentParser(description="Transformer Training")
@@ -392,7 +394,7 @@ def main():
                 for val_it, val_text in enumerate(
                     tqdm(vl, disable=not jax.process_index() == 0)
                 ):
-                    val_text = val_text[:, :1024]
+                    val_text = val_text[:, :1024] #TODO: Unhardcode
                     if val_it < cfg.training.maximum_evaluation_steps:
                         metrics = pjit_eval_step(state, val_text)
                         validation_metrics.append(metrics)
