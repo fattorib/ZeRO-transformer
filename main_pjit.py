@@ -217,16 +217,6 @@ def main():
                 f"Sharding Optimizer State and Gradients across {num_devices} devices. First compilation may take a while."
             )
 
-        else:
-            logger.debug(
-                f"Performing DP and MP training with grid shape {(cfg.device.dp_devices, cfg.device.mp_devices)}"
-            )
-
-        if len(cfg.training.staged_sequences) > 0:
-            logger.debug(
-                f"Running sequence length warmup for {cfg.training.staged_warmup_steps} total steps with stages: {cfg.training.staged_sequences}"
-            )
-
     if not args.resume:
         if cfg.data.bucket_path is not None:
             # clear bucket
