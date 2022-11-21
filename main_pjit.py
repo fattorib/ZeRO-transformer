@@ -71,10 +71,6 @@ def main():
     num_host = num_devices // num_local_devices
     platform = jax.local_devices()[0].platform
 
-    assert (
-        num_devices // (cfg.device.dp_devices * cfg.device.mp_devices) == 1
-    ), f"Incorrect mesh shape specified for {num_devices} devices with mesh shape {(cfg.device.dp_devices,cfg.device.mp_devices)}. Check your device configs"
-
     if cfg.training.precision == "fp16":
         model_dtype = jnp.float16
     elif cfg.training.precision == "bf16":
@@ -218,7 +214,7 @@ def main():
 
         if cfg.device.mp_devices == 1:
             logger.debug(
-                f"Performing data parallel training only. Model and train state will be replicated across all devices"
+                f"Sharding Optimizer State and Gradients across {num_devices} devices. First compilation may take a while."
             )
 
         else:
