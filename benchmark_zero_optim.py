@@ -49,7 +49,12 @@ if __name__ == "__main__":
     NUM_PASSES = 10
 
     # Setting up device mesh (dp, mp axes)
-    mesh = Mesh(np.asarray(jax.devices(), dtype=object).reshape(jax.local_device_count(),), ['dp']) 
+    mesh = Mesh(
+        np.asarray(jax.devices(), dtype=object).reshape(
+            jax.local_device_count(),
+        ),
+        ["dp"],
+    )
 
     # Setting up model + param spec
     model = model_getter(MODEL_SIZE, return_cfg=False, dtype=jnp.bfloat16)
@@ -89,7 +94,7 @@ if __name__ == "__main__":
         batch: jnp.array,
         rng_key: jax.random.PRNGKey = None,
         param_spec: Any = None,
-        state_spec: Any = None, 
+        state_spec: Any = None,
         grad_accum_steps: int = None,
     ):
         """Train on a single Gradient-Accumulation batch
@@ -122,12 +127,10 @@ if __name__ == "__main__":
                 get_minibatch(batch, grad_idx) if grad_idx is not None else batch
             )
 
-            minibatch = with_sharding_constraint(minibatch, PartitionSpec("dp",None))
+            minibatch = with_sharding_constraint(minibatch, PartitionSpec("dp", None))
             loss, grads = grad_fn(state.params, minibatch)
 
-            grads = with_sharding_constraint(
-                grads, param_spec
-            )  
+            grads = with_sharding_constraint(grads, param_spec)
 
             return loss, grads
 
@@ -180,16 +183,19 @@ if __name__ == "__main__":
     with mesh:
         train_step_pjit = pjit(
             functools.partial(
-                train_step, param_spec=param_spec, state_spec = state_spec, grad_accum_steps=GRAD_ACCUM_STEPS
+                train_step,
+                param_spec=param_spec,
+                state_spec=state_spec,
+                grad_accum_steps=GRAD_ACCUM_STEPS,
             ),
-            in_axis_resources=(state_spec, PartitionSpec("dp",None), None),
+            in_axis_resources=(state_spec, PartitionSpec("dp", None), None),
             out_axis_resources=(state_spec, None),
         )
 
         rng, dropout_rng = jax.random.split(rng, 2)
         init_batch = jax.numpy.ones(shape=(1, CTX_LEN), dtype=jax.numpy.int32)
 
-        params = model.init(rng, init_batch, train = False)
+        params = model.init(rng, init_batch, train=False)
 
         state = pjit(
             init_state,

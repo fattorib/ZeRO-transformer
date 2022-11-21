@@ -48,7 +48,12 @@ if __name__ == "__main__":
     NUM_PASSES = 10
 
     # Setting up device mesh (dp, mp axes)
-    mesh = Mesh(np.asarray(jax.devices(), dtype=object).reshape(jax.local_device_count(),), ['dp']) 
+    mesh = Mesh(
+        np.asarray(jax.devices(), dtype=object).reshape(
+            jax.local_device_count(),
+        ),
+        ["dp"],
+    )
 
     # Setting up model + param spec
     model = model_getter(MODEL_SIZE, return_cfg=False, dtype=jnp.bfloat16)
@@ -76,7 +81,7 @@ if __name__ == "__main__":
         This means that the batch will be size (local_bs*grad_accum, ctx) instead of (local_bs, ctx)
 
         """
-        #TODO now is to keep the gradients partioned on their respective devices 
+        # TODO now is to keep the gradients partioned on their respective devices
         # I believe they are being synced too early
 
         def get_minibatch(batch, grad_idx):
@@ -103,7 +108,7 @@ if __name__ == "__main__":
             minibatch = (
                 get_minibatch(batch, grad_idx) if grad_idx is not None else batch
             )
-            minibatch = with_sharding_constraint(minibatch, PartitionSpec("dp",None))
+            minibatch = with_sharding_constraint(minibatch, PartitionSpec("dp", None))
 
             loss, grads = grad_fn(state.params, minibatch)
 
@@ -114,7 +119,10 @@ if __name__ == "__main__":
         # tuple of loss, grads
         init_minibatch = (
             0.0,
-            with_sharding_constraint(jax.tree_util.tree_map(jnp.zeros_like, state.params), PartitionSpec("dp"))
+            with_sharding_constraint(
+                jax.tree_util.tree_map(jnp.zeros_like, state.params),
+                PartitionSpec("dp"),
+            ),
         )
 
         # accumulate gradients
@@ -133,7 +141,6 @@ if __name__ == "__main__":
             cumul_minibatch_step,
             init_minibatch,
         )
-
 
         # sum -> mean
         loss, grads = jax.tree_util.tree_map(
@@ -156,17 +163,15 @@ if __name__ == "__main__":
 
     with mesh:
         train_step_pjit = pjit(
-            functools.partial(
-                train_step, grad_accum_steps=GRAD_ACCUM_STEPS
-            ),
-            in_axis_resources=(None, PartitionSpec("dp",None), None),
+            functools.partial(train_step, grad_accum_steps=GRAD_ACCUM_STEPS),
+            in_axis_resources=(None, PartitionSpec("dp", None), None),
             out_axis_resources=(None, None),
         )
 
         rng, dropout_rng = jax.random.split(rng, 2)
         init_batch = jax.numpy.ones(shape=(1, CTX_LEN), dtype=jax.numpy.int32)
 
-        params = model.init(rng, init_batch, train = False)
+        params = model.init(rng, init_batch, train=False)
 
         state = init_state(params)
 

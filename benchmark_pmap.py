@@ -17,6 +17,7 @@ significantly faster.
 
 """
 
+import argparse
 from time import time
 
 import jax
@@ -28,7 +29,7 @@ from tqdm import tqdm
 from optimized_pmap import naive_train_step, train_step
 from src.models.GPT import model_getter
 from src.training.training_utils import create_train_state
-import argparse
+
 
 def parse():
     parser = argparse.ArgumentParser(description="Pjit benchmarking code")
