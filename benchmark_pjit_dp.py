@@ -101,18 +101,18 @@ if __name__ == "__main__":
             minibatch = (
                 get_minibatch(batch, grad_idx) if grad_idx is not None else batch
             )
-            minibatch = with_sharding_constraint(minibatch, PartitionSpec("dp"))
+            minibatch = with_sharding_constraint(minibatch, PartitionSpec("dp",None))
 
             loss, grads = grad_fn(state.params, minibatch)
-
-            grads = with_sharding_constraint(grads, PartitionSpec("dp"))
 
             return loss, grads
 
         # tuple of loss, grads
         init_minibatch = (
             0.0,
-            with_sharding_constraint(jax.tree_util.tree_map(jnp.zeros_like, state.params), PartitionSpec("dp"))
+            # with_sharding_constraint(jax.tree_util.tree_map(jnp.zeros_like, state.params), PartitionSpec(None, "dp"))
+            jax.tree_util.tree_map(jnp.zeros_like, state.params)
+
         )
 
         # accumulate gradients
@@ -153,7 +153,7 @@ if __name__ == "__main__":
             functools.partial(
                 train_step, grad_accum_steps=GRAD_ACCUM_STEPS
             ),
-            in_axis_resources=(None, PartitionSpec("dp"), None),
+            in_axis_resources=(None, PartitionSpec("dp",None), None),
             out_axis_resources=(None, None),
         )
 
