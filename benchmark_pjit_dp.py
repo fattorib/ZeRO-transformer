@@ -101,7 +101,7 @@ if __name__ == "__main__":
             minibatch = (
                 get_minibatch(batch, grad_idx) if grad_idx is not None else batch
             )
-            minibatch = with_sharding_constraint(minibatch, (None,"dp"))
+            minibatch = with_sharding_constraint(minibatch, PartitionSpec(None,"dp"))
 
             loss, grads = grad_fn(state.params, minibatch)
 
