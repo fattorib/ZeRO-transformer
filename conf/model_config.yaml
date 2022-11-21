@@ -50,7 +50,7 @@ smol:
 
 base:
   embedding_dim: 768
-  vocab_size: 50264
+  vocab_size: 50304
   num_head: 12
   block_size: 1024
   dropout: 0.1
