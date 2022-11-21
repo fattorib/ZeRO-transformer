@@ -123,7 +123,6 @@ if __name__ == "__main__":
             )
 
             minibatch = with_sharding_constraint(minibatch, PartitionSpec("dp",None))
-            state = with_sharding_constraint(state, state_spec)
             loss, grads = grad_fn(state.params, minibatch)
 
             grads = with_sharding_constraint(
