@@ -118,9 +118,9 @@ def main():
     resume_step = 0
 
     # Setup
-
+    #TODO: Remove hardocoding of 1024 for sequence length
     batch_tok = jax.random.randint(
-        rng, shape=(1, cfg.data.max_context), maxval=50257, minval=0
+        rng, shape=(1, 1024), maxval=50257, minval=0
     )
     param_shape = jax.eval_shape(model.init, rng, batch_tok)
 
@@ -196,7 +196,7 @@ def main():
     else:
         with mesh:
             init_batch = jax.numpy.ones(
-                shape=(1, cfg.data.max_context), dtype=jax.numpy.int32
+                shape=(1, 1024), dtype=jax.numpy.int32
             )
 
             params = model.init(rng, init_batch, train=False)
