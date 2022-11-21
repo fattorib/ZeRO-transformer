@@ -76,6 +76,8 @@ if __name__ == "__main__":
         This means that the batch will be size (local_bs*grad_accum, ctx) instead of (local_bs, ctx)
 
         """
+        #TODO now is to keep the gradients partioned on their respective devices 
+        # I believe they are being synced too early
 
         def get_minibatch(batch, grad_idx):
             return jax.tree_util.tree_map(
@@ -112,7 +114,7 @@ if __name__ == "__main__":
         # tuple of loss, grads
         init_minibatch = (
             0.0,
-            jax.tree_util.tree_map(jnp.zeros_like, state.params)
+            with_sharding_constraint(jax.tree_util.tree_map(jnp.zeros_like, state.params), PartitionSpec("dp"))
         )
 
         # accumulate gradients
