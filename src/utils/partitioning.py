@@ -26,17 +26,6 @@ def setup_dp_mesh():
     return mesh
 
 
-def setup_mp_mesh(cfg):
-    """
-    Creates jax device mesh for data-parallel and model-parellel training
-    """
-    mesh_shape = (cfg.device.dp_devices, cfg.device.mp_devices)
-    devices = np.asarray(jax.devices()).reshape(*mesh_shape)
-    mesh = Mesh(devices, ("dp", "mp"))
-
-    return mesh
-
-
 def _match(qs, ks):
     """Return True if regexes in qs match any window of strings in tuple ks."""
     # compile regexes and force complete match
