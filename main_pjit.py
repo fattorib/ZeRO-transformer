@@ -317,14 +317,8 @@ def main():
 
     running_metrics = []
 
-    if cfg.training.warmup_train_context < cfg.data.max_context:
-        step_to_seq = (
-            lambda x: cfg.training.warmup_train_context
-            if x < cfg.training.staged_warmup_steps
-            else cfg.training.max_context
-        )
-    else:
-        step_to_seq = lambda x: cfg.data.max_context
+    # no sequence length warmup for now. Keep at a fixed 1024
+    step_to_seq = lambda x: cfg.data.max_context // 2
 
     with mesh:
         pjit_train_step = pjit(
