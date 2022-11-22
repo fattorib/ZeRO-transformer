@@ -446,7 +446,7 @@ def train_step(
 
     def get_minibatch(batch, grad_idx):
         return jax.tree_util.tree_map(
-            lambda x: jax.lax.dynamic_index_in_dim(x, grad_idx, keepdims=False, axis=1),
+            lambda x: jax.lax.dynamic_index_in_dim(x, grad_idx, keepdims=True, axis=1),
             batch,
         )
 
@@ -466,10 +466,14 @@ def train_step(
         minibatch = get_minibatch(batch, grad_idx) if grad_idx is not None else batch
 
         minibatch = with_sharding_constraint(minibatch, PartitionSpec("dp", None))
-        loss, grads = grad_fn(state.params, minibatch)
+        loss, grads = jax.vmap(grad_fn, in_axes=(None, 1), out_axes=(0, 0))(state.params, minibatch)
 
         grads = with_sharding_constraint(grads, param_spec)
-
+        
+        loss, grads = jax.tree_util.tree_map(
+                    lambda x: jnp.mean(x, axis=0), (loss, grads)
+                )
+        
         return loss, grads
 
     # tuple of loss, grads
