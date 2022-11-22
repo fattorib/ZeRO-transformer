@@ -13,7 +13,6 @@ import optax
 import torch
 import webdataset as wds
 from flax.training import checkpoints
-from jax import random
 from jax.experimental import PartitionSpec
 from jax.experimental.pjit import pjit, with_sharding_constraint
 from omegaconf import OmegaConf
@@ -439,9 +438,10 @@ def train_step(
     state_spec: Any = None,
     grad_accum_steps: int = None,
 ):
-    """Train on a single Gradient-Accumulation batch
+    """Train on a single Gradient-Accumulation batch with Optimizer State Sharding
     This means that the batch will be size (local_bs*grad_accum, ctx) instead of (local_bs, ctx)
 
+    TODO: Add back in gradient sharding
     """
 
     def get_minibatch(batch, grad_idx):
@@ -463,26 +463,24 @@ def train_step(
     grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
 
     def loss_and_grad(grad_idx):
-        minibatch = get_minibatch(batch, grad_idx) if grad_idx is not None else batch
+        minibatch = (
+            get_minibatch(batch, grad_idx) if grad_idx is not None else batch
+        )
+        minibatch = with_sharding_constraint(minibatch, PartitionSpec("dp",None))
 
-        minibatch = with_sharding_constraint(minibatch, PartitionSpec("dp", None))
-        loss, grads = jax.vmap(grad_fn, in_axes=(None, 1), out_axes=(0, 0))(state.params, minibatch)
+        loss, grads = jax.vmap(grad_fn, in_axes=(None, 0), out_axes=(0, 0))(state.params, minibatch)
 
-        grads = with_sharding_constraint(grads, param_spec)
-        
         loss, grads = jax.tree_util.tree_map(
-                    lambda x: jnp.mean(x, axis=0), (loss, grads)
-                )
-        
+                lambda x: jnp.mean(x, axis=0), (loss, grads)
+            )
+
         return loss, grads
 
     # tuple of loss, grads
     init_minibatch = (
-        0.0,
-        with_sharding_constraint(
-            jax.tree_util.tree_map(jnp.zeros_like, state.params), param_spec
-        ),
-    )
+            0.0,
+            jax.tree_util.tree_map(jnp.zeros_like, state.params)
+        )
 
     # accumulate gradients
     def cumul_minibatch_step(grad_idx, cumul_loss_grad):
@@ -491,7 +489,6 @@ def train_step(
         cumul_loss, cumul_grads = jax.tree_util.tree_map(
             jnp.add, (cumul_loss, cumul_grads), (loss, grads)
         )
-        cumul_grads = with_sharding_constraint(cumul_grads, param_spec)
         return cumul_loss, cumul_grads
 
     loss, grads = jax.lax.fori_loop(
@@ -502,11 +499,8 @@ def train_step(
     )
 
     state = with_sharding_constraint(state, state_spec)
-    grads = with_sharding_constraint(grads, param_spec)
     # sum -> mean
     loss, grads = jax.tree_util.tree_map(lambda x: x / grad_accum_steps, (loss, grads))
-
-    grads = with_sharding_constraint(grads, param_spec)
 
     # only update train_state at the end of a single full batch
     new_state = state.apply_gradients(
