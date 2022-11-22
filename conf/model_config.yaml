@@ -86,5 +86,5 @@ XL: #around 780M
   block_size: 1024
   dropout: 0.1
   N: 24
-  fused_residuals: False
+  fused_residuals: True
   alibi_attn: True
