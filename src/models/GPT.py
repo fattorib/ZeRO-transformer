@@ -161,7 +161,7 @@ class Transformer(nn.Module):
         labels: jnp.array = None,
         train: bool = False,
     ) -> Union[jnp.array, Tuple[jnp.array, jnp.array]]:
-        B, T = x.shape[0:2]
+        T = x.shape[-1]
         embed = nn.Embed(
             name="wte",
             num_embeddings=self.vocab_size,
@@ -180,7 +180,7 @@ class Transformer(nn.Module):
                 features=self.embedding_dim,
                 embedding_init=initializers.normal(stddev=0.02),
                 dtype=self.dtype,
-            )(jnp.ones((B, T), dtype=jnp.uint8))
+            )(jnp.ones((T), dtype=jnp.uint8))
 
             out += wpe
 
