@@ -73,12 +73,13 @@ def create_zero_train_state(
     )
     return state, tx, opt_state
 
-@partial(jax.pmap, axis_name= "batch", static_broadcasted_argnums=(3,))
+@partial(jax.pmap, axis_name= "batch", static_broadcasted_argnums=(3,4))
 def train_step(
-    state: Any,
+    params: Any,
     batch: jnp.array,
     rng_key: jax.random.PRNGKey = None,
     accum_steps: int = 8,
+    model: Any = None
 ):
     """
     Computes loss/grads for a single batch of data, pmeans across all devices to sync grads
@@ -92,7 +93,7 @@ def train_step(
         )
 
     def loss_fn(params, batch):
-        _, loss = state.apply_fn(
+        _, loss = model.apply(
             {"params": params["params"]},
             x=batch,
             labels=batch,
@@ -106,12 +107,12 @@ def train_step(
     def loss_and_grad(grad_idx):
         minibatch = get_minibatch(batch, grad_idx) if grad_idx is not None else batch
 
-        loss, grads = grad_fn(state.params, minibatch)
+        loss, grads = grad_fn(params, minibatch)
 
         return loss, grads
 
 
-    init_minibatch = (0.0, jax.tree_util.tree_map(jnp.zeros_like, state.params))
+    init_minibatch = (0.0, jax.tree_util.tree_map(jnp.zeros_like, params))
 
     # accumulate gradients
     def cumul_minibatch_step(grad_idx, cumul_loss_grad):
@@ -142,6 +143,7 @@ def train_step(
     }
 
     return loss, grads, metrics
+
 
 
 
@@ -228,25 +230,29 @@ if __name__ == "__main__":
     opt_state = jax.pmap(lambda x: x)(opt_state) # shard opt state to free up memory
 
     # replicate state across devices
-    state = replicate(state)
+    params = state.params
+    del state
+
+    # replicate state across devices
+    params = replicate(params)
 
     # compute loss, grads, can add accumulation here
-    loss, synced_grads, metrics = train_step(
+    loss, grads, metrics = train_step(
         state,
         batch,
         rng_sharded, 
-        GRADIENT_ACCUMULATION_STEPS
+        GRADIENT_ACCUMULATION_STEPS,
+        model
     ) 
     
     # adding an extra slice dimension to the grads/params, by doing this we can then update the same device slices as the optimizer states
-    sharded_grads = split_sharded_device_array(synced_grads)
-    del synced_grads
-    sharded_params = split_sharded_device_array(state.params) # crashes here with memory error
+    grads = split_sharded_device_array(grads)
+    params = split_sharded_device_array(params) # crashes here with memory error
     
     # update sharded state
-    params, opt_state = update_sharded_state(sharded_grads,
+    params, opt_state = update_sharded_state(grads,
         opt_state,
-        sharded_params,
+        grads,
         optimizer, 
         device_index = jax.numpy.arange(jax.device_count())
         )
@@ -269,21 +275,22 @@ if __name__ == "__main__":
         rng_sharded = shard_prng_key(rng)
 
         t0 = time()
-        loss, synced_grads, metrics = train_step(
+        loss, grads, metrics = train_step(
             state,
             batch,
             rng_sharded, 
-            GRADIENT_ACCUMULATION_STEPS
+            GRADIENT_ACCUMULATION_STEPS,
+            model
         ) 
         
         # adding an extra slice dimension to the grads/params, by doing this we can then update the same device slices as the optimizer states
-        sharded_grads = split_sharded_device_array(synced_grads)
-        sharded_params = split_sharded_device_array(state.params)
+        grads = split_sharded_device_array(grads)
+        params = split_sharded_device_array(params)
         
         # update sharded state
-        params, opt_state = update_sharded_state(sharded_grads,
+        params, opt_state = update_sharded_state(grads,
             opt_state,
-            sharded_params,
+            params,
             optimizer, 
             device_index = jax.numpy.arange(jax.device_count())
         )
