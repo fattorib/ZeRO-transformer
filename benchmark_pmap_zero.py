@@ -281,8 +281,6 @@ if __name__ == "__main__":
     del grads # manually free grad mem since scope exists outside of train_step function
 
     times = []
-    jax.block_until_ready()
-    jax.profiler.save_device_memory_profile("memory.prof")
     
     for _ in tqdm(range(NUM_PASSES)):
         rng, batch_rng = jax.random.split(rng, 2)
