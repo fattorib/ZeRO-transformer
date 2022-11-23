@@ -148,8 +148,6 @@ def train_step(
 
     return loss, grads, metrics
 
-
-
 @partial(jax.pmap, axis_name= "shard", devices = jax.local_devices())
 def slice_grads(grads, device_index):
     grad_slice = jax.tree_util.tree_map(lambda x: x[device_index, ...], grads)
@@ -166,12 +164,10 @@ def update_sharded_state(grads: Any,
     Updates the sharded optimizer state
     """
 
-    param_slice = jax.tree_util.tree_map(lambda x: x[device_index, ...], params)
-    # grad_slice = jax.tree_util.tree_map(lambda x: x[device_index, ...], grads)
 
     # These two lines update the specific shard of state/parameters sitting on device 'i'
-    updates, new_opt_state = optimizer.update(grads, optimizer_state, param_slice)
-    new_param_slice = optax.apply_updates(param_slice, updates)
+    updates, new_opt_state = optimizer.update(grads, optimizer_state, params)
+    new_param_slice = optax.apply_updates(params, updates)
 
     new_params = jax.lax.all_gather(new_param_slice, axis_name = 'shard')
     return new_params, new_opt_state
@@ -184,27 +180,25 @@ def partition_shard(xs, local_device_count, devices):
     return jax.tree_util.tree_map(
       lambda x: x.reshape((local_device_count, -1) + x.shape[1:]) if x.ndim > 0 else jax.device_put_replicated(x, devices), xs)
 
-# @jax.jit #NOTE: Currently these cause OOMs on tpu, just need to wrap with @partial(jax.jit, device = 'cpu')
-def split_sharded_device_array(arr):
-    """
-    Reshapes pytree to add a 'device' dimension. This is used for the sharded update
 
-    NOTE: Since we're on TPU, could just harcode this 8 and jit it
+@partial(jax.pmap, devices = jax.local_devices())
+def split_sharded_device_array(arr, device_index):
+    """
+    Pmappable way to get shards of param/grad pytrees
+
     """
     local_device_count = 8
-    return jax.tree_util.tree_map(lambda x: x.reshape(x.shape[0], local_device_count, -1, x.shape[-1]) if x.ndim > 2 else x.reshape(x.shape[0],local_device_count,-1),arr)
+    return jax.tree_util.tree_map(lambda x: x.reshape(local_device_count, -1, x.shape[-1])[device_index, ...] if x.ndim >= 2 else x.reshape(local_device_count,-1)[device_index, ...],arr)
 
-# @jax.jit #NOTE: Currently these cause OOMs on tpu, just need to wrap with @partial(jax.jit, device = 'cpu')
+@partial(jax.pmap, devices = jax.local_devices())
 def deshard(xs):
     """
-    Deshard a replicated params tree while keeping the device axis.
+    Pmappable way to get reshape a sharded device array containing param replicas
 
-    NOTE: Since we're on TPU, could just harcode this 8 and jit it
     """
     local_device_count = 8
-    return jax.tree_util.tree_map(lambda x: x.reshape((local_device_count,-1,x.shape[-1])) if x.ndim > 3 else x.reshape((local_device_count, -1)), xs)
+    return jax.tree_util.tree_map(lambda x: x.reshape((-1,x.shape[-1])) if x.ndim > 2 else x.reshape(-1), xs)
     
-
 
 if __name__ == "__main__":
     
@@ -264,13 +258,10 @@ if __name__ == "__main__":
         model
     ) 
     
-    # adding an extra slice dimension to the grads/params, by doing this we can then update the same device slices as the optimizer states
-    grads = split_sharded_device_array(grads) # we want to shard these but not shard the params
-    grads = jax.pmap(lambda x: x, donate_argnums=(0,))(grads)
-    grads = slice_grads(grads, jax.numpy.arange(jax.device_count()))
-
-    params = split_sharded_device_array(params)
-    params = jax.pmap(lambda x: x, donate_argnums=(0,))(params)
+    
+    grads = split_sharded_device_array(grads, jax.numpy.arange(jax.device_count())) 
+    params = split_sharded_device_array(params, jax.numpy.arange(jax.device_count()))
+        
     
     # update sharded state
     params, opt_state = update_sharded_state(grads,
@@ -279,14 +270,13 @@ if __name__ == "__main__":
         optimizer, 
         device_index = jax.numpy.arange(jax.device_count())
         )
-    
-    params = jax.pmap(lambda x: x, donate_argnums = (0,))(deshard(params))
+
+    #NOTE: Unnecessary gather here
+    params = deshard(params)
 
     del grads # manually free grad mem since scope exists outside of train_step function
 
     times = []
-    train_times = []
-    opt_times = []
     
     for _ in tqdm(range(NUM_PASSES)):
         rng, batch_rng = jax.random.split(rng, 2)
@@ -310,15 +300,10 @@ if __name__ == "__main__":
             GRADIENT_ACCUMULATION_STEPS, 
             model
         )
-        train_times.append(time()- t0)
         
-        # adding an extra slice dimension to the grads/params, by doing this we can then update the same device slices as the optimizer states
-        grads = split_sharded_device_array(grads) # OOM here
-        grads = jax.pmap(lambda x: x, donate_argnums=(0,))(grads)
-        grads = slice_grads(grads, jax.numpy.arange(jax.device_count()))
-
-        params = split_sharded_device_array(params)
-        params = jax.pmap(lambda x: x, donate_argnums=(0,))(params)
+        #NOTE: Unnecessary gather here
+        grads = split_sharded_device_array(grads, jax.numpy.arange(jax.device_count())) 
+        params = split_sharded_device_array(params, jax.numpy.arange(jax.device_count()))
         
         # update sharded state
         params, opt_state = update_sharded_state(grads,
@@ -327,11 +312,10 @@ if __name__ == "__main__":
             optimizer, 
             device_index = jax.numpy.arange(jax.device_count())
         )
-        opt_times.append(time() - t0)
 
         del grads
 
-        params = jax.pmap(lambda x: x, donate_argnums = (0,))(deshard(params))
+        params = deshard(params)
 
         times.append(time() - t0)
 
@@ -339,6 +323,4 @@ if __name__ == "__main__":
     f"Optimized Pmap Step - Global BS {GLOBAL_BATCH_SIZE} - accum steps {GRADIENT_ACCUMULATION_STEPS} - Num Executions {NUM_PASSES}"
     )
     print(f"Mean Batch Time {np.mean(times):.4f} Seconds")
-    print(f"Mean train_step Time {np.mean(train_times) :.4f} Seconds")
-    print(f"Mean optimizer update Time {np.mean(opt_times)-np.mean(train_times):.4f} Seconds")
     print()
