@@ -321,6 +321,8 @@ if __name__ == "__main__":
             device_index = jax.numpy.arange(jax.device_count())
         )
 
+        del grads
+
         params = jax.pmap(lambda x: x, donate_argnums = (0,))(deshard(params))
 
         times.append(time() - t0)
