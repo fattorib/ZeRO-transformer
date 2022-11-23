@@ -215,7 +215,7 @@ if __name__ == "__main__":
     GRADIENT_ACCUMULATION_STEPS = args.grad_accum
     GLOBAL_BATCH_SIZE = args.batch_size
     SEQ_LEN = args.ctx
-    MODEL_SIZE = "base"
+    MODEL_SIZE = "smol"
     NUM_PASSES = 25
 
     model = model_getter(MODEL_SIZE, return_cfg=False)
