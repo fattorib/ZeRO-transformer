@@ -325,8 +325,8 @@ if __name__ == "__main__":
 
         times.append(time() - t0)
 
-        print(
-        f"Optimized Pmap Step - Global BS {GLOBAL_BATCH_SIZE} - accum steps {GRADIENT_ACCUMULATION_STEPS} - Num Executions {NUM_PASSES}"
-        )
-        print(f"Mean Batch Time {np.mean(times):.4f} Seconds")
-        print()
+    print(
+    f"Optimized Pmap Step - Global BS {GLOBAL_BATCH_SIZE} - accum steps {GRADIENT_ACCUMULATION_STEPS} - Num Executions {NUM_PASSES}"
+    )
+    print(f"Mean Batch Time {np.mean(times):.4f} Seconds")
+    print()
