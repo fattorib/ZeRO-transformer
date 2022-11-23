@@ -199,62 +199,108 @@ def deshard(xs):
 
 
 if __name__ == "__main__":
-    with jax.profiler.trace("articles", create_perfetto_link=True, create_perfetto_trace=True):
+    
 
-        args = parse()
+    args = parse()
 
-        # CONSTANTS
-        GRADIENT_ACCUMULATION_STEPS = args.grad_accum
-        GLOBAL_BATCH_SIZE = args.batch_size
-        SEQ_LEN = args.ctx
-        MODEL_SIZE = "base"
-        NUM_PASSES = 10
+    # CONSTANTS
+    GRADIENT_ACCUMULATION_STEPS = args.grad_accum
+    GLOBAL_BATCH_SIZE = args.batch_size
+    SEQ_LEN = args.ctx
+    MODEL_SIZE = "base"
+    NUM_PASSES = 10
 
-        model = model_getter(MODEL_SIZE, return_cfg=False)
-        local_device_count = jax.local_device_count()
+    model = model_getter(MODEL_SIZE, return_cfg=False)
+    local_device_count = jax.local_device_count()
 
-        # State Creation, etc
-        init_rng = jax.random.PRNGKey(0)
+    # State Creation, etc
+    init_rng = jax.random.PRNGKey(0)
 
-        state, optimizer, opt_state = create_zero_train_state(init_rng,
-            3e-4,
-            weight_decay=0.1,
-            model=model,)
-        
-        batch = jax.random.randint(
-                init_rng, (GLOBAL_BATCH_SIZE, SEQ_LEN), maxval=50257, minval=0
-            )
-        batch = batch.reshape(
+    state, optimizer, opt_state = create_zero_train_state(init_rng,
+        3e-4,
+        weight_decay=0.1,
+        model=model,)
+    
+    batch = jax.random.randint(
+            init_rng, (GLOBAL_BATCH_SIZE, SEQ_LEN), maxval=50257, minval=0
+        )
+    batch = batch.reshape(
+        GRADIENT_ACCUMULATION_STEPS,
+        GLOBAL_BATCH_SIZE // GRADIENT_ACCUMULATION_STEPS,
+        SEQ_LEN,
+    ).transpose(1, 0, 2)
+
+    batch = shard(batch)
+    rng_sharded = shard_prng_key(init_rng)
+
+    # optimizer state is completely partitioned across devices, needs to be done pre replication of state
+    # once this is passed through our pmapped function, all arrays here are ShardedDeviceArrays sitting on all local_devices
+    opt_state = partition_shard(opt_state, local_device_count, jax.local_devices()) 
+    opt_state = jax.pmap(lambda x: x)(opt_state) # shard opt state to free up memory
+
+    # replicate state across devices
+    params = state.params
+    del state
+
+    # replicate state across devices
+    params = replicate(params)
+
+    rng, _ = jax.random.split(init_rng)
+
+    # compute loss, grads, can add accumulation here
+    loss, grads, metrics = train_step(
+        params,
+        batch,
+        rng_sharded, 
+        GRADIENT_ACCUMULATION_STEPS, 
+        model
+    ) 
+    
+    # adding an extra slice dimension to the grads/params, by doing this we can then update the same device slices as the optimizer states
+    grads = split_sharded_device_array(grads)
+    grads = jax.pmap(lambda x: x, donate_argnums=(0,))(grads)
+
+    params = split_sharded_device_array(params)
+    params = jax.pmap(lambda x: x, donate_argnums=(0,))(params)
+    
+    # update sharded state
+    params, opt_state = update_sharded_state(grads,
+        opt_state,
+        grads,
+        optimizer, 
+        device_index = jax.numpy.arange(jax.device_count())
+        )
+    
+    params = deshard(params)
+
+    del grads # manually free grad mem since scope exists outside of train_step function
+
+    times = []
+    jax.block_until_ready()
+    jax.profiler.save_device_memory_profile("memory.prof")
+    
+    for _ in tqdm(range(NUM_PASSES)):
+        rng, batch_rng = jax.random.split(rng, 2)
+        test_batch = jax.random.randint(
+            batch_rng, (GLOBAL_BATCH_SIZE, SEQ_LEN), maxval=50257, minval=0
+        )
+        test_batch = test_batch.reshape(
             GRADIENT_ACCUMULATION_STEPS,
             GLOBAL_BATCH_SIZE // GRADIENT_ACCUMULATION_STEPS,
             SEQ_LEN,
         ).transpose(1, 0, 2)
 
-        batch = shard(batch)
-        rng_sharded = shard_prng_key(init_rng)
+        test_batch = shard(test_batch)
+        rng_sharded = shard_prng_key(rng)
 
-        # optimizer state is completely partitioned across devices, needs to be done pre replication of state
-        # once this is passed through our pmapped function, all arrays here are ShardedDeviceArrays sitting on all local_devices
-        opt_state = partition_shard(opt_state, local_device_count, jax.local_devices()) 
-        opt_state = jax.pmap(lambda x: x)(opt_state) # shard opt state to free up memory
-
-        # replicate state across devices
-        params = state.params
-        del state
-
-        # replicate state across devices
-        params = replicate(params)
-
-        rng, _ = jax.random.split(init_rng)
-
-        # compute loss, grads, can add accumulation here
+        t0 = time()
         loss, grads, metrics = train_step(
             params,
             batch,
             rng_sharded, 
             GRADIENT_ACCUMULATION_STEPS, 
             model
-        ) 
+        )
         
         # adding an extra slice dimension to the grads/params, by doing this we can then update the same device slices as the optimizer states
         grads = split_sharded_device_array(grads)
@@ -266,60 +312,17 @@ if __name__ == "__main__":
         # update sharded state
         params, opt_state = update_sharded_state(grads,
             opt_state,
-            grads,
+            params,
             optimizer, 
             device_index = jax.numpy.arange(jax.device_count())
-            )
-        
+        )
+
         params = deshard(params)
 
-        del grads # manually free grad mem since scope exists outside of train_step function
+        times.append(time() - t0)
 
-        times = []
-        for _ in tqdm(range(NUM_PASSES)):
-            rng, batch_rng = jax.random.split(rng, 2)
-            test_batch = jax.random.randint(
-                batch_rng, (GLOBAL_BATCH_SIZE, SEQ_LEN), maxval=50257, minval=0
-            )
-            test_batch = test_batch.reshape(
-                GRADIENT_ACCUMULATION_STEPS,
-                GLOBAL_BATCH_SIZE // GRADIENT_ACCUMULATION_STEPS,
-                SEQ_LEN,
-            ).transpose(1, 0, 2)
-
-            test_batch = shard(test_batch)
-            rng_sharded = shard_prng_key(rng)
-
-            t0 = time()
-            loss, grads, metrics = train_step(
-                params,
-                batch,
-                rng_sharded, 
-                GRADIENT_ACCUMULATION_STEPS, 
-                model
-            )
-            
-            # adding an extra slice dimension to the grads/params, by doing this we can then update the same device slices as the optimizer states
-            grads = split_sharded_device_array(grads)
-            grads = jax.pmap(lambda x: x, donate_argnums=(0,))(grads)
-
-            params = split_sharded_device_array(params)
-            params = jax.pmap(lambda x: x, donate_argnums=(0,))(params)
-            
-            # update sharded state
-            params, opt_state = update_sharded_state(grads,
-                opt_state,
-                params,
-                optimizer, 
-                device_index = jax.numpy.arange(jax.device_count())
-            )
-
-            params = deshard(params)
-
-            times.append(time() - t0)
-
-            print(
-            f"Optimized Pmap Step - Global BS {GLOBAL_BATCH_SIZE} - accum steps {GRADIENT_ACCUMULATION_STEPS} - Num Executions {NUM_PASSES}"
-            )
-            print(f"Mean Batch Time {np.mean(times):.4f} Seconds")
-            print()
+        print(
+        f"Optimized Pmap Step - Global BS {GLOBAL_BATCH_SIZE} - accum steps {GRADIENT_ACCUMULATION_STEPS} - Num Executions {NUM_PASSES}"
+        )
+        print(f"Mean Batch Time {np.mean(times):.4f} Seconds")
+        print()
