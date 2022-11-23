@@ -146,6 +146,10 @@ def train_step(
 
 
 
+@partial(jax.pmap, axis_name= "shard", devices = jax.local_devices())
+def slice_grads(grads, device_index):
+    grad_slice = jax.tree_util.tree_map(lambda x: x[device_index, ...], grads)
+    return grad_slice
 
 @partial(jax.pmap, axis_name= "shard", static_broadcasted_argnums = (3,), devices = jax.local_devices())
 def update_sharded_state(grads: Any, 
@@ -159,10 +163,10 @@ def update_sharded_state(grads: Any,
     """
 
     param_slice = jax.tree_util.tree_map(lambda x: x[device_index, ...], params)
-    grad_slice = jax.tree_util.tree_map(lambda x: x[device_index, ...], grads)
+    # grad_slice = jax.tree_util.tree_map(lambda x: x[device_index, ...], grads)
 
     # These two lines update the specific shard of state/parameters sitting on device 'i'
-    updates, new_opt_state = optimizer.update(grad_slice, optimizer_state, param_slice)
+    updates, new_opt_state = optimizer.update(grads, optimizer_state, param_slice)
     new_param_slice = optax.apply_updates(param_slice, updates)
 
     new_params = jax.lax.all_gather(new_param_slice, axis_name = 'shard')
@@ -257,8 +261,9 @@ if __name__ == "__main__":
     ) 
     
     # adding an extra slice dimension to the grads/params, by doing this we can then update the same device slices as the optimizer states
-    grads = split_sharded_device_array(grads)
+    grads = split_sharded_device_array(grads) # we want to shard these but not shard the params
     grads = jax.pmap(lambda x: x, donate_argnums=(0,))(grads)
+    grads = slice_grads(grads, jax.numpy.arange(jax.device_count()))
 
     params = split_sharded_device_array(params)
     params = jax.pmap(lambda x: x, donate_argnums=(0,))(params)
@@ -303,9 +308,10 @@ if __name__ == "__main__":
         )
         
         # adding an extra slice dimension to the grads/params, by doing this we can then update the same device slices as the optimizer states
-        grads = split_sharded_device_array(grads)
+        grads = split_sharded_device_array(grads) # we want to shard these but not shard the params
         grads = jax.pmap(lambda x: x, donate_argnums=(0,))(grads)
-
+        grads = slice_grads(grads, jax.numpy.arange(jax.device_count()))
+        
         params = split_sharded_device_array(params)
         params = jax.pmap(lambda x: x, donate_argnums=(0,))(params)
         
