@@ -199,7 +199,7 @@ def deshard(xs):
 
 
 if __name__ == "__main__":
-    with jax.profiler.trace("", create_perfetto_link=True):
+    with jax.profiler.trace("articles", create_perfetto_link=True, create_perfetto_trace=True):
 
         args = parse()
 
