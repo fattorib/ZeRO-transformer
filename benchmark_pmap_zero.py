@@ -222,6 +222,8 @@ if __name__ == "__main__":
     # optimizer state is completely partitioned across devices, needs to be done pre replication of state
     # once this is passed through our pmapped function, all arrays here are ShardedDeviceArrays sitting on all local_devices
     opt_state = partition_shard(opt_state, local_device_count, jax.local_devices()) 
+    opt_state = jax.pmap(lambda x: x)(opt_state) # shard opt state to free up memory
+    
     # replicate state across devices
     state = replicate(state)
 
@@ -245,6 +247,8 @@ if __name__ == "__main__":
         device_index = jax.numpy.arange(jax.device_count())
         )
     
+    params = deshard(params)
+
     times = []
     for _ in tqdm(range(NUM_PASSES)):
         rng, batch_rng = jax.random.split(rng, 2)
