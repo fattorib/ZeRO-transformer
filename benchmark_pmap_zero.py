@@ -174,6 +174,9 @@ def partition_shard(xs, local_device_count, devices):
       lambda x: x.reshape((local_device_count, -1) + x.shape[1:]) if x.ndim > 0 else jax.device_put_replicated(x, devices), xs)
 
 def split_sharded_device_array(arr):
+    """
+    Reshapes pytree to add a 'device' dimension. This is used for the sharded update
+    """
     local_device_count = jax.local_device_count()
     return jax.tree_util.tree_map(lambda x: x.reshape(x.shape[0], local_device_count, -1, x.shape[-1]) if x.ndim > 2 else x.reshape(x.shape[0],local_device_count,-1),arr)
 
@@ -223,7 +226,7 @@ if __name__ == "__main__":
     # once this is passed through our pmapped function, all arrays here are ShardedDeviceArrays sitting on all local_devices
     opt_state = partition_shard(opt_state, local_device_count, jax.local_devices()) 
     opt_state = jax.pmap(lambda x: x)(opt_state) # shard opt state to free up memory
-    
+
     # replicate state across devices
     state = replicate(state)
 
@@ -237,7 +240,8 @@ if __name__ == "__main__":
     
     # adding an extra slice dimension to the grads/params, by doing this we can then update the same device slices as the optimizer states
     sharded_grads = split_sharded_device_array(synced_grads)
-    sharded_params = split_sharded_device_array(state.params)
+    del synced_grads
+    sharded_params = split_sharded_device_array(state.params) # crashes here with memory error
     
     # update sharded state
     params, opt_state = update_sharded_state(sharded_grads,
