@@ -247,10 +247,10 @@ if __name__ == "__main__":
     
     # adding an extra slice dimension to the grads/params, by doing this we can then update the same device slices as the optimizer states
     grads = split_sharded_device_array(grads)
-    grads = jax.pmap(lambda x: x)(grads)
+    grads = jax.pmap(lambda x: x, donate_argnums=(0,))(grads)
 
     params = split_sharded_device_array(params)
-    params = jax.pmap(lambda x: x)(params) # crashes here with memory error
+    params = jax.pmap(lambda x: x, donate_argnums=(0,))(params)
     
     # update sharded state
     params, opt_state = update_sharded_state(grads,
@@ -288,10 +288,10 @@ if __name__ == "__main__":
         
         # adding an extra slice dimension to the grads/params, by doing this we can then update the same device slices as the optimizer states
         grads = split_sharded_device_array(grads)
-        grads = jax.pmap(lambda x: x)(grads)
+        grads = jax.pmap(lambda x: x, donate_argnums=(0,))(grads)
 
         params = split_sharded_device_array(params)
-        params = jax.pmap(lambda x: x)(params)
+        params = jax.pmap(lambda x: x, donate_argnums=(0,))(params)
         
         # update sharded state
         params, opt_state = update_sharded_state(grads,
