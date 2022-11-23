@@ -236,6 +236,8 @@ if __name__ == "__main__":
     # replicate state across devices
     params = replicate(params)
 
+    rng, _ = jax.random.split(init_rng)
+
     # compute loss, grads, can add accumulation here
     loss, grads, metrics = train_step(
         params,
