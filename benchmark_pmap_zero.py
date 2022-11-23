@@ -216,7 +216,7 @@ if __name__ == "__main__":
     GLOBAL_BATCH_SIZE = args.batch_size
     SEQ_LEN = args.ctx
     MODEL_SIZE = "base"
-    NUM_PASSES = 10
+    NUM_PASSES = 25
 
     model = model_getter(MODEL_SIZE, return_cfg=False)
     local_device_count = jax.local_device_count()
