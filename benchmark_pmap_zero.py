@@ -222,7 +222,7 @@ if __name__ == "__main__":
     MODEL_SIZE = "base"
     NUM_PASSES = 25
 
-    model = model_getter(MODEL_SIZE, return_cfg=False)
+    model = model_getter(MODEL_SIZE, return_cfg=False, dtype = jnp.bfloat16)
     local_device_count = jax.local_device_count()
 
     # State Creation, etc
