@@ -1,8 +1,13 @@
+"""
+Runs without OOM but is:
+    - Extremely slow
+    - Brittle (forgetting to delete grads anywhere will cause OOM)
+"""
+
 import argparse
 from time import time
 from typing import Any
 
-import os
 from functools import partial
 from typing import Any
 
@@ -12,7 +17,6 @@ import numpy as np
 import optax
 from flax.jax_utils import replicate
 from flax.training.common_utils import shard, shard_prng_key
-from flax.core import unfreeze, freeze
 from typing import Callable, Union
 import flax.linen as nn
 
@@ -281,6 +285,8 @@ if __name__ == "__main__":
     del grads # manually free grad mem since scope exists outside of train_step function
 
     times = []
+    train_times = []
+    opt_times = []
     
     for _ in tqdm(range(NUM_PASSES)):
         rng, batch_rng = jax.random.split(rng, 2)
@@ -304,6 +310,7 @@ if __name__ == "__main__":
             GRADIENT_ACCUMULATION_STEPS, 
             model
         )
+        train_times.append(time()- t0)
         
         # adding an extra slice dimension to the grads/params, by doing this we can then update the same device slices as the optimizer states
         grads = split_sharded_device_array(grads) # OOM here
@@ -320,6 +327,7 @@ if __name__ == "__main__":
             optimizer, 
             device_index = jax.numpy.arange(jax.device_count())
         )
+        opt_times.append(time() - t0)
 
         del grads
 
@@ -331,4 +339,6 @@ if __name__ == "__main__":
     f"Optimized Pmap Step - Global BS {GLOBAL_BATCH_SIZE} - accum steps {GRADIENT_ACCUMULATION_STEPS} - Num Executions {NUM_PASSES}"
     )
     print(f"Mean Batch Time {np.mean(times):.4f} Seconds")
+    print(f"Mean train_step Time {np.mean(train_times) :.4f} Seconds")
+    print(f"Mean optimizer update Time {np.mean(opt_times)-np.mean(train_times):.4f} Seconds")
     print()
