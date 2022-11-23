@@ -266,7 +266,7 @@ if __name__ == "__main__":
     
     params = deshard(params)
 
-    del grads # manually do this since its scope exists outside of train function
+    del grads # manually free grad mem since scope exists outside of train_step function
 
     times = []
     for _ in tqdm(range(NUM_PASSES)):
