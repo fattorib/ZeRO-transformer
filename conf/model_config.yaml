@@ -40,9 +40,9 @@ test:
 
 smol:
   embedding_dim: 768
-  vocab_size: 50432
+  vocab_size: 50264
   num_head: 12
-  block_size: 2048
+  block_size: 512
   dropout: 0.1
   N: 6
   fused_residuals: False
