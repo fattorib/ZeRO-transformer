@@ -276,7 +276,7 @@ if __name__ == "__main__":
         device_index = jax.numpy.arange(jax.device_count())
         )
     
-    params = deshard(params)
+    params = jax.pmap(lambda x: x, donate_argnums = (0,))(deshard(params))
 
     del grads # manually free grad mem since scope exists outside of train_step function
 
@@ -306,7 +306,7 @@ if __name__ == "__main__":
         )
         
         # adding an extra slice dimension to the grads/params, by doing this we can then update the same device slices as the optimizer states
-        grads = split_sharded_device_array(grads) # we want to shard these but not shard the params
+        grads = split_sharded_device_array(grads) # OOM here
         grads = jax.pmap(lambda x: x, donate_argnums=(0,))(grads)
         grads = slice_grads(grads, jax.numpy.arange(jax.device_count()))
 
@@ -322,6 +322,8 @@ if __name__ == "__main__":
         )
 
         params = deshard(params)
+
+        params = jax.pmap(lambda x: x, donate_argnums = (0,))(deshard(params))
 
         times.append(time() - t0)
 
