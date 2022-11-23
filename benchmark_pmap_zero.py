@@ -178,6 +178,8 @@ def partition_shard(xs, local_device_count, devices):
 def split_sharded_device_array(arr):
     """
     Reshapes pytree to add a 'device' dimension. This is used for the sharded update
+
+    NOTE: Since we're on TPU, could just harcode this 8 and jit it
     """
     local_device_count = jax.local_device_count()
     return jax.tree_util.tree_map(lambda x: x.reshape(x.shape[0], local_device_count, -1, x.shape[-1]) if x.ndim > 2 else x.reshape(x.shape[0],local_device_count,-1),arr)
@@ -263,6 +265,8 @@ if __name__ == "__main__":
         )
     
     params = deshard(params)
+
+    del grads # manually do this since its scope exists outside of train function
 
     times = []
     for _ in tqdm(range(NUM_PASSES)):
