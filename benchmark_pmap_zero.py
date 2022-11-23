@@ -186,6 +186,12 @@ def split_sharded_device_array(arr, device_index):
     """
     Pmappable way to get shards of param/grad pytrees
 
+    By default, anything that is not a pmapped function applied to a ShardedDeviceArray will 
+    force a gather to the 0'th device and return a DeviceArray. 
+
+    See: https://github.com/google/jax/issues/2535
+
+
     """
     local_device_count = 8
     return jax.tree_util.tree_map(lambda x: x.reshape(local_device_count, -1, x.shape[-1])[device_index, ...] if x.ndim >= 2 else x.reshape(local_device_count,-1)[device_index, ...],arr)
@@ -195,8 +201,12 @@ def deshard(xs):
     """
     Pmappable way to get reshape a sharded device array containing param replicas
 
+    By default, anything that is not a pmapped function applied to a ShardedDeviceArray will 
+    force a gather to the 0'th device and return a DeviceArray. 
+
+    See: https://github.com/google/jax/issues/2535
+
     """
-    local_device_count = 8
     return jax.tree_util.tree_map(lambda x: x.reshape((-1,x.shape[-1])) if x.ndim > 2 else x.reshape(-1), xs)
     
 
@@ -271,8 +281,7 @@ if __name__ == "__main__":
         device_index = jax.numpy.arange(jax.device_count())
         )
 
-    #NOTE: Unnecessary gather here
-    params = deshard(params)
+    params = deshard(params) #reshape params
 
     del grads # manually free grad mem since scope exists outside of train_step function
 
@@ -301,7 +310,6 @@ if __name__ == "__main__":
             model
         )
         
-        #NOTE: Unnecessary gather here
         grads = split_sharded_device_array(grads, jax.numpy.arange(jax.device_count())) 
         params = split_sharded_device_array(params, jax.numpy.arange(jax.device_count()))
         
@@ -315,7 +323,7 @@ if __name__ == "__main__":
 
         del grads
 
-        params = deshard(params)
+        params = deshard(params) # reshape params
 
         times.append(time() - t0)
 
