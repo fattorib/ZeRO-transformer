@@ -180,7 +180,7 @@ def partition_shard(xs, local_device_count, devices):
     return jax.tree_util.tree_map(
       lambda x: x.reshape((local_device_count, -1) + x.shape[1:]) if x.ndim > 0 else jax.device_put_replicated(x, devices), xs)
 
-# @jax.jit(device='cpu')
+# @jax.jit #NOTE: Currently these cause OOMs on tpu, just need to wrap with @partial(jax.jit, device = 'cpu')
 def split_sharded_device_array(arr):
     """
     Reshapes pytree to add a 'device' dimension. This is used for the sharded update
@@ -190,7 +190,7 @@ def split_sharded_device_array(arr):
     local_device_count = 8
     return jax.tree_util.tree_map(lambda x: x.reshape(x.shape[0], local_device_count, -1, x.shape[-1]) if x.ndim > 2 else x.reshape(x.shape[0],local_device_count,-1),arr)
 
-# @jax.jit(device='cpu')
+# @jax.jit #NOTE: Currently these cause OOMs on tpu, just need to wrap with @partial(jax.jit, device = 'cpu')
 def deshard(xs):
     """
     Deshard a replicated params tree while keeping the device axis.
