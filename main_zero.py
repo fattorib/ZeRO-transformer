@@ -504,7 +504,7 @@ def train_step(
     model: Any = None,
 ):
     """
-    Computes loss/grads for a single batch of data, pmeans across all devices to sync grads
+    Computes loss/grads for a single batch of data, pmeans across all devices/hosts to sync grads
     and returns loss/grads
     """
 
