@@ -388,9 +388,6 @@ def main():
 
         t0 = time.time()
 
-        state, metrics = train_step(
-            state, text, rng_sharded, gradient_accumulation_steps
-        )
 
         loss, grads, metrics = train_step(
             params, text, rng_sharded, gradient_accumulation_steps, model
