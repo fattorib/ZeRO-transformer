@@ -389,7 +389,7 @@ def main():
         t0 = time.time()
 
 
-        loss, grads, metrics = train_step(
+        grads, metrics = train_step(
             params, text, rng_sharded, gradient_accumulation_steps, model
         )
 
@@ -559,7 +559,7 @@ def train_step(
         "Train LM PPL": jnp.exp(loss),
     }
 
-    return loss, grads, metrics
+    return grads, metrics
 
 
 @partial(jax.pmap, axis_name="shard", devices=jax.local_devices())
@@ -581,9 +581,9 @@ def update_sharded_state(
 
     # These two lines update the specific shard of state/parameters sitting on device 'i'
     updates, new_opt_state = optimizer.update(grads, optimizer_state, params)
-    new_param_slice = optax.apply_updates(params, updates)
+    new_params = optax.apply_updates(params, updates)
 
-    new_params = jax.lax.all_gather(new_param_slice, axis_name="shard")
+    new_params = jax.lax.all_gather(new_params, axis_name="shard")
     return new_params, new_opt_state
 
 
