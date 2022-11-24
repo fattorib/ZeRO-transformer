@@ -214,7 +214,7 @@ def main():
     opt_state = partition_shard(
         opt_state, jax.local_device_count(), jax.local_devices()
     )
-    opt_state = jax.pmap(lambda x: x)(opt_state)  # shard opt state to free up memory
+    opt_state = jax.pmap(lambda x: x, devices = jax.local_devices())(opt_state)  # shard opt state to free up memory
 
     if args.resume:
         pass
