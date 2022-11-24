@@ -127,19 +127,18 @@ if __name__ == "__main__":
             )
 
             minibatch = with_sharding_constraint(minibatch, PartitionSpec("dp", None))
-            loss, grads = jax.vmap(grad_fn, in_axes=(None, 0), out_axes=(0, 0))(params, minibatch)
+            loss, grads = jax.vmap(grad_fn, in_axes=(None, 0), out_axes=(0, 0))(
+                params, minibatch
+            )
 
             loss, grads = jax.tree_util.tree_map(
-                    lambda x: jnp.mean(x, axis=0), (loss, grads)
-                )
+                lambda x: jnp.mean(x, axis=0), (loss, grads)
+            )
 
             return loss, grads
 
         # tuple of loss, grads
-        init_minibatch = (
-            0.0,
-            jax.tree_util.tree_map(jnp.zeros_like, state.params)
-        )
+        init_minibatch = (0.0, jax.tree_util.tree_map(jnp.zeros_like, state.params))
 
         # accumulate gradients
         def cumul_minibatch_step(grad_idx, cumul_loss_grad):
