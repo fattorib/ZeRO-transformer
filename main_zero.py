@@ -255,7 +255,7 @@ def main():
                 prefix=f"{cfg.data.checkpoint_directory}/optimizer"
             )
             for blob in blobs:
-                if blob.name != f"{cfg.data.checkpoint_directory}/optimizer":
+                if blob.name != f"{cfg.data.checkpoint_directory}/optimizer/":
                     blob_list.append(blob.name)
 
             all_steps = [int(b.split("_")[-1]) for b in blob_list]
