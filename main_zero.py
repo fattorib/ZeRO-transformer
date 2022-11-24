@@ -206,7 +206,7 @@ def main():
 
     state, optimizer, opt_state = create_zero_train_state(
         init_rng,
-        3e-4,
+        learning_rate_fn,
         weight_decay=0.1,
         model=model,
     )
