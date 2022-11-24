@@ -255,7 +255,7 @@ def main():
                 prefix=f"{cfg.data.checkpoint_directory}/optimizer"
             )
             for blob in blobs:
-                blob_list.append(blob)
+                blob_list.append(blob.name)
 
             all_steps = [b.split("_")[-1] for b in blobs]
 
