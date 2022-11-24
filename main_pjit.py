@@ -33,7 +33,9 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 from jax.experimental.compilation_cache import compilation_cache as cc
+
 cc.initialize_cache("jax_cache")
+
 
 def parse():
     parser = argparse.ArgumentParser(description="Transformer Training")
@@ -119,10 +121,8 @@ def main():
     resume_step = 0
 
     # Setup
-    #TODO: Remove hardocoding of 1024 for sequence length
-    batch_tok = jax.random.randint(
-        rng, shape=(1, 1024), maxval=50257, minval=0
-    )
+    # TODO: Remove hardocoding of 1024 for sequence length
+    batch_tok = jax.random.randint(rng, shape=(1, 1024), maxval=50257, minval=0)
     param_shape = jax.eval_shape(model.init, rng, batch_tok)
 
     param_spec = set_partitions_zero(param_shape)
@@ -196,9 +196,7 @@ def main():
 
     else:
         with mesh:
-            init_batch = jax.numpy.ones(
-                shape=(1, 1024), dtype=jax.numpy.int32
-            )
+            init_batch = jax.numpy.ones(shape=(1, 1024), dtype=jax.numpy.int32)
 
             params = model.init(rng, init_batch, train=False)
 
@@ -393,7 +391,7 @@ def main():
                 for val_it, val_text in enumerate(
                     tqdm(vl, disable=not jax.process_index() == 0)
                 ):
-                    val_text = val_text[:, :1024] #TODO: Unhardcode
+                    val_text = val_text[:, :1024]  # TODO: Unhardcode
                     if val_it < cfg.training.maximum_evaluation_steps:
                         metrics = pjit_eval_step(state, val_text)
                         validation_metrics.append(metrics)
@@ -463,24 +461,21 @@ def train_step(
     grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
 
     def loss_and_grad(grad_idx):
-        minibatch = (
-            get_minibatch(batch, grad_idx) if grad_idx is not None else batch
-        )
-        minibatch = with_sharding_constraint(minibatch, PartitionSpec("dp",None))
+        minibatch = get_minibatch(batch, grad_idx) if grad_idx is not None else batch
+        minibatch = with_sharding_constraint(minibatch, PartitionSpec("dp", None))
 
-        loss, grads = jax.vmap(grad_fn, in_axes=(None, 0), out_axes=(0, 0))(state.params, minibatch)
+        loss, grads = jax.vmap(grad_fn, in_axes=(None, 0), out_axes=(0, 0))(
+            state.params, minibatch
+        )
 
         loss, grads = jax.tree_util.tree_map(
-                lambda x: jnp.mean(x, axis=0), (loss, grads)
-            )
+            lambda x: jnp.mean(x, axis=0), (loss, grads)
+        )
 
         return loss, grads
 
     # tuple of loss, grads
-    init_minibatch = (
-            0.0,
-            jax.tree_util.tree_map(jnp.zeros_like, state.params)
-        )
+    init_minibatch = (0.0, jax.tree_util.tree_map(jnp.zeros_like, state.params))
 
     # accumulate gradients
     def cumul_minibatch_step(grad_idx, cumul_loss_grad):

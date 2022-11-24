@@ -17,7 +17,9 @@ if jax.process_index() == 0:
     print("pmap result:", r)
 
 xs = jax.numpy.ones(jax.local_device_count())
-r = jax.pmap(lambda x: jax.lax.psum(x, "i"), axis_name="i", devices=jax.local_devices())(xs)
+r = jax.pmap(
+    lambda x: jax.lax.psum(x, "i"), axis_name="i", devices=jax.local_devices()
+)(xs)
 # Print from a single host to avoid duplicated output
 if jax.process_index() == 0:
     print("global device count:", jax.device_count())
