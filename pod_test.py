@@ -22,4 +22,4 @@ r = jax.pmap(lambda x: jax.lax.psum(x, "i"), axis_name="i", devices=jax.local_de
 if jax.process_index() == 0:
     print("global device count:", jax.device_count())
     print("local device count:", jax.local_device_count())
-    print("pmap result:", r)
+    print("local device pmap result:", r)
