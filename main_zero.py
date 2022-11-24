@@ -53,34 +53,80 @@ def save_checkpoint_params(params, step, workdir):
     """
     if jax.process_index() == 0:
         params = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], params))
+        faux_state = train_state.TrainState(
+            step=step, apply_fn=None, params=params, tx=None, opt_state=None
+        )
         checkpoints.save_checkpoint(
-            workdir, params, step, keep=5, overwrite=True, prefix="params_"
+            workdir, faux_state, step, keep=5, overwrite=True, prefix="params_"
         )
 
 
 def save_checkpoint_optimizer(opt_state, step, workdir):
     """
-    Checkpoints sharded optimizer state
+    Checkpoints sharded optimizer state. To avoid some funky serialization issues
+    with flax state dicts and
     """
     if jax.process_index() == 0:
         opt_state = jax.device_get(opt_state)
+
+        # unshard buffers
+        opt_state = jax.tree_util.tree_map(
+            lambda x: x.reshape(-1, x.shape[-1])
+            if x.ndim > 2
+            else x.reshape(
+                -1,
+            ),
+            opt_state,
+        )
+
+        faux_state = train_state.TrainState(
+            step=step, apply_fn=None, params=None, tx=None, opt_state=opt_state
+        )
         checkpoints.save_checkpoint(
-            workdir, opt_state, step, keep=5, overwrite=True, prefix="optimizer_"
+            workdir, faux_state, step, keep=5, overwrite=True, prefix="optimizer_"
         )
 
 
 def restore_param_checkpoint(workdir):
+
     params = checkpoints.restore_checkpoint(workdir, target=None, prefix="params_")
 
-    return params
+    return params["params"]
 
 
 def restore_opt_checkpoint(workdir):
-    opt_state = checkpoints.restore_checkpoint(
+    """
+    Doesn't seem to be possible to directly restore from a serialized flax dict
+    to an optax optimizer state. Instead, we just pull out the components we need
+    and recreate optimizer state ourselves
+    """
+    opt_state_restored = checkpoints.restore_checkpoint(
         workdir, target=None, prefix="optimizer_"
     )
 
-    return opt_state
+    mu_pytree = jax.tree_util.tree_map(
+        lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["mu"]
+    )
+    nu_pytree = jax.tree_util.tree_map(
+        lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["nu"]
+    )
+    count_pytree = jax.tree_util.tree_map(
+        lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["count"]
+    )
+
+    restoredadamstate = optax.ScaleByAdamState(
+        count_pytree, flax.core.FrozenDict(mu_pytree), flax.core.FrozenDict(nu_pytree)
+    )
+    restored_state = (
+        optax.EmptyState(),
+        (
+            restoredadamstate,
+            optax.MaskedState(inner_state=optax.EmptyState()),
+            optax.ScaleByScheduleState(count=jnp.array(opt_state_restored["step"])),
+        ),
+    )
+
+    return restored_state, opt_state_restored["step"]
 
 
 def partition_shard(xs, local_device_count, devices):
@@ -240,27 +286,14 @@ def main():
         del params
 
         if save_to_bucket:
-            opt_state = restore_opt_checkpoint(
+            opt_state, step = restore_opt_checkpoint(
                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/optimizer"
             )
             params = restore_param_checkpoint(
                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params"
             )
 
-            # Hacky way to strip training step from checkpoint names
-            client = storage.Client()
-            blob_list = []
-            bucket = storage.Bucket(client, f"{cfg.data.bucket_path}")
-            blobs = bucket.list_blobs(
-                prefix=f"{cfg.data.checkpoint_directory}/optimizer"
-            )
-            for blob in blobs:
-                if blob.name != f"{cfg.data.checkpoint_directory}/optimizer/":
-                    blob_list.append(blob.name)
-
-            all_steps = [int(b.split("_")[-1]) for b in blob_list]
-
-            resume_step = int(max(all_steps))
+            resume_step = int(step)
 
         else:
             raise NotImplementedError(
