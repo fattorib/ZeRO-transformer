@@ -3,7 +3,7 @@ import logging
 import random as pyrandom
 import time
 from functools import partial
-from typing import Any, Callable, Union
+from typing import Any, Callable, Tuple, Union
 
 import flax
 import flax.linen as nn
@@ -47,9 +47,9 @@ def parse():
     return args
 
 
-def save_checkpoint_params(params, step, workdir):
+def save_checkpoint_params(params: Any, step: int, workdir: str) -> None:
     """
-    Checkpoints params
+    Save a copy of params.
     """
     if jax.process_index() == 0:
         params = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], params))
@@ -61,10 +61,9 @@ def save_checkpoint_params(params, step, workdir):
         )
 
 
-def save_checkpoint_optimizer(opt_state, step, workdir):
+def save_checkpoint_optimizer(opt_state: Any, step: int, workdir: str) -> None:
     """
-    Checkpoints sharded optimizer state. To avoid some funky serialization issues
-    with flax state dicts and
+    Function to gather and save the sharded optimizer state.
     """
     if jax.process_index() == 0:
         opt_state = jax.device_get(opt_state)
@@ -87,18 +86,20 @@ def save_checkpoint_optimizer(opt_state, step, workdir):
         )
 
 
-def restore_param_checkpoint(workdir):
-
+def restore_param_checkpoint(workdir: str) -> Any:
+    """
+    Restores the most recent parameter dict
+    """
     params = checkpoints.restore_checkpoint(workdir, target=None, prefix="params_")
 
     return params["params"]
 
 
-def restore_opt_checkpoint(workdir):
+def restore_opt_checkpoint(workdir: str) -> Tuple[Any, int]:
     """
-    Doesn't seem to be possible to directly restore from a serialized flax dict
-    to an optax optimizer state. Instead, we just pull out the components we need
-    and recreate optimizer state ourselves
+    Function to restore optimizer state from a sequence of serialized Flax
+    state dicts. By default, restoring a flax state dict to an optax state
+    doesn't work so we manually recreate the optimizer state and return it.
     """
     opt_state_restored = checkpoints.restore_checkpoint(
         workdir, target=None, prefix="optimizer_"
@@ -129,9 +130,9 @@ def restore_opt_checkpoint(workdir):
     return restored_state, opt_state_restored["step"]
 
 
-def partition_shard(xs, local_device_count, devices):
+def partition_shard(xs: Any, local_device_count: int, devices: jnp.array) -> Any:
     """
-    Partitions optimizer state by splitting the first dimension of buffers across local devices
+    Partitions optimizer state by splitting the first dimension of all buffers across local devices
     """
     return jax.tree_util.tree_map(
         lambda x: x.reshape((local_device_count, -1) + x.shape[1:])
@@ -142,16 +143,15 @@ def partition_shard(xs, local_device_count, devices):
 
 
 @partial(jax.pmap, devices=jax.local_devices())
-def split_sharded_device_array(arr, device_index):
+def split_sharded_device_array(arr: Any, device_index: int) -> Any:
     """
-    Pmappable way to get shards of param/grad pytrees
+    Function to access different shards of param/grad pytrees. Used to access
+    pytree shards matching the devices of the sharded opt_state.
 
     By default, anything that is not a pmapped function applied to a ShardedDeviceArray will
     force a gather to the 0'th device and return a DeviceArray.
 
     See: https://github.com/google/jax/issues/2535
-
-
     """
     local_device_count = 8
     return jax.tree_util.tree_map(
@@ -163,7 +163,7 @@ def split_sharded_device_array(arr, device_index):
 
 
 @partial(jax.pmap, devices=jax.local_devices())
-def deshard(xs):
+def deshard(xs: Any) -> Any:
     """
     Pmappable way to get reshape a sharded device array containing param replicas
 
@@ -171,7 +171,6 @@ def deshard(xs):
     force a gather to the 0'th device and return a DeviceArray.
 
     See: https://github.com/google/jax/issues/2535
-
     """
     return jax.tree_util.tree_map(
         lambda x: x.reshape((-1, x.shape[-1])) if x.ndim > 2 else x.reshape(-1), xs
@@ -183,12 +182,10 @@ def create_zero_train_state(
     learning_rate_fn: Union[float, Callable],
     weight_decay: float,
     model: nn.Module,
-):
+) -> Tuple[train_state.TrainState, Any, optax.GradientTransformation]:
     """
-    Initializes parameters and returns a _simplified_ TrainState without an optimizer.
-
-    Returns TrainState, opt_state, GradientTransformation
-
+    Initializes model parameters, optimizer state and returns a simplified flax
+    TrainState object.
     """
     params = initialized(rng, model, input_shape=(1, model.block_size))
 
