@@ -568,7 +568,7 @@ def slice_grads(grads, device_index):
     return grad_slice
 
 
-@partial(jax.pmap, axis_name="shard", devices=jax.local_devices())
+@partial(jax.pmap, axis_name="shard", devices=jax.local_devices(), static_broadcasted_argnums = (3,))
 def update_sharded_state(
     grads: Any,
     optimizer_state: Any,
