@@ -403,7 +403,7 @@ def main():
         params, opt_state = update_sharded_state(
             grads,
             opt_state,
-            grads,
+            params,
             optimizer,
         )
 
