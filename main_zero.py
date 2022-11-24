@@ -257,7 +257,7 @@ def main():
             for blob in blobs:
                 blob_list.append(blob.name)
 
-            all_steps = [b.split("_")[-1] for b in blobs]
+            all_steps = [b.split("_")[-1] for b in blob_list]
 
             resume_step = int(max(all_steps))
 
