@@ -47,17 +47,40 @@ def parse():
     return args
 
 
-def save_checkpoint(state, workdir):
-    # if jax.process_index() == 0:
-    #     state = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], state))
-    #     step = int(state.step)
-    #     checkpoints.save_checkpoint(workdir, state, step, keep=5, overwrite=True)
-    pass
+def save_checkpoint_params(params, step, workdir):
+    """
+    Checkpoints params
+    """
+    if jax.process_index() == 0:
+        params = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], params))
+        checkpoints.save_checkpoint(
+            workdir, params, step, keep=5, overwrite=True, prefix="params_"
+        )
 
 
-def restore_checkpoint(state, workdir, prefix):
-    # return checkpoints.restore_checkpoint(workdir, state, prefix=prefix)
-    pass
+def save_checkpoint_optimizer(opt_state, step, workdir):
+    """
+    Checkpoints sharded optimizer state
+    """
+    if jax.process_index() == 0:
+        opt_state = jax.device_get(opt_state)
+        checkpoints.save_checkpoint(
+            workdir, opt_state, step, keep=5, overwrite=True, prefix="optimizer_"
+        )
+
+
+def restore_param_checkpoint(workdir):
+    params = checkpoints.restore_checkpoint(workdir, target=None, prefix="params_")
+
+    return params
+
+
+def restore_opt_checkpoint(workdir):
+    opt_state = checkpoints.restore_checkpoint(
+        workdir, target=None, prefix="optimizer_"
+    )
+
+    return opt_state
 
 
 def partition_shard(xs, local_device_count, devices):
@@ -136,7 +159,7 @@ def create_zero_train_state(
             weight_decay=weight_decay,
             mask=mask,
             b2=0.95,
-            # mu_dtype= jnp.float32 TODO: Is this needed?
+            mu_dtype=jnp.float32,  # keep fp32 optimizer states
         ),
     )
 
@@ -210,27 +233,48 @@ def main():
         weight_decay=0.1,
         model=model,
     )
+    params = state.params
+    del state
+
+    if args.resume:
+        del params
+
+        if save_to_bucket:
+            opt_state = restore_opt_checkpoint(
+                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/optimizer"
+            )
+            params = restore_param_checkpoint(
+                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params"
+            )
+
+            # Hacky way to strip training step from checkpoint names
+            client = storage.Client()
+            blob_list = []
+            bucket = storage.Bucket(client, f"{cfg.data.bucket_path}")
+            blobs = bucket.list_blobs(
+                prefix=f"{cfg.data.checkpoint_directory}/optimizer"
+            )
+            for blob in blobs:
+                blob_list.append(blob)
+
+            all_steps = [b.split("_")[-1] for b in blobs]
+
+            resume_step = int(max(all_steps))
+
+        else:
+            raise NotImplementedError(
+                "Checkpointing not currently implemented for GPU/CPU"
+            )
+
+        if jax.process_index() == 0:
+            logger.debug(f"Resuming training from step {resume_step}")
 
     opt_state = partition_shard(
         opt_state, jax.local_device_count(), jax.local_devices()
     )
-    opt_state = jax.pmap(lambda x: x, devices = jax.local_devices())(opt_state)  # shard opt state to free up memory
-
-    if args.resume:
-        pass
-        # if save_to_bucket:
-        #     state = restore_checkpoint(
-        #         state,
-        #         workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-        #         prefix="checkpoint_",
-        #     )
-        # else:
-        #     state = restore_checkpoint(state, workdir=cfg.data.checkpoint_directory)
-
-        # if jax.process_index() == 0:
-        #     logger.debug(f"Resuming training from step {int(state.step)}")
-
-        # resume_step = int(state.step)
+    opt_state = jax.pmap(lambda x: x, devices=jax.local_devices())(
+        opt_state
+    )  # shard opt state to free up memory
 
     if jax.process_index() == 0:
         logger.debug(f"VM setup with {num_devices} devices.")
@@ -248,7 +292,15 @@ def main():
             client = storage.Client()
             if jax.process_index() == 0:
                 bucket = storage.Bucket(client, f"{cfg.data.bucket_path}")
-                blobs = bucket.list_blobs(prefix=f"{cfg.data.checkpoint_directory}")
+                blobs = bucket.list_blobs(
+                    prefix=f"{cfg.data.checkpoint_directory}/optimizer"
+                )
+                for blob in blobs:
+                    blob.delete()
+
+                blobs = bucket.list_blobs(
+                    prefix=f"{cfg.data.checkpoint_directory}/params"
+                )
                 for blob in blobs:
                     blob.delete()
 
@@ -348,9 +400,6 @@ def main():
         else cfg.training.gradient_accumulation_steps
     )
 
-    params = state.params
-    del state
-
     params = flax.jax_utils.replicate(params)
 
     rng = jax.random.fold_in(rng, resume_step)  # fold in resume step to create new rng
@@ -387,7 +436,6 @@ def main():
         rng_sharded = shard_prng_key(dropout_rng)
 
         t0 = time.time()
-
 
         grads, metrics = train_step(
             params, text, rng_sharded, gradient_accumulation_steps, model
@@ -463,24 +511,22 @@ def main():
                 train_metrics_np.pop("Train Batch Time")
                 wandb.log(train_metrics_np)
 
-                # TODO: Write checkpointing code
-                # if cfg.device.mp_devices > 1:
-                #     device_state = jax.device_get(
-                #         state
-                #     )  # pull a copy of the sharded state to CPU and save
-                #     save_checkpoint(
-                #         device_state,
-                #         workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                #     )
+                if save_to_bucket:
+                    save_checkpoint_params(
+                        params,
+                        absolute_step,
+                        workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
+                    )
+                    save_checkpoint_optimizer(
+                        opt_state,
+                        absolute_step,
+                        workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/optimizer",
+                    )
 
-                # else:
-                #     if save_to_bucket:
-                #         save_checkpoint(
-                #             state,
-                #             workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                #         )
-                #     else:
-                #         save_checkpoint(state, workdir=cfg.data.checkpoint_directory)
+                else:
+                    raise NotImplementedError(
+                        "Checkpointing not currently implemented for GPU/CPU"
+                    )
 
         else:
             if jax.process_index() == 0:
@@ -568,7 +614,12 @@ def slice_grads(grads, device_index):
     return grad_slice
 
 
-@partial(jax.pmap, axis_name="shard", devices=jax.local_devices(), static_broadcasted_argnums = (3,))
+@partial(
+    jax.pmap,
+    axis_name="shard",
+    devices=jax.local_devices(),
+    static_broadcasted_argnums=(3,),
+)
 def update_sharded_state(
     grads: Any,
     optimizer_state: Any,
@@ -587,7 +638,7 @@ def update_sharded_state(
     return new_params, new_opt_state
 
 
-@partial(jax.pmap, axis_name="batch",static_broadcasted_argnums = (1,))
+@partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=(1,))
 def eval_step(params: Any, model: Any, batch: jnp.array):
     """Evaluate on a single batch"""
 
