@@ -405,7 +405,6 @@ def main():
             opt_state,
             grads,
             optimizer,
-            device_index=jax.numpy.arange(jax.local_device_count()),
         )
 
         del grads  # manually free grad mem
