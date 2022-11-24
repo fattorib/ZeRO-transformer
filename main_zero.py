@@ -587,7 +587,7 @@ def update_sharded_state(
     return new_params, new_opt_state
 
 
-@partial(jax.pmap, axis_name="batch")
+@partial(jax.pmap, axis_name="batch",static_broadcasted_argnums = (1,))
 def eval_step(params: Any, model: Any, batch: jnp.array):
     """Evaluate on a single batch"""
 
