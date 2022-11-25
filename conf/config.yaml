@@ -3,8 +3,8 @@ training:
   batch_size: 64
   peak_learning_rate: 8e-4
   warmup_steps: 2000
-  decay_steps: 160000
-  total_steps: 180000
+  decay_steps: 65000
+  total_steps: 70000
   end_learning_rate: 8e-5
   weight_decay: 0.1
   gradient_accumulation_steps: 2
