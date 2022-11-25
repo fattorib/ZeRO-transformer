@@ -34,3 +34,8 @@ gs://bfattoriwebtext2/shards/openwebtext_train-000032.tar.gz
 gs://bfattoriwebtext2/shards/openwebtext_train-000033.tar.gz
 gs://bfattoriwebtext2/shards/openwebtext_train-000034.tar.gz
 gs://bfattoriwebtext2/shards/openwebtext_train-000035.tar.gz
+gs://bfattoriwebtext2/shards/openwebtext_validation-000000.tar.gz
+gs://bfattoriwebtext2/shards/openwebtext_validation-000001.tar.gz
+gs://bfattoriwebtext2/shards/openwebtext_validation-000002.tar.gz
+gs://bfattoriwebtext2/shards/openwebtext_validation-000003.tar.gz
+gs://bfattoriwebtext2/shards/openwebtext_validation-000004.tar.gz
