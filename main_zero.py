@@ -92,7 +92,7 @@ def restore_param_checkpoint(workdir: str) -> Any:
     """
     params = checkpoints.restore_checkpoint(workdir, target=None, prefix="params_")
 
-    return params["params"]
+    return flax.core.freeze(params["params"])
 
 
 def restore_opt_checkpoint(workdir: str) -> Tuple[Any, int]:
