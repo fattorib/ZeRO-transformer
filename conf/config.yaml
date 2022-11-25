@@ -1,21 +1,21 @@
 training:
   max_epochs: 20
   batch_size: 64
-  peak_learning_rate: 8e-4
+  peak_learning_rate: 2.5e-4
   warmup_steps: 2000
-  decay_steps: 65000
-  total_steps: 70000
-  end_learning_rate: 8e-5
+  decay_steps: 90000
+  total_steps: 100000
+  end_learning_rate: 2.5e-5
   weight_decay: 0.1
   gradient_accumulation_steps: 8
   evaluation_frequency: 500
   maximum_evaluation_steps: 500
   precision: 'bf16'
-  staged_warmup_steps: 100000
+  staged_warmup_steps: 100001
   warmup_train_context: 1024
 
 model:
-  size: "XL"
+  size: "large"
 
 data:
   corpus: "openwebtext"
