@@ -34,11 +34,8 @@ def params_from_trainstate(state, out_path):
         f.write(param_bytes)
 
 
-ckpt_path = [
-    f"checkpoints_checkpoint_{i}" for i in [106503, 107003, 107503, 108003, 108503]
-]
-
-for ckpt in ckpt_path:
+if __name__ == '__main__':
+    ckpt = 'checkpoints_params_params_95000'
 
     state = checkpoints.restore_checkpoint(
         ckpt_dir="checkpoints",
@@ -46,5 +43,4 @@ for ckpt in ckpt_path:
         prefix=ckpt,
     )
     idx = ckpt.split("_")[-1]
-
     params_from_trainstate(state, out_path=f"checkpoints/model_params_{idx}.msgpack")

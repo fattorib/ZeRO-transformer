@@ -85,7 +85,6 @@ def save_checkpoint_optimizer(opt_state: Any, step: int, workdir: str) -> None:
             workdir, faux_state, step, keep=5, overwrite=True, prefix="optimizer_"
         )
 
-
 def restore_param_checkpoint(workdir: str) -> Any:
     """
     Restores the most recent parameter dict
@@ -223,10 +222,6 @@ def main():
     num_host = num_devices // num_local_devices
     platform = jax.local_devices()[0].platform
 
-    assert (
-        cfg.device.mp_devices == 1
-    ), f"This train script only supports data parallel training through pmap."
-
     if cfg.training.precision == "fp16":
         model_dtype = jnp.float16
     elif cfg.training.precision == "bf16":
@@ -312,10 +307,10 @@ def main():
         logger.debug(f"Host setup with {num_local_devices} devices.")
         logger.debug(f"Using platform: {platform} with precision {model_dtype}")
 
-        if cfg.device.mp_devices == 1:
-            logger.debug(
-                f"Performing data parallel training only. Model and train state will be replicated across all devices"
-            )
+
+        logger.debug(
+            f"Performing data parallel training. Parameters will be replicated across all devices. Optimizer state will be sharded across devices"
+        )
 
     if not args.resume:
         if cfg.data.bucket_path is not None:
