@@ -13,6 +13,7 @@ import numpy as np
 import optax
 import torch
 import webdataset as wds
+from flax.serialization import msgpack_restore
 from flax.training import checkpoints, train_state
 from flax.training.common_utils import shard, shard_prng_key
 from omegaconf import OmegaConf
@@ -273,6 +274,19 @@ def main():
     )
     params = state.params
     del state
+
+    if cfg.model.warm_start:
+        if jax.process_index() == 0:
+            logger.debug(
+                f"Warm starting model training from tiled checkpoint {cfg.model.model_path}"
+            )
+
+        del params
+
+        with open(cfg.model.model_path, "rb") as f:
+            param_bytes = msgpack_restore(f.read())
+
+        params = flax.core.freeze(param_bytes["params"])
 
     if args.resume:
         del params
