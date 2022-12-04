@@ -15,7 +15,7 @@ training:
   warmup_train_context: 1024
 
 model:
-  size: "XXL"
+  size: "XL"
   warm_start: False
   model_path: ""
 
