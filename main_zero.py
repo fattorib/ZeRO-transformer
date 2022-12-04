@@ -85,6 +85,7 @@ def save_checkpoint_optimizer(opt_state: Any, step: int, workdir: str) -> None:
             workdir, faux_state, step, keep=5, overwrite=True, prefix="optimizer_"
         )
 
+
 def restore_param_checkpoint(workdir: str) -> Any:
     """
     Restores the most recent parameter dict
@@ -306,7 +307,6 @@ def main():
         logger.debug(f"Host setup with {num_local_devices} devices.")
         logger.debug(f"Using platform: {platform} with precision {model_dtype}")
 
-
         logger.debug(
             f"Performing data parallel training. Parameters will be replicated across all devices. Optimizer state will be sharded across devices"
         )
@@ -419,9 +419,7 @@ def main():
     else:
         step_to_seq = lambda x: cfg.data.max_context
 
-    accum_steps = (
-        lambda x: cfg.training.gradient_accumulation_steps
-    )
+    accum_steps = lambda x: cfg.training.gradient_accumulation_steps
 
     params = flax.jax_utils.replicate(params)
 
@@ -516,7 +514,7 @@ def main():
             for val_it, val_text in enumerate(
                 tqdm(vl, disable=not jax.process_index() == 0)
             ):
-                val_text = val_text[:,:cfg.training.warmup_train_context]
+                val_text = val_text[:, : cfg.training.warmup_train_context]
                 val_text = shard(val_text)
 
                 if val_it < cfg.training.maximum_evaluation_steps:

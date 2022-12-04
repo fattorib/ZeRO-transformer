@@ -89,12 +89,12 @@ XL: #around 780M
   fused_residuals: False
   alibi_attn: True
 
-XXL: #around 1.3B
-  embedding_dim: 2048
+XXL: #around 1.1B
+  embedding_dim: 1536
   vocab_size: 50304
-  num_head: 16
+  num_head: 12
   block_size: 1024
   dropout: 0.1
-  N: 24
+  N: 36
   fused_residuals: False
   alibi_attn: True
