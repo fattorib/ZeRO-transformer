@@ -275,7 +275,7 @@ def main():
     params = state.params
     del state
 
-    if cfg.model.warm_start:
+    if cfg.model.warm_start and not args.resume:
         if jax.process_index() == 0:
             logger.debug(
                 f"Warm starting model training from tiled checkpoint {cfg.model.model_path}"
