@@ -33,7 +33,7 @@ def extend_params(target_pytree, params_pytree):
     out = params_pytree["params"].pop("wte")
     del out
 
-    block_mapping = create_mapping(18)
+    block_mapping = create_mapping()
 
     for key in list(param_keys):
 
@@ -50,11 +50,27 @@ def extend_params(target_pytree, params_pytree):
     return target_pytree
 
 
-def create_mapping(original_blocks):
-    block_mapping = {}
-
-    for i, block in enumerate(range(original_blocks)):
-        block_mapping[block] = [block + i, block + i + 1]
+def create_mapping():
+    block_mapping = {
+        0: [0, 1],
+        1: [2],
+        2: [3],
+        3: [4, 5],
+        4: [6],
+        5: [7],
+        6: [8, 9],
+        7: [10],
+        8: [11],
+        9: [12, 13],
+        10: [14],
+        11: [15],
+        12: [16, 17],
+        13: [18],
+        14: [19],
+        15: [20, 21],
+        16: [22],
+        17: [23],
+    }
 
     return block_mapping
 
@@ -65,9 +81,7 @@ if __name__ == "__main__":
     with open("checkpoints/LAWA.msgpack", "rb") as f:
         params_pytree = msgpack_restore(f.read())
 
-    model = model_getter(
-        "XXL", return_cfg=False
-    )  # init model to draw empty pytree from
+    model = model_getter("XL", return_cfg=False)  # init model to draw empty pytree from
 
     # create empty target pytree
     rng = jax.random.PRNGKey(0)
@@ -79,5 +93,9 @@ if __name__ == "__main__":
     extended_pytree = extend_params(unfreeze(empty_pytree), unfreeze(params_pytree))
     del params_pytree
 
-    with open("checkpoints/warmstart_params.msgpack", "wb") as f:
+    with open("checkpoints/warmstart_params_XL.msgpack", "wb") as f:
         f.write(msgpack_serialize(unfreeze(extended_pytree), in_place=True))
+
+    # num_layers_new = 24
+    # num_layers_old = 18
+    # print((jax.numpy.array(range(num_layers_new))/num_layers_new * num_layers_old).astype(jnp.int8))
