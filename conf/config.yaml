@@ -4,7 +4,7 @@ training:
   peak_learning_rate: 2.0e-4
   warmup_steps: 2000
   decay_steps: 90000
-  total_steps: 100000
+  total_steps: 95000
   end_learning_rate: 2.0e-5
   weight_decay: 0.1
   gradient_accumulation_steps: 16
@@ -16,19 +16,19 @@ training:
 
 model:
   size: "XL"
-  warm_start: False
-  model_path: ""
+  warm_start: True
+  model_path: "gs://bfattoriwebtext2/warmstart_params/warmstart_params_XL.msgpack"
 
 data:
   corpus: "openwebtext"
   train_shard_urls:
   validation_shard_urls: 
   max_context: 2048
-  train_samples: 
+  train_samples: 9741373
   checkpoint_directory: "checkpoints"
   bucket_path: "bfattoriwebtext2"
-  index_path_train: "data/index/openwebtext_useast.train.index"
-  index_path_validation: "data/index/openwebtext_useast.val.index"
+  index_path_train: "data/index/openwebtext_extended_useast.train.index"
+  index_path_validation: "data/index/openwebtext_extended_useast.val.index"
   wandb_project: "jax-transformer"
 
 
