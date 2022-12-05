@@ -283,8 +283,9 @@ def main():
 
         del params
 
-        with open(cfg.model.model_path, "rb") as f:
-            param_bytes = msgpack_restore(f.read())
+        bucket = client.bucket(cfg.data.bucket_path)
+        blob = bucket.blob('warmstart_params/warmstart_params_XL.msgpack')
+        param_bytes = blob.download_as_bytes()
 
         params = flax.core.freeze(param_bytes["params"])
 
