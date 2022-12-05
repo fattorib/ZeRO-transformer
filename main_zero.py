@@ -287,7 +287,7 @@ def main():
         blob = bucket.blob('warmstart_params/warmstart_params_XL.msgpack')
         param_bytes = msgpack_restore(blob.download_as_bytes())
 
-        params = flax.core.freeze(param_bytes["params"])
+        params = flax.core.freeze(param_bytes)
 
     if args.resume:
         del params
