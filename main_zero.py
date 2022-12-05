@@ -285,7 +285,7 @@ def main():
 
         bucket = client.bucket(cfg.data.bucket_path)
         blob = bucket.blob('warmstart_params/warmstart_params_XL.msgpack')
-        param_bytes = blob.download_as_bytes()
+        param_bytes = msgpack_restore(blob.download_as_bytes())
 
         params = flax.core.freeze(param_bytes["params"])
 
