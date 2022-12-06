@@ -51,6 +51,8 @@ def parse():
 def save_checkpoint_params(params: Any, step: int, workdir: str) -> None:
     """
     Save a copy of params.
+
+    TODO: Add async manager to do this in a background process
     """
     if jax.process_index() == 0:
         params = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], params))
@@ -65,6 +67,8 @@ def save_checkpoint_params(params: Any, step: int, workdir: str) -> None:
 def save_checkpoint_optimizer(opt_state: Any, step: int, workdir: str) -> None:
     """
     Function to gather and save the sharded optimizer state.
+
+    TODO: Add async manager to do this in a background process
     """
     if jax.process_index() == 0:
         opt_state = jax.device_get(opt_state)
