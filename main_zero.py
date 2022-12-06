@@ -310,6 +310,8 @@ def main():
 
         if jax.process_index() == 0:
             logger.debug(f"Resuming training from step {resume_step}")
+            sample_params = params['params']['TransformerBlock_0']['MLPBlock_0']['fc_residual']
+            logger.debug(f"Dtype of resumed weights {jax.tree_util.tree_map(lambda x: x.dtype, sample_params)}")
 
     opt_state = partition_shard(
         opt_state, jax.local_device_count(), jax.local_devices()
