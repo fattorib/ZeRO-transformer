@@ -311,7 +311,7 @@ def main():
         if jax.process_index() == 0:
             logger.debug(f"Resuming training from step {resume_step}")
             sample_params = params['params']['TransformerBlock_0']['MLPBlock_0']['fc_residual']
-            logger.debug(f"Dtype of resumed weights {jax.tree_util.tree_map(lambda x: x.dtype, sample_params)}")
+            logger.debug(f"dtype of resumed weights {jax.tree_util.tree_map(lambda x: x.dtype, sample_params)}")
 
     opt_state = partition_shard(
         opt_state, jax.local_device_count(), jax.local_devices()
@@ -323,10 +323,10 @@ def main():
     if jax.process_index() == 0:
         logger.debug(f"VM setup with {num_devices} devices.")
         logger.debug(f"Host setup with {num_local_devices} devices.")
-        logger.debug(f"Using platform: {platform} with precision {model_dtype}")
+        logger.debug(f"Using platform: {platform}. Model weights stored as {model_dtype}")
 
         logger.debug(
-            f"Performing data parallel training. Parameters will be replicated across all devices. Optimizer state will be sharded across devices"
+            f"Performing data parallel training. Model parameters are replicated across all devices. Optimizer state is sharded across {num_local_devices} devices"
         )
 
     if not args.resume:
