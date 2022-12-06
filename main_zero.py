@@ -203,6 +203,7 @@ def create_zero_train_state(
             weight_decay=weight_decay,
             mask=mask,
             b2=0.95,
+            mu_dtype=jnp.float32,  # keep fp32 optimizer states
         ),
     )
 
