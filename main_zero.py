@@ -458,11 +458,6 @@ def main():
 
             return True
 
-        if i < int(6000):
-            # skip through some of the dataset. Helpful since we've glued 2 datasets together
-            # doesn't have to be super precise since we go for multiple epochs
-            continue
-
         rng, dropout_rng = jax.random.split(rng, 2)
 
         seq_len = step_to_seq(resume_step + new_steps)
