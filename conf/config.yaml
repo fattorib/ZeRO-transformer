@@ -1,13 +1,13 @@
 training:
   max_epochs: 20
   batch_size: 64
-  peak_learning_rate: 1.5e-4
+  peak_learning_rate: 6.0e-4
   warmup_steps: 2000
   decay_steps: 85000
   total_steps: 90000
-  end_learning_rate: 2.0e-5
+  end_learning_rate: 6.0e-5
   weight_decay: 0.1
-  gradient_accumulation_steps: 16
+  gradient_accumulation_steps: 2
   evaluation_frequency: 500
   maximum_evaluation_steps: 500
   precision: 'fp32'
@@ -15,9 +15,9 @@ training:
   warmup_train_context: 1024
 
 model:
-  size: "XL"
+  size: "smol"
   warm_start: True
-  model_path: "gs://bfattoriwebtext2/warmstart_params/warmstart_params_XL.msgpack"
+  model_path: "gs://bfattoriwebtext2/warmstart_params/small_params.msgpack"
 
 data:
   corpus: "openwebtext"
