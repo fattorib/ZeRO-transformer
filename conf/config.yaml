@@ -17,7 +17,7 @@ training:
 model:
   size: "smol"
   warm_start: True
-  model_path: "gs://bfattoriwebtext2/warmstart_params/small_params.msgpack"
+  model_path: "warmstart_params/small_params.msgpack"
 
 data:
   corpus: "openwebtext"

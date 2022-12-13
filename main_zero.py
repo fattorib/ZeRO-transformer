@@ -289,7 +289,7 @@ def main():
         del params
 
         bucket = client.bucket(cfg.data.bucket_path)
-        blob = bucket.blob('warmstart_params/small_params.msgpack') #TODO: Parse out from cfg.model.model_path
+        blob = bucket.blob(cfg.model.model_path) 
         param_bytes = msgpack_restore(blob.download_as_bytes())
 
         params = flax.core.freeze(param_bytes)
