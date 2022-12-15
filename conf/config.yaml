@@ -1,23 +1,23 @@
 training:
   max_epochs: 20
   batch_size: 64
-  peak_learning_rate: 2.0e-4
+  peak_learning_rate: 8.0e-4
   warmup_steps: 2000
-  decay_steps: 9500
-  total_steps: 10000
-  end_learning_rate: 2.0e-5
+  decay_steps: 58000
+  total_steps: 60000
+  end_learning_rate: 8.0e-5
   weight_decay: 0.1
-  gradient_accumulation_steps: 8
+  gradient_accumulation_steps: 2
   evaluation_frequency: 500
   maximum_evaluation_steps: 500
   precision: 'fp32'
   staged_warmup_steps: 100001
-  warmup_train_context: 1024
+  warmup_train_context: 2048
 
 model:
-  size: "large"
+  size: "smol"
   warm_start: True
-  model_path: "warmstart_params/large_params.msgpack"
+  model_path: "warmstart_params/small_params.msgpack"
 
 data:
   corpus: "openwebtext"
