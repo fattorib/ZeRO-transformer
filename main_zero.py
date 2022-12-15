@@ -457,6 +457,11 @@ def main():
                 logger.debug(f"Training has completed.")
 
             return True
+        
+        if i < int(20000):
+            # skip through some of the dataset. Helpful since we've glued 2 datasets together
+            # doesn't have to be super precise since we go for multiple epochs
+            continue
 
         rng, dropout_rng = jax.random.split(rng, 2)
 
