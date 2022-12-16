@@ -116,7 +116,6 @@ class ALiBi(nn.Module):
 
         self.n_head = num_head
         self.num_layers = num_layers
-        self.window_size = window_size
 
         self.register_buffer("slopes", torch.Tensor(self.get_slopes(self.n_head)))
         self.register_buffer(
