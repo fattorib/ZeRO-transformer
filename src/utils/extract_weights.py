@@ -1,4 +1,6 @@
-import jax
+"""
+Utility method to extract params from serialized trainstate.
+"""
 from flax.core.frozen_dict import unfreeze
 from flax.serialization import msgpack_serialize
 from flax.training import checkpoints
@@ -34,8 +36,9 @@ def params_from_trainstate(state, out_path):
         f.write(param_bytes)
 
 
-if __name__ == '__main__':
-    ckpt = 'checkpoints_params_params_95000'
+if __name__ == "__main__":
+    ckpt = ""
+    out_path = ""
 
     state = checkpoints.restore_checkpoint(
         ckpt_dir="checkpoints",
@@ -43,4 +46,6 @@ if __name__ == '__main__':
         prefix=ckpt,
     )
     idx = ckpt.split("_")[-1]
-    params_from_trainstate(state, out_path=f"checkpoints/model_params_{idx}.msgpack")
+    params_from_trainstate(
+        state, out_path=f"{out_path}/model_params_{idx}.msgpack"
+    )
