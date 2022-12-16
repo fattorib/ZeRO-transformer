@@ -46,6 +46,4 @@ if __name__ == "__main__":
         prefix=ckpt,
     )
     idx = ckpt.split("_")[-1]
-    params_from_trainstate(
-        state, out_path=f"{out_path}/model_params_{idx}.msgpack"
-    )
+    params_from_trainstate(state, out_path=f"{out_path}/model_params_{idx}.msgpack")
