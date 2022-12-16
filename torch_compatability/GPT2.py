@@ -190,17 +190,6 @@ class ALiBi(nn.Module):
                 .to(x.device)
             )
 
-            if self.window_size is not None:
-                del self.mask
-                self.mask = (
-                    torch.tril(
-                        torch.ones(seq_len_k, seq_len_k, dtype=torch.uint8).triu(
-                            -self.window_size
-                        )
-                    )
-                    .view(1, 1, seq_len_k, seq_len_k)
-                    .to(x.device)
-                )
             # Create ALiBi distance matrix
             a = -torch.tril(
                 torch.arange(seq_len_k).view(seq_len_k, 1).repeat(1, seq_len_k)
@@ -506,7 +495,6 @@ def create_GPT2_flax(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
         embedding_dim=768,
         N=6,
         vocab_size=vocab_size,
-        use_bnb=False,
         num_head=12,
         fused_residuals=False,
         use_alibi=True,
