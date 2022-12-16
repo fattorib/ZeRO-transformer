@@ -31,7 +31,7 @@ def model_creator(size: str, path: str) -> torch.nn.Module:
     model = model_getter(
         size,
         vocab_size=50304,
-        num_ctx=1024,
+        num_ctx=1024 if "distill" not in size else 2048,
         model_checkpoint=path,
     )
 
