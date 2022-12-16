@@ -64,7 +64,7 @@ def match_transformer_block(pytree, state_dict, block_idx):
     return state_dict
 
 
-def match_and_save(model: OrderedDict, flax_save_path: str, out_save_path: str):
+def match_and_save(model: torch.nn.Module, flax_save_path: str, out_save_path: str):
     """
     Top-level function which performs matching for all blocks, including wte/LN
 
