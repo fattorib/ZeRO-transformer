@@ -207,7 +207,6 @@ def create_zero_train_state(
             weight_decay=weight_decay,
             mask=mask,
             b2=0.95,
-            mu_dtype=jnp.float32,  # keep fp32 optimizer states
         ),
     )
 
@@ -289,7 +288,7 @@ def main():
         del params
 
         bucket = client.bucket(cfg.data.bucket_path)
-        blob = bucket.blob(cfg.model.model_path) 
+        blob = bucket.blob(cfg.model.model_path)
         param_bytes = msgpack_restore(blob.download_as_bytes())
 
         params = flax.core.freeze(param_bytes)
@@ -314,8 +313,12 @@ def main():
 
         if jax.process_index() == 0:
             logger.debug(f"Resuming training from step {resume_step}")
-            sample_params = params['params']['TransformerBlock_0']['MLPBlock_0']['fc_residual']
-            logger.debug(f"dtype of resumed weights {jax.tree_util.tree_map(lambda x: x.dtype, sample_params)}")
+            sample_params = params["params"]["TransformerBlock_0"]["MLPBlock_0"][
+                "fc_residual"
+            ]
+            logger.debug(
+                f"dtype of resumed weights {jax.tree_util.tree_map(lambda x: x.dtype, sample_params)}"
+            )
 
     opt_state = partition_shard(
         opt_state, jax.local_device_count(), jax.local_devices()
@@ -327,7 +330,9 @@ def main():
     if jax.process_index() == 0:
         logger.debug(f"VM setup with {num_devices} devices.")
         logger.debug(f"Host setup with {num_local_devices} devices.")
-        logger.debug(f"Using platform: {platform}. Model weights stored as {model_dtype}")
+        logger.debug(
+            f"Using platform: {platform}. Model weights stored as {model_dtype}"
+        )
 
         logger.debug(
             f"Performing data parallel training. Model parameters are replicated across all devices. Optimizer state is sharded across {num_local_devices} devices"
@@ -457,11 +462,6 @@ def main():
                 logger.debug(f"Training has completed.")
 
             return True
-        
-        if i < int(20000):
-            # skip through some of the dataset. Helpful since we've glued 2 datasets together
-            # doesn't have to be super precise since we go for multiple epochs
-            continue
 
         rng, dropout_rng = jax.random.split(rng, 2)
 
@@ -636,7 +636,6 @@ def train_step(
 
         return cumul_loss, cumul_grads
 
-    # this logic could probably be movied into cumul_minibatch_step,
     loss, grads = jax.lax.fori_loop(
         0,
         accum_steps,

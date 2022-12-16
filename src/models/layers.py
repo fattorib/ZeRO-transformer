@@ -156,8 +156,10 @@ class CausalAttention(nn.Module):
             attn_full = attn_full + self.alibi_mask[:, :T, :T]
 
         mask = jnp.tril(jnp.ones((T, T), dtype=jnp.int8)).reshape(1, 1, T, T)
-        
-        masked_attn = jnp.where(mask, attn_full.astype(jnp.float32), jnp.finfo(jnp.float32).min)
+
+        masked_attn = jnp.where(
+            mask, attn_full.astype(jnp.float32), jnp.finfo(jnp.float32).min
+        )
 
         attn_scores = nn.softmax(masked_attn, axis=-1)
         attn_scores = dropout()(attn_scores)
