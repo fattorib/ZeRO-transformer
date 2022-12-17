@@ -98,7 +98,6 @@ class ALiBi(nn.Module):
         block_size: int,
         resid_dropout: float,
         num_layers: int,
-        window_size: int = None,
     ):
         super().__init__()
         assert embedding_dim % num_head == 0
@@ -251,9 +250,8 @@ class GPT2Block(nn.Module):
         block_size: int,
         resid_dropout: float,
         num_layers: int,
-        fused_residuals: bool,
-        use_alibi: bool,
-        window_size: int = None,
+        fused_residuals: bool = False,
+        use_alibi: bool = True,
     ) -> None:
         super().__init__()
         self.ln1 = nn.LayerNorm(embedding_dim)
@@ -269,7 +267,6 @@ class GPT2Block(nn.Module):
                 block_size,
                 resid_dropout,
                 num_layers,
-                window_size,
             )
 
         else:
@@ -313,7 +310,6 @@ class GPT2(nn.Module):
         resid_dropout: float = 0.0,
         embedding_dropout: float = 0.0,
         use_alibi: bool = False,
-        window_size: List[int] = None,
     ):
         super().__init__()
         self.num_ctx = num_ctx
@@ -349,7 +345,6 @@ class GPT2(nn.Module):
                         num_layers=N,
                         fused_residuals=fused_residuals,
                         use_alibi=self.use_alibi,
-                        window_size=window_size[i] if window_size is not None else None,
                     )
                 )
                 for i in range(self.N)
@@ -486,6 +481,32 @@ class GPT2(nn.Module):
                 return logits_lm
 
 
+def create_GPT2_test(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
+    """
+    Unittest model
+    """
+    model = GPT2(
+        num_ctx=num_ctx,
+        embedding_dim=128,
+        N=2,
+        vocab_size=vocab_size,
+        num_head=8,
+        fused_residuals=False,
+        use_alibi=True,
+        **kwargs,
+    )
+
+    if model_checkpoint is not None:
+        state_dict = torch.load(
+            model_checkpoint,
+            map_location="cpu",
+        )
+
+        model.load_state_dict(state_dict)
+
+    return model
+
+
 def create_GPT2_flax(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
     """
     TODO: Fill this in
@@ -498,7 +519,7 @@ def create_GPT2_flax(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
         num_head=12,
         fused_residuals=False,
         use_alibi=True,
-        **kwargs
+        **kwargs,
     )
 
     if model_checkpoint is not None:
@@ -524,7 +545,7 @@ def create_GPT2_flax_large(vocab_size, num_ctx, model_checkpoint=None, **kwargs)
         num_head=12,
         fused_residuals=False,
         use_alibi=True,
-        **kwargs
+        **kwargs,
     )
 
     if model_checkpoint is not None:
@@ -550,7 +571,7 @@ def create_GPT2_flax_xlarge(vocab_size, num_ctx, model_checkpoint=None, **kwargs
         num_head=12,
         fused_residuals=False,
         use_alibi=True,
-        **kwargs
+        **kwargs,
     )
 
     if model_checkpoint is not None:
@@ -565,10 +586,18 @@ def create_GPT2_flax_xlarge(vocab_size, num_ctx, model_checkpoint=None, **kwargs
 
 
 def model_getter(model_name, vocab_size, num_ctx, model_checkpoint=None, **kwargs):
+    assert vocab_size > 0, "Vocab size must be positive"
+    assert num_ctx > 0, "Model context must be positive"
+
     MODELS_DICT = {
+        "flax-test": create_GPT2_test,
         "flax-distill": create_GPT2_flax,
         "flax-large": create_GPT2_flax_large,
         "flax-xlarge": create_GPT2_flax_xlarge,
     }
+
+    assert (
+        model_name in MODELS_DICT.keys()
+    ), f"Invalid model name provided. Must be one of {MODELS_DICT.keys()}"
 
     return MODELS_DICT[model_name](vocab_size, num_ctx, model_checkpoint, **kwargs)
