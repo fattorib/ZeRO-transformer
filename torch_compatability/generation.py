@@ -10,10 +10,12 @@ Helper utilities and classes for text generation from models. Supports:
 """
 import math
 import re
+from cProfile import run
 from typing import List, Tuple
 
 import torch
 import torch.nn.functional as F
+from matplotlib.pyplot import step
 from tokenizers import Tokenizer
 from tqdm import tqdm
 
@@ -77,6 +79,9 @@ def typical_sampling_logits(
     mass: float = 0.2,
     min_tokens_to_keep: int = 1,
     filter_value: float = -float("Inf"),
+    running_ent: float = 0,
+    beta: float = 0.5,
+    t: int = 0,
 ) -> torch.Tensor:
     """
     From `Locally Typical Sampling` by Meister et al.
@@ -89,7 +94,14 @@ def typical_sampling_logits(
     p = torch.exp(normalized)
     ent = -(normalized * p).nansum(-1, keepdim=True)
 
-    shifted_scores = torch.abs((-normalized) - ent)
+    # NOTE: Instead of just using conditional entropy at the current token, try keeping a running average of past H(|x)
+    # Decay is controlled by beta
+
+    # Update the running moment + correct it
+    running_ent = beta * running_ent + (1 - beta) * ent
+    running_ent = running_ent / (1 - (beta ** (t + 1)))
+
+    shifted_scores = torch.abs((-normalized) - running_ent)
     sorted_scores, sorted_indices = torch.sort(shifted_scores, descending=False)
     sorted_logits = logits.gather(-1, sorted_indices)
     cumulative_probs = sorted_logits.softmax(dim=-1).cumsum(dim=-1)
@@ -107,7 +119,7 @@ def typical_sampling_logits(
     )
 
     logits = logits.masked_fill(indices_to_remove, filter_value)
-    return logits
+    return logits, running_ent
 
 
 def eta_sampling_logits(
@@ -231,6 +243,7 @@ class TextGenerator:
         layer_past = None
 
         generated_tokens = []
+        running_ent = 0
 
         for step in tqdm(range(steps)):
             if device != "cpu":
@@ -256,7 +269,9 @@ class TextGenerator:
                 logits = top_p_logits(logits, top_p=top_p)
 
             elif sampling_method == "typical":
-                logits = typical_sampling_logits(logits, mass=tau)
+                logits, running_ent = typical_sampling_logits(
+                    logits, mass=tau, running_ent=running_ent, beta=0.5, t=step #TODO: make beta an hpram/allow toggling of ewma
+                )
 
             elif sampling_method == "topk":
                 logits = top_k_logits(logits, k=top_k)
