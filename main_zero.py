@@ -3,16 +3,18 @@ import logging
 import random as pyrandom
 import time
 from functools import partial
-from typing import Any
+from typing import Any, Callable, Tuple, Union
 
 import flax
+import flax.linen as nn
 import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
 import torch
 import webdataset as wds
-from flax.training import checkpoints
+from flax.serialization import msgpack_restore
+from flax.training import checkpoints, train_state
 from flax.training.common_utils import shard, shard_prng_key
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
@@ -20,7 +22,7 @@ from tqdm import tqdm
 
 import wandb
 from src.models.GPT import model_getter
-from src.training.training_utils import compute_tokens_seen, create_train_state
+from src.training.training_utils import compute_tokens_seen, initialized
 from src.utils.configs import flatten_dict
 from src.utils.dataloader import numpy_collate
 
@@ -46,15 +48,173 @@ def parse():
     return args
 
 
-def save_checkpoint(state, workdir):
+def save_checkpoint_params(params: Any, step: int, workdir: str) -> None:
+    """
+    Save a copy of params.
+
+    TODO: Add async manager to do this in a background process
+    """
     if jax.process_index() == 0:
-        state = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], state))
-        step = int(state.step)
-        checkpoints.save_checkpoint(workdir, state, step, keep=5, overwrite=True)
+        params = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], params))
+        faux_state = train_state.TrainState(
+            step=step, apply_fn=None, params=params, tx=None, opt_state=None
+        )
+        checkpoints.save_checkpoint(
+            workdir, faux_state, step, keep=5, overwrite=True, prefix="params_"
+        )
 
 
-def restore_checkpoint(state, workdir, prefix):
-    return checkpoints.restore_checkpoint(workdir, state, prefix=prefix)
+def save_checkpoint_optimizer(opt_state: Any, step: int, workdir: str) -> None:
+    """
+    Function to gather and save the sharded optimizer state.
+
+    TODO: Add async manager to do this in a background process
+    """
+    if jax.process_index() == 0:
+        opt_state = jax.device_get(opt_state)
+
+        # unshard buffers
+        opt_state = jax.tree_util.tree_map(
+            lambda x: x.reshape(-1, x.shape[-1])
+            if x.ndim > 2
+            else x.reshape(
+                -1,
+            ),
+            opt_state,
+        )
+
+        faux_state = train_state.TrainState(
+            step=step, apply_fn=None, params=None, tx=None, opt_state=opt_state
+        )
+        checkpoints.save_checkpoint(
+            workdir, faux_state, step, keep=5, overwrite=True, prefix="optimizer_"
+        )
+
+
+def restore_param_checkpoint(workdir: str) -> Any:
+    """
+    Restores the most recent parameter dict
+    """
+    params = checkpoints.restore_checkpoint(workdir, target=None, prefix="params_")
+
+    return flax.core.freeze(params["params"])
+
+
+def restore_opt_checkpoint(workdir: str) -> Tuple[Any, int]:
+    """
+    Function to restore optimizer state from a sequence of serialized Flax
+    state dicts. By default, restoring a flax state dict to an optax state
+    doesn't work so we manually recreate the optimizer state and return it.
+    """
+    opt_state_restored = checkpoints.restore_checkpoint(
+        workdir, target=None, prefix="optimizer_"
+    )
+
+    mu_pytree = jax.tree_util.tree_map(
+        lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["mu"]
+    )
+    nu_pytree = jax.tree_util.tree_map(
+        lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["nu"]
+    )
+    count_pytree = jax.tree_util.tree_map(
+        lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["count"]
+    )
+
+    restoredadamstate = optax.ScaleByAdamState(
+        count_pytree, flax.core.FrozenDict(mu_pytree), flax.core.FrozenDict(nu_pytree)
+    )
+    restored_state = (
+        optax.EmptyState(),
+        (
+            restoredadamstate,
+            optax.MaskedState(inner_state=optax.EmptyState()),
+            optax.ScaleByScheduleState(count=jnp.array(opt_state_restored["step"])),
+        ),
+    )
+
+    return restored_state, opt_state_restored["step"]
+
+
+def partition_shard(xs: Any, local_device_count: int, devices: jnp.array) -> Any:
+    """
+    Partitions optimizer state by splitting the first dimension of all buffers across local devices
+    """
+    return jax.tree_util.tree_map(
+        lambda x: x.reshape((local_device_count, -1) + x.shape[1:])
+        if x.ndim > 0
+        else jax.device_put_replicated(x, devices),
+        xs,
+    )
+
+
+@partial(jax.pmap, devices=jax.local_devices())
+def split_sharded_device_array(arr: Any, device_index: int) -> Any:
+    """
+    Function to access different shards of param/grad pytrees. Used to access
+    pytree shards matching the devices of the sharded opt_state.
+
+    By default, anything that is not a pmapped function applied to a ShardedDeviceArray will
+    force a gather to the 0'th device and return a DeviceArray.
+
+    See: https://github.com/google/jax/issues/2535
+    """
+    local_device_count = 8
+    return jax.tree_util.tree_map(
+        lambda x: x.reshape(local_device_count, -1, x.shape[-1])[device_index, ...]
+        if x.ndim >= 2
+        else x.reshape(local_device_count, -1)[device_index, ...],
+        arr,
+    )
+
+
+@partial(jax.pmap, devices=jax.local_devices())
+def deshard(xs: Any) -> Any:
+    """
+    Pmappable way to get reshape a sharded device array containing param replicas
+
+    By default, anything that is not a pmapped function applied to a ShardedDeviceArray will
+    force a gather to the 0'th device and return a DeviceArray.
+
+    See: https://github.com/google/jax/issues/2535
+    """
+    return jax.tree_util.tree_map(
+        lambda x: x.reshape((-1, x.shape[-1])) if x.ndim > 2 else x.reshape(-1), xs
+    )
+
+
+def create_zero_train_state(
+    rng: jax.random.PRNGKey,
+    learning_rate_fn: Union[float, Callable],
+    weight_decay: float,
+    model: nn.Module,
+) -> Tuple[train_state.TrainState, Any, optax.GradientTransformation]:
+    """
+    Initializes model parameters, optimizer state and returns a simplified flax
+    TrainState object.
+    """
+    params = initialized(rng, model, input_shape=(1, model.block_size))
+
+    # This mask turns off weight decay for bias terms, LN terms and position embeddings
+    mask = jax.tree_map(
+        lambda x: x.ndim != 1 and x.shape != (model.block_size, model.embedding_dim),
+        params,
+    )
+
+    tx = optax.chain(
+        optax.clip(1.0),
+        optax.adamw(
+            learning_rate=learning_rate_fn,
+            weight_decay=weight_decay,
+            mask=mask,
+            b2=0.95,
+        ),
+    )
+
+    opt_state = tx.init(params)
+    state = train_state.TrainState(
+        apply_fn=model.apply, params=params, step=0, opt_state=None, tx=None
+    )
+    return state, tx, opt_state
 
 
 def main():
@@ -66,10 +226,6 @@ def main():
     num_local_devices = jax.local_device_count()
     num_host = num_devices // num_local_devices
     platform = jax.local_devices()[0].platform
-
-    assert (
-        cfg.device.mp_devices == 1
-    ), f"This train script only supports data parallel training through pmap."
 
     if cfg.training.precision == "fp16":
         model_dtype = jnp.float16
@@ -114,37 +270,73 @@ def main():
 
     resume_step = 0
 
-    state = create_train_state(
+    state, optimizer, opt_state = create_zero_train_state(
         init_rng,
         learning_rate_fn,
-        weight_decay=cfg.training.weight_decay,
+        weight_decay=0.1,
         model=model,
     )
+    params = state.params
+    del state
+
+    if cfg.model.warm_start and not args.resume:
+        if jax.process_index() == 0:
+            logger.debug(
+                f"Warm starting model training from tiled checkpoint {cfg.model.model_path}"
+            )
+
+        del params
+
+        bucket = client.bucket(cfg.data.bucket_path)
+        blob = bucket.blob(cfg.model.model_path)
+        param_bytes = msgpack_restore(blob.download_as_bytes())
+
+        params = flax.core.freeze(param_bytes)
 
     if args.resume:
+        del params
+
         if save_to_bucket:
-            state = restore_checkpoint(
-                state,
-                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                prefix="checkpoint_",
+            opt_state, step = restore_opt_checkpoint(
+                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/optimizer"
             )
+            params = restore_param_checkpoint(
+                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params"
+            )
+
+            resume_step = int(step)
+
         else:
-            state = restore_checkpoint(state, workdir=cfg.data.checkpoint_directory)
+            raise NotImplementedError(
+                "Checkpointing not currently implemented for GPU/CPU"
+            )
 
         if jax.process_index() == 0:
-            logger.debug(f"Resuming training from step {int(state.step)}")
+            logger.debug(f"Resuming training from step {resume_step}")
+            sample_params = params["params"]["TransformerBlock_0"]["MLPBlock_0"][
+                "fc_residual"
+            ]
+            logger.debug(
+                f"dtype of resumed weights {jax.tree_util.tree_map(lambda x: x.dtype, sample_params)}"
+            )
 
-        resume_step = int(state.step)
+    opt_state = partition_shard(
+        opt_state, jax.local_device_count(), jax.local_devices()
+    )
+    opt_state = jax.pmap(lambda x: x, devices=jax.local_devices())(
+        opt_state
+    )  # shard opt state to free up memory
 
     if jax.process_index() == 0:
         logger.debug(f"VM setup with {num_devices} devices.")
         logger.debug(f"Host setup with {num_local_devices} devices.")
-        logger.debug(f"Using platform: {platform} with precision {model_dtype}")
+        logger.debug(
+            f"Using platform: {platform}. Model weights stored as {model_dtype}"
+        )
 
-        if cfg.device.mp_devices == 1:
-            logger.debug(
-                f"Performing data parallel training only. Model and train state will be replicated across all devices"
-            )
+        logger.debug(
+            f"Performing data parallel training. Model parameters are replicated across all devices. Optimizer state is sharded across {num_local_devices} devices"
+        )
 
     if not args.resume:
         if cfg.data.bucket_path is not None:
@@ -152,7 +344,15 @@ def main():
             client = storage.Client()
             if jax.process_index() == 0:
                 bucket = storage.Bucket(client, f"{cfg.data.bucket_path}")
-                blobs = bucket.list_blobs(prefix=f"{cfg.data.checkpoint_directory}")
+                blobs = bucket.list_blobs(
+                    prefix=f"{cfg.data.checkpoint_directory}/optimizer"
+                )
+                for blob in blobs:
+                    blob.delete()
+
+                blobs = bucket.list_blobs(
+                    prefix=f"{cfg.data.checkpoint_directory}/params"
+                )
                 for blob in blobs:
                     blob.delete()
 
@@ -246,13 +446,9 @@ def main():
     else:
         step_to_seq = lambda x: cfg.data.max_context
 
-    accum_steps = (
-        lambda x: 2
-        if x < cfg.training.staged_warmup_steps
-        else cfg.training.gradient_accumulation_steps
-    )
+    accum_steps = lambda x: cfg.training.gradient_accumulation_steps
 
-    state = flax.jax_utils.replicate(state)
+    params = flax.jax_utils.replicate(params)
 
     rng = jax.random.fold_in(rng, resume_step)  # fold in resume step to create new rng
 
@@ -289,9 +485,27 @@ def main():
 
         t0 = time.time()
 
-        state, metrics = train_step(
-            state, text, rng_sharded, gradient_accumulation_steps
+        grads, metrics = train_step(
+            params, text, rng_sharded, gradient_accumulation_steps, model
         )
+
+        grads = split_sharded_device_array(
+            grads, jax.numpy.arange(jax.local_device_count())
+        )
+        params = split_sharded_device_array(
+            params, jax.numpy.arange(jax.local_device_count())
+        )
+
+        params, opt_state = update_sharded_state(
+            grads,
+            opt_state,
+            params,
+            optimizer,
+        )
+
+        del grads  # manually free grad mem
+
+        params = deshard(params)  # reshape params
 
         metrics["Train Batch Time"] = time.time() - t0
         metrics["Train Sequence Length"] = seq_len
@@ -327,10 +541,11 @@ def main():
             for val_it, val_text in enumerate(
                 tqdm(vl, disable=not jax.process_index() == 0)
             ):
+                val_text = val_text[:, : cfg.training.warmup_train_context]
                 val_text = shard(val_text)
 
                 if val_it < cfg.training.maximum_evaluation_steps:
-                    metrics = eval_step(state, val_text)
+                    metrics = eval_step(params, model, val_text)
                     validation_metrics.append(metrics)
                 else:
                     break
@@ -345,23 +560,22 @@ def main():
                 train_metrics_np.pop("Train Batch Time")
                 wandb.log(train_metrics_np)
 
-                if cfg.device.mp_devices > 1:
-                    device_state = jax.device_get(
-                        state
-                    )  # pull a copy of the sharded state to CPU and save
-                    save_checkpoint(
-                        device_state,
-                        workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
+                if save_to_bucket:
+                    save_checkpoint_params(
+                        params,
+                        absolute_step,
+                        workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
+                    )
+                    save_checkpoint_optimizer(
+                        opt_state,
+                        absolute_step,
+                        workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/optimizer",
                     )
 
                 else:
-                    if save_to_bucket:
-                        save_checkpoint(
-                            state,
-                            workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}",
-                        )
-                    else:
-                        save_checkpoint(state, workdir=cfg.data.checkpoint_directory)
+                    raise NotImplementedError(
+                        "Checkpointing not currently implemented for GPU/CPU"
+                    )
 
         else:
             if jax.process_index() == 0:
@@ -372,21 +586,17 @@ def main():
                 wandb.log(train_metrics_np)
 
 
-@partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=(3,))
+@partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=(3, 4))
 def train_step(
-    state: Any,
+    params: Any,
     batch: jnp.array,
     rng_key: jax.random.PRNGKey = None,
     accum_steps: int = 8,
+    model: Any = None,
 ):
     """
-    Train on a single batch of data. Designed to perform gradient and loss
-    communication once per _batch_ instead of once per mini batch
-
-    NOTE: This means that the batch will be size
-    (local_bs*grad_accum, ctx) instead of (local_bs, ctx)
-
-
+    Computes loss/grads for a single batch of data, pmeans across all devices/hosts to sync grads
+    and returns loss/grads
     """
 
     def get_minibatch(batch, grad_idx):
@@ -396,7 +606,7 @@ def train_step(
         )
 
     def loss_fn(params, batch):
-        _, loss = state.apply_fn(
+        _, loss = model.apply(
             {"params": params["params"]},
             x=batch,
             labels=batch,
@@ -410,11 +620,11 @@ def train_step(
     def loss_and_grad(grad_idx):
         minibatch = get_minibatch(batch, grad_idx) if grad_idx is not None else batch
 
-        loss, grads = grad_fn(state.params, minibatch)
+        loss, grads = grad_fn(params, minibatch)
 
         return loss, grads
 
-    init_minibatch = (0.0, jax.tree_util.tree_map(jnp.zeros_like, state.params))
+    init_minibatch = (0.0, jax.tree_util.tree_map(jnp.zeros_like, params))
 
     # accumulate gradients
     def cumul_minibatch_step(grad_idx, cumul_loss_grad):
@@ -438,28 +648,50 @@ def train_step(
     loss = jax.lax.pmean(loss, axis_name="batch")
     grads = jax.lax.pmean(grads, axis_name="batch")
 
-    # only update train_state at the end of a single full batch
-    new_state = state.apply_gradients(
-        grads=grads,
-    )
-
     metrics = {
         "Train LM Loss": loss,
         "Train LM PPL": jnp.exp(loss),
     }
 
-    return new_state, metrics
+    return grads, metrics
 
 
-@partial(jax.pmap, axis_name="batch")
-def eval_step(state: Any, batch: jnp.array):
+@partial(jax.pmap, axis_name="shard", devices=jax.local_devices())
+def slice_grads(grads, device_index):
+    grad_slice = jax.tree_util.tree_map(lambda x: x[device_index, ...], grads)
+    return grad_slice
+
+
+@partial(
+    jax.pmap,
+    axis_name="shard",
+    devices=jax.local_devices(),
+    static_broadcasted_argnums=(3,),
+)
+def update_sharded_state(
+    grads: Any,
+    optimizer_state: Any,
+    params: Any,
+    optimizer: Any,
+):
+    """
+    Updates the sharded optimizer state
+    """
+
+    # These two lines update the specific shard of state/parameters sitting on device 'i'
+    updates, new_opt_state = optimizer.update(grads, optimizer_state, params)
+    new_params = optax.apply_updates(params, updates)
+
+    new_params = jax.lax.all_gather(new_params, axis_name="shard")
+    return new_params, new_opt_state
+
+
+@partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=(1,))
+def eval_step(params: Any, model: Any, batch: jnp.array):
     """Evaluate on a single batch"""
 
-    _, loss = state.apply_fn(
-        {"params": state.params["params"]},
-        x=batch,
-        labels=batch,
-        train=False,
+    _, loss = model.apply(
+        {"params": params["params"]}, x=batch, labels=batch, train=False
     )
 
     loss = jax.lax.pmean(loss, axis_name="batch")

@@ -26,9 +26,7 @@ class TestLoadModels(unittest.TestCase):
     def test_call_invalid(self) -> None:
 
         model_size = "Humongous"
-
         self.assertRaises(AssertionError, model_getter, model_size)
 
         model_size = "small"
-
         self.assertRaises(AssertionError, model_getter, model_size, dtype=jnp.float64)

@@ -26,17 +26,6 @@ def setup_dp_mesh():
     return mesh
 
 
-def setup_mp_mesh(cfg):
-    """
-    Creates jax device mesh for data-parallel and model-parellel training
-    """
-    mesh_shape = (cfg.device.dp_devices, cfg.device.mp_devices)
-    devices = np.asarray(jax.devices()).reshape(*mesh_shape)
-    mesh = Mesh(devices, ("dp", "mp"))
-
-    return mesh
-
-
 def _match(qs, ks):
     """Return True if regexes in qs match any window of strings in tuple ks."""
     # compile regexes and force complete match
@@ -92,13 +81,71 @@ def _get_partition_rules():
     ]
 
 
+def _get_partition_rules_zero():
+    """
+    Follows Megatron-LM partition rules from
+
+    `Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism`
+    by Shoeybi et al.
+    <https://arxiv.org/abs/1909.08053>
+
+    Question: How are biases handled?
+    """
+    return [
+        (("wte", "embedding"), PartitionSpec("dp", None)),
+        (("wpe", "embedding"), PartitionSpec("dp", None)),
+        # attention
+        (("(query_proj|key_proj|value_proj)", "kernel"), PartitionSpec(None, "dp")),
+        (("residual_out", "kernel"), PartitionSpec("dp", None)),
+        (("(query_proj|key_proj|value_proj)", "bias"), PartitionSpec("dp")),
+        (("residual_out", "bias"), PartitionSpec("dp")),
+        # MLP
+        (("fc_in", "kernel"), PartitionSpec(None, "dp")),
+        (("fc_residual", "kernel"), PartitionSpec("dp", None)),
+        (("fc_in", "bias"), PartitionSpec("dp")),
+        (("fc_residual", "bias"), PartitionSpec("dp")),
+        # layer norms
+        (
+            (
+                "LayerNorm_0",
+                "(bias|scale)",
+            ),
+            PartitionSpec("dp"),
+        ),
+    ]
+
+
 def set_partitions(in_dict):
     """
     Takes a FrozenDict and returns the associated PartitionSpec rule
     for all groups of parameters
     """
 
-    rules = _get_partition_rules()
+    rules = _get_partition_rules
+    replace = _replacement_rules(rules)
+
+    _unmatched = object()
+    initd = {
+        k: _unmatched for k in flatten_dict(in_dict)
+    }  # replaces all values in the dict with _object()
+
+    result = {
+        k: replace(k, v) for k, v in initd.items()
+    }  # replaces all values in the initd dict with defined PartitionSpec rules
+
+    assert (
+        _unmatched not in result.values()
+    ), "Incomplete partition spec! All parameters must have a partitioning rule"
+    return freeze(unflatten_dict(result))
+
+
+def set_partitions_zero(in_dict):
+    """
+    Takes a FrozenDict and returns the associated PartitionSpec rule
+    for all groups of parameters
+    """
+
+    rules = _get_partition_rules_zero()
     replace = _replacement_rules(rules)
 
     _unmatched = object()

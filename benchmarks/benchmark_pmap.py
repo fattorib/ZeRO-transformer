@@ -17,6 +17,7 @@ significantly faster.
 
 """
 
+import argparse
 from time import time
 
 import jax
@@ -29,16 +30,31 @@ from optimized_pmap import naive_train_step, train_step
 from src.models.GPT import model_getter
 from src.training.training_utils import create_train_state
 
-# the quantity GLOBAL_BATCH_SIZE must be divisible by 8 (or num local devices)
-GLOBAL_BATCH_SIZE = 128
-GRADIENT_ACCUMULATION_STEPS = 16
-SEQ_LEN = 1024
-NUM_PASSES = 10
+
+def parse():
+    parser = argparse.ArgumentParser(description="Pjit benchmarking code")
+
+    parser.add_argument("--grad-accum", default=32, type=int)
+
+    parser.add_argument("--batch-size", default=512, type=int)
+
+    parser.add_argument("--ctx", default=512, type=int)
+
+    args = parser.parse_args()
+    return args
 
 
 def main_optimized():
+    args = parse()
+
+    # the quantity GLOBAL_BATCH_SIZE must be divisible by 8 (or num local devices)
+    GLOBAL_BATCH_SIZE = args.batch_size
+    GRADIENT_ACCUMULATION_STEPS = args.grad_accum
+    SEQ_LEN = args.ctx
+    NUM_PASSES = 10
+
     # base model is ~125M params
-    model = model_getter("large", return_cfg=False)
+    model = model_getter("base", return_cfg=False)
 
     # State Creation, etc
     init_rng = jax.random.PRNGKey(0)
@@ -48,6 +64,8 @@ def main_optimized():
         weight_decay=0.1,
         model=model,
     )
+
+    print("State Created")
 
     # replicate state across devices
     state = replicate(state)
