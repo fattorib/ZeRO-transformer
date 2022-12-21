@@ -170,7 +170,7 @@ class Transformer(nn.Module):
             dtype=self.dtype,
         )
 
-        wte = jax.checkpoint(embed)(x)
+        wte = flax.linen.remat(embed)(x)
 
         out = wte
         if not self.alibi_attn:
@@ -186,7 +186,7 @@ class Transformer(nn.Module):
 
         for i in range(self.N):
 
-            out = jax.checkpoint(
+            out = flax.linen.remat(
                 TransformerBlock(
                     self.embedding_dim,
                     self.num_head,
