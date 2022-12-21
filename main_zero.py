@@ -320,7 +320,8 @@ def main():
                 f"dtype of resumed weights {jax.tree_util.tree_map(lambda x: x.dtype, sample_params)}"
             )
 
-    params = jax.device_get(params) # copy params to VM CPU, before sharding the state
+    params = jax.device_get(params) # copy params to VM CPU
+    opt_state = jax.device_get(opt_state) # copy opt_state to VM CPU
     opt_state = partition_shard(
         opt_state, jax.local_device_count(), jax.local_devices()
     )
