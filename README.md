@@ -1,12 +1,6 @@
 # Transformer - JAX
 
-JAX codebase for distributed training of language models in flax using ```pmap``` or ```pjit```. This repo is currently a work in progress. The end goal is a well-documented and efficient training script for Transformers.
-
-# Todos
-- Clean up current code
-- Extend ```main_pjit.py```
-- Optimized GPT model class for better sharding 
-- Write everything up in ```articles```
+JAX codebase demonstrating an application of [ZeRO](https://arxiv.org/abs/1910.02054)-style optimizer sharding with ```pmap```. This codebase was used to train a 760M parameter transformer model on a v3-32, something that would not be possible with standard data parallel training. 
 
 # Configuration Setup
 
@@ -59,10 +53,6 @@ data:
   bucket_path:
   index_path_train: 
   index_path_validation: 
-
-device: # dimensions for ('dp', 'mp')
-  dp_devices: 
-  mp_devices: 
 ```
 
 
@@ -71,13 +61,7 @@ device: # dimensions for ('dp', 'mp')
 ```pmap```:
 
 ```bash 
-python main.py
-```
-
-```pjit``` (unoptimized):
-
-```bash 
-python main_pjit.py 
+python main_zero.py
 ```
 
 
