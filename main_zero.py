@@ -321,7 +321,7 @@ def main():
             )
 
     params = jax.device_get(params) # copy params to VM CPU
-    opt_state = jax.device_get(opt_state) # copy opt_state to VM CPU
+    opt_state = jax.device_get(opt_state) # NOTE: OOMs here with large models as we need 16*(params)bytes for this
     opt_state = partition_shard(
         opt_state, jax.local_device_count(), jax.local_devices()
     )
