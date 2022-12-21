@@ -16,7 +16,7 @@ training:
 
 model:
   size: "XXL"
-  warm_start: True
+  warm_start: False
   model_path: "warmstart_params/small_params.msgpack"
 
 data:
