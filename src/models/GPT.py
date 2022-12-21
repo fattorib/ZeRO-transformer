@@ -185,18 +185,16 @@ class Transformer(nn.Module):
             out += wpe
 
         for i in range(self.N):
-            out = flax.linen.remat(
-                TransformerBlock, static_argnums = (2,)
-            )(
-                    self.embedding_dim,
-                    self.num_head,
-                    self.block_size,
-                    self.dropout,
-                    self.N,
-                    self.dtype,
-                    self.fused_residuals,
-                    self.alibi_attn,
-                )(out, train)
+            out = flax.linen.remat(TransformerBlock, static_argnums=(2,))(
+                self.embedding_dim,
+                self.num_head,
+                self.block_size,
+                self.dropout,
+                self.N,
+                self.dtype,
+                self.fused_residuals,
+                self.alibi_attn,
+            )(out, train)
 
         out = nn.LayerNorm(dtype=self.dtype)(out)
 
