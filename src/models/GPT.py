@@ -170,7 +170,7 @@ class Transformer(nn.Module):
             dtype=self.dtype,
         )
 
-        wte = embed(x)
+        wte = jax.checkpoint(embed)(x)
 
         out = wte
         if not self.alibi_attn:
@@ -186,15 +186,17 @@ class Transformer(nn.Module):
 
         for i in range(self.N):
 
-            out = TransformerBlock(
-                self.embedding_dim,
-                self.num_head,
-                self.block_size,
-                self.dropout,
-                self.N,
-                self.dtype,
-                self.fused_residuals,
-                self.alibi_attn,
+            out = jax.checkpoint(
+                TransformerBlock(
+                    self.embedding_dim,
+                    self.num_head,
+                    self.block_size,
+                    self.dropout,
+                    self.N,
+                    self.dtype,
+                    self.fused_residuals,
+                    self.alibi_attn,
+                )
             )(out, train)
 
         out = nn.LayerNorm(dtype=self.dtype)(out)
