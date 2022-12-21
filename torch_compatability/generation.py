@@ -98,8 +98,11 @@ def typical_sampling_logits(
     # Decay is controlled by beta
 
     # Update the running moment + correct it
-    running_ent = beta * running_ent + (1 - beta) * ent
-    running_ent = running_ent / (1 - (beta ** (t + 1)))
+    if beta > 0:
+        running_ent = beta * running_ent + (1 - beta) * ent
+        running_ent = running_ent / (1 - (beta ** (t + 1)))
+    else:
+        running_ent = ent
 
     shifted_scores = torch.abs((-normalized) - running_ent)
     sorted_scores, sorted_indices = torch.sort(shifted_scores, descending=False)
@@ -177,6 +180,7 @@ class TextGenerator:
         sampling_method: str = None,
         epsilon: float = 1.0,
         device: str = "cpu",
+        beta: float = 0.9,
     ) -> Tuple[str, str, List[float]]:
 
         output, step, logprobs = self.generate_tokens(
@@ -191,6 +195,7 @@ class TextGenerator:
             epsilon=epsilon,
             sampling_method=sampling_method,
             device=device,
+            beta=beta,
         )
         full_gen, new_gen = self.token_to_text(prompt, output, step)
         return full_gen, new_gen, logprobs
@@ -221,6 +226,7 @@ class TextGenerator:
         epsilon: float = 0.0001,
         sampling_method: List[str] = None,
         device: str = "cpu",
+        beta: float = 0.5,
     ) -> Tuple[torch.Tensor, int, List[float]]:
 
         model.eval()
@@ -270,7 +276,7 @@ class TextGenerator:
 
             elif sampling_method == "typical":
                 logits, running_ent = typical_sampling_logits(
-                    logits, mass=tau, running_ent=running_ent, beta=0.5, t=step #TODO: make beta an hpram/allow toggling of ewma
+                    logits, mass=tau, running_ent=running_ent, beta=beta, t=step
                 )
 
             elif sampling_method == "topk":

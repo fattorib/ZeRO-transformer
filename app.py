@@ -51,6 +51,7 @@ def generate_text(
     repetition_penalty,
     epsilon,
     sampling_choice,
+    beta,
 ):
     if sampling_choice == "Top-k":
         sampling_method = "topk"
@@ -79,6 +80,7 @@ def generate_text(
         epsilon=epsilon,
         sampling_method=sampling_method,
         device=DEVICE,
+        beta=beta,
     )
 
     original_gen_length = len(generated_text) - len(new_gen)
@@ -145,6 +147,12 @@ if __name__ == "__main__":
                 choices=["Top-k", "Nucleus", "Typical", "Greedy", "$\eta$"],
                 label="Sampling Method",
                 default="Nucleus",
+            ),
+            gr.inputs.Slider(
+                0.0,
+                1.0,
+                default=0.5,
+                label=r"$\beta$",
             ),
         ],
         outputs=gr.HighlightedText(
