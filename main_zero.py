@@ -320,6 +320,7 @@ def main():
                 f"dtype of resumed weights {jax.tree_util.tree_map(lambda x: x.dtype, sample_params)}"
             )
 
+    params = jax.device_get(params) # copy params to VM CPU, before sharding the state
     opt_state = partition_shard(
         opt_state, jax.local_device_count(), jax.local_devices()
     )
@@ -448,7 +449,7 @@ def main():
 
     accum_steps = lambda x: cfg.training.gradient_accumulation_steps
 
-    params = flax.jax_utils.replicate(params)
+    params = flax.jax_utils.replicate(params, devices=jax.local_devices())
 
     rng = jax.random.fold_in(rng, resume_step)  # fold in resume step to create new rng
 
