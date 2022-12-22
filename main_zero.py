@@ -326,7 +326,7 @@ def main():
     # TODO: Fix device_put_replicated on line 145 above, probably enough to just duplicate params along axis
     opt_state = jax.device_get(opt_state) 
     opt_state = partition_shard(
-        opt_state, jax.local_device_count(), jax.local_devices()
+        opt_state, jax.local_device_count(), jax.local_devices() #Currently this operates on CPU
     )
     opt_state = jax.pmap(lambda x: x, devices=jax.local_devices())(
         opt_state
