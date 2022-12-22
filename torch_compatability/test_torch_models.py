@@ -4,8 +4,7 @@ Tests for PyTorch models
 import pytest
 import torch
 
-from torch_compatability.GPT2 import (GPT2, ALiBi, GPT2Block, MLPBlock,
-                                      model_getter)
+from torch_compatability.GPT2 import GPT2, ALiBi, GPT2Block, MLPBlock, model_getter
 
 
 @pytest.fixture
@@ -37,8 +36,7 @@ def test_alibi_attn_nocache(model_config):
     batch = torch.rand((1, cfg["ctx"], cfg["embed_dim"]))
     out = layer(batch)
 
-    assert out[0].shape == batch.shape
-    assert out[1] is None
+    assert (out[0].shape, out[1]) == (batch.shape, None)
 
 
 def test_alibi_attn_cache(model_config):
@@ -65,28 +63,31 @@ def test_alibi_attn_cache(model_config):
     batch = torch.rand((1, 1, cfg["embed_dim"]))
 
     out = layer(batch, use_cache=True, layer_past=layer_past)
-    assert out[0].shape == batch.shape
 
     present_cache = out[1]
-    assert present_cache.shape == (
-        2,
-        1,
-        cfg["n_head"],
-        cache_size + 1,
-        cfg["embed_dim"] // cfg["n_head"],
-    )
 
     # Ensure we can pass in the cached vectors again
     batch = torch.rand((1, 1, cfg["embed_dim"]))
-    out = layer(batch, use_cache=True, layer_past=present_cache)
+    out_again = layer(batch, use_cache=True, layer_past=present_cache)
 
-    present_cache = out[1]
-    assert present_cache.shape == (
-        2,
-        1,
-        cfg["n_head"],
-        cache_size + 2,
-        cfg["embed_dim"] // cfg["n_head"],
+    present_cache_again = out_again[1]
+
+    assert (out[0].shape, present_cache.shape, present_cache_again.shape) == (
+        batch.shape,
+        (
+            2,
+            1,
+            cfg["n_head"],
+            cache_size + 1,
+            cfg["embed_dim"] // cfg["n_head"],
+        ),
+        (
+            2,
+            1,
+            cfg["n_head"],
+            cache_size + 2,
+            cfg["embed_dim"] // cfg["n_head"],
+        ),
     )
 
 
@@ -104,8 +105,7 @@ def test_transformerblock_nocache(model_config):
     batch = torch.rand((1, cfg["ctx"], cfg["embed_dim"]))
     out = layer(batch)
 
-    assert out[0].shape == batch.shape
-    assert out[1] is None
+    assert (out[0].shape, out[1]) == (batch.shape, None)
 
 
 def test_transformerblock_cache(model_config):
@@ -132,32 +132,35 @@ def test_transformerblock_cache(model_config):
 
     batch = torch.rand((1, 1, cfg["embed_dim"]))
     out = layer(batch, use_cache=True, layer_past=layer_past)
-    assert out[0].shape == batch.shape
 
     present_cache = out[1]
-    assert present_cache.shape == (
-        2,
-        1,
-        cfg["n_head"],
-        cache_size + 1,
-        cfg["embed_dim"] // cfg["n_head"],
-    )
 
     # Ensure we can pass in the cached vectors again
     batch = torch.rand((1, 1, cfg["embed_dim"]))
     out = layer(batch, use_cache=True, layer_past=present_cache)
 
-    present_cache = out[1]
-    assert present_cache.shape == (
-        2,
-        1,
-        cfg["n_head"],
-        cache_size + 2,
-        cfg["embed_dim"] // cfg["n_head"],
+    present_cache_again = out[1]
+
+    assert (out[0].shape, present_cache.shape, present_cache_again.shape) == (
+        batch.shape,
+        (
+            2,
+            1,
+            cfg["n_head"],
+            cache_size + 1,
+            cfg["embed_dim"] // cfg["n_head"],
+        ),
+        (
+            2,
+            1,
+            cfg["n_head"],
+            cache_size + 2,
+            cfg["embed_dim"] // cfg["n_head"],
+        ),
     )
 
 
-def test_gpt2(model_config):
+def test_gpt2_no_labels(model_config):
     cfg = model_config
     model = GPT2(
         embedding_dim=cfg["embed_dim"],
@@ -173,10 +176,25 @@ def test_gpt2(model_config):
     out = model(batch)
     assert out.shape == batch.shape + (cfg["vocab_size"],)
 
+
+def test_gpt2_labels(model_config):
+    cfg = model_config
+    model = GPT2(
+        embedding_dim=cfg["embed_dim"],
+        num_head=cfg["n_head"],
+        num_ctx=cfg["ctx"],
+        vocab_size=cfg["vocab_size"],
+        N=cfg["n_layer"],
+        use_alibi=True,
+    )
+
+    batch = torch.ones((1, cfg["ctx"]), dtype=torch.int32).long()
     # test with labels
     out_tuple = model(batch, batch)
-    assert out_tuple[1].shape == ()
-    assert out_tuple[0].shape == batch.shape + (cfg["vocab_size"],)
+    assert (out_tuple[0].shape, out_tuple[1].shape) == (
+        batch.shape + (cfg["vocab_size"],),
+        (),
+    )
 
 
 def test_model_getter():
