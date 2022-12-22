@@ -24,35 +24,7 @@ model_name:
 Pretty much all other configuration is handled in ```conf/config.yaml```:
 
 ```yaml
-training:
-  max_epochs: 
-  batch_size: 
-  peak_learning_rate: 
-  warmup_steps: 
-  decay_steps: 
-  total_steps: 
-  end_learning_rate: 
-  weight_decay: 
-  gradient_accumulation_steps: 
-  evaluation_frequency: 
-  maximum_evaluation_steps: 
-  precision: 'bf16' # can be ['fp32', 'fp16', 'bf16']
-  staged_warmup_steps: # number of steps to perform at a shortened context
-  train_context: # context used during sequence length warmup
-
-model:
-  size: 
-
-data:
-  corpus: 
-  train_shard_urls:
-  validation_shard_urls: 
-  max_context: 
-  full_steps_in_batch: 
-  checkpoint_directory: 
-  bucket_path:
-  index_path_train: 
-  index_path_validation: 
+TODO
 ```
 
 
@@ -79,6 +51,6 @@ TPU Development and training supported with Cloud TPUs from Google's TPU Researc
 
 # Testing
 ```bash 
-python -m pytest
+make test
 ```
 
