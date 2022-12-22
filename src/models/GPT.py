@@ -25,8 +25,7 @@ class TransformerBlock(nn.Module):
     N: int = None
     dtype: Any = jnp.float32
     fused_residuals: bool = False
-    alibi_attn: bool = False
-    qk_norm: bool = False
+    alibi_attn: bool = True
 
     @nn.compact
     def __call__(
