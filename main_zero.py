@@ -322,13 +322,11 @@ def main():
 
     params = jax.device_get(params)  # copy params to VM CPU
 
-    # NOTE: OOMs here on TPu with large models as we need 16*(params)bytes for this
-    # TODO: Fix device_put_replicated on line 145 above, probably enough to just duplicate params along axis
     opt_state = jax.device_get(opt_state)
     opt_state = partition_shard(
         opt_state,
         jax.local_device_count(),
-        jax.local_devices(),  # Currently this operates on CPU
+        jax.local_devices(),
     )
     opt_state = jax.pmap(lambda x: x, devices=jax.local_devices())(
         opt_state
@@ -524,6 +522,10 @@ def main():
             k: np.mean([metrics[k] for metrics in running_metrics])
             for k in running_metrics[0]
         }
+
+        if (i+1) % 25 == 0:
+            # using activation ckpt causes pretty severe fragmentation here (as we are keeping certain activations in mem but dropping others that are recomputed)
+            jax.lib.xla_bridge.get_backend().defragment()
 
         running_metrics = []
         validation_metrics = []
