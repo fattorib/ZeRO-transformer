@@ -16,8 +16,8 @@ training:
 
 model:
   size: "XXL"
-  warm_start: False
-  model_path: "warmstart_params/small_params.msgpack"
+  warm_start: True
+  model_path: "warmstart_params/warmstart_params_XXL.msgpack"
 
 data:
   corpus: "openwebtext"
