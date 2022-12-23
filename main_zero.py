@@ -300,9 +300,12 @@ def main():
             opt_state, step = restore_opt_checkpoint(
                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/optimizer"
             )
+            opt_state = jax.device_get(opt_state) # copy to CPU
+
             params = restore_param_checkpoint(
                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params"
             )
+            params = jax.device_get(params) # copy to CPU
 
             resume_step = int(step)
 
@@ -522,10 +525,6 @@ def main():
             k: np.mean([metrics[k] for metrics in running_metrics])
             for k in running_metrics[0]
         }
-
-        # if (i+1) % 25 == 0:
-        #     # using activation ckpt causes pretty severe fragmentation here (as we are keeping certain activations in mem but dropping others that are recomputed)
-        #     jax.lib.xla_bridge.get_backend().defragment()
 
         running_metrics = []
         validation_metrics = []
