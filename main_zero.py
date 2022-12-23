@@ -523,9 +523,9 @@ def main():
             for k in running_metrics[0]
         }
 
-        if (i+1) % 25 == 0:
-            # using activation ckpt causes pretty severe fragmentation here (as we are keeping certain activations in mem but dropping others that are recomputed)
-            jax.lib.xla_bridge.get_backend().defragment()
+        # if (i+1) % 25 == 0:
+        #     # using activation ckpt causes pretty severe fragmentation here (as we are keeping certain activations in mem but dropping others that are recomputed)
+        #     jax.lib.xla_bridge.get_backend().defragment()
 
         running_metrics = []
         validation_metrics = []
