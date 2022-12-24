@@ -113,13 +113,13 @@ def restore_opt_checkpoint(workdir: str) -> Tuple[Any, int]:
     mu_pytree = jax.tree_util.tree_map(
         lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["mu"]
     )
-    mu_pytree = jax.device_get(mu_pytree)
+    # mu_pytree = jax.device_get(mu_pytree)
 
     nu_pytree = jax.tree_util.tree_map(
         lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["nu"]
     )
-    nu_pytree = jax.device_get(nu_pytree)
-    
+    # nu_pytree = jax.device_get(nu_pytree)
+
     count_pytree = jax.tree_util.tree_map(
         lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["count"]
     )
@@ -299,6 +299,7 @@ def main():
 
     if args.resume:
         del params
+        del opt_state
 
         if save_to_bucket:
             opt_state, step = restore_opt_checkpoint(
