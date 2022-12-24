@@ -316,13 +316,7 @@ def main():
 
         if jax.process_index() == 0:
             logger.debug(f"Resuming training from step {resume_step}")
-            sample_params = params["params"]["TransformerBlock_0"]["MLPBlock_0"][
-                "fc_residual"
-            ]
-            logger.debug(
-                f"dtype of resumed weights {jax.tree_util.tree_map(lambda x: x.dtype, sample_params)}"
-            )
-
+        
     params = jax.device_get(params)  # copy params to VM CPU
 
     opt_state = jax.device_get(opt_state) # copy opt_state to VM CPU
