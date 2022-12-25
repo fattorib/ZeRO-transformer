@@ -470,7 +470,7 @@ def main():
 
             return True
 
-        if i < int(12000):
+        if i < int(cfg.data.resume_step):
             # skip through some of the dataset. Helpful since we've glued 2 datasets together
             # doesn't have to be super precise since we go for multiple epochs
             continue
