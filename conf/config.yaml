@@ -30,7 +30,7 @@ data:
   index_path_train: "data/index/openwebtext_extended_useast.train.index"
   index_path_validation: "data/index/openwebtext_extended_useast.val.index"
   wandb_project: "jax-transformer"
-  resume_step: 4000
+  resume_step: 16000
 
 device: 
   dp_devices: 32
