@@ -1,6 +1,12 @@
 # Transformer - JAX
 
-JAX codebase demonstrating an application of [ZeRO](https://arxiv.org/abs/1910.02054)-style optimizer sharding with ```pmap```. This codebase was used to train a 760M parameter transformer model on a v3-32, something that would not be possible with standard data parallel training. 
+JAX codebase demonstrating an application of [ZeRO](https://arxiv.org/abs/1910.02054)-style optimizer sharding with ```pmap```. This codebase was used to train a 1.1B parameter transformer model on a TPU v3-32, something that would not be possible with standard data parallel training. 
+
+# Todos:
+1. Finish 1.1B training 
+2. 1.1B training log
+3. Finish readme install instructions, etc 
+4. Write up how everything works 
 
 # Configuration Setup
 
