@@ -77,7 +77,7 @@ if __name__ == "__main__":
     del params_pytree
 
     unfrozen = unfreeze(extended_pytree)
-    
+
     del extended_pytree
     serialized = msgpack_serialize(unfrozen, in_place=False)
 

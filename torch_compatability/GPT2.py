@@ -584,6 +584,7 @@ def create_GPT2_flax_xlarge(vocab_size, num_ctx, model_checkpoint=None, **kwargs
 
     return model
 
+
 def create_GPT2_flax_xxlarge(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
     """
     TODO: Fill this in
@@ -608,6 +609,7 @@ def create_GPT2_flax_xxlarge(vocab_size, num_ctx, model_checkpoint=None, **kwarg
         model.load_state_dict(state_dict)
 
     return model
+
 
 def model_getter(model_name, vocab_size, num_ctx, model_checkpoint=None, **kwargs):
     assert vocab_size > 0, "Vocab size must be positive"
