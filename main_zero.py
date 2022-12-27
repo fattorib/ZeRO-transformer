@@ -113,12 +113,10 @@ def restore_opt_checkpoint(workdir: str) -> Tuple[Any, int]:
     mu_pytree = jax.tree_util.tree_map(
         lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["mu"]
     )
-    # mu_pytree = jax.device_get(mu_pytree)
 
     nu_pytree = jax.tree_util.tree_map(
         lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["nu"]
     )
-    # nu_pytree = jax.device_get(nu_pytree)
 
     count_pytree = jax.tree_util.tree_map(
         lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["count"]
@@ -305,12 +303,12 @@ def main():
             opt_state, step = restore_opt_checkpoint(
                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/optimizer"
             )
-            opt_state = jax.device_get(opt_state) # copy to CPU
+            opt_state = jax.device_get(opt_state)  # copy to CPU
 
             params = restore_param_checkpoint(
                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params"
             )
-            params = jax.device_get(params) # copy to CPU
+            params = jax.device_get(params)  # copy to CPU
 
             resume_step = int(step)
 
@@ -321,10 +319,10 @@ def main():
 
         if jax.process_index() == 0:
             logger.debug(f"Resuming training from step {resume_step}")
-        
+
     params = jax.device_get(params)  # copy params to VM CPU
 
-    opt_state = jax.device_get(opt_state) # copy opt_state to VM CPU
+    opt_state = jax.device_get(opt_state)  # copy opt_state to VM CPU
     opt_state = partition_shard(
         opt_state,
         jax.local_device_count(),
@@ -670,6 +668,7 @@ def train_step(
 
 @partial(jax.pmap, axis_name="shard", devices=jax.local_devices())
 def slice_grads(grads, device_index):
+    """pmappable way to access a 'slice' of grads by device index"""
     grad_slice = jax.tree_util.tree_map(lambda x: x[device_index, ...], grads)
     return grad_slice
 
