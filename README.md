@@ -7,6 +7,7 @@ JAX codebase demonstrating an application of [ZeRO](https://arxiv.org/abs/1910.0
 2. 1.1B training log
 3. Finish readme install instructions, etc 
 4. Write up how everything works 
+5. Drop benchmark/unused training scripts
 
 # Configuration Setup
 
