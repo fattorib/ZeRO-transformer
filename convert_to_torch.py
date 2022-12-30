@@ -16,21 +16,21 @@ def parse():
     parser.add_argument("--model-name", type=str)
     parser.add_argument("--flax-path", type=str)  # path of flax msgpack object
     parser.add_argument("--torch-path", type=str)  # path to save torch statedict to
-
-    parser.add_argument("--vocab-sze", type=int, default=50304)  # model vocab size
-
+    parser.add_argument("--vocab-size", type=int, default=50304)  # model vocab size
     parser.add_argument("--seq-len", type=int, default=1024)  # maximum model context
 
     args = parser.parse_args()
-    return
+    return args
 
 
 def main():
 
     args = parse()
-
     model = model_getter(
         model_name=args.model_name, vocab_size=args.vocab_size, num_ctx=args.seq_len
     )
 
     match_and_save(model, args.flax_path, args.torch_path)
+
+if __name__ == '__main__':
+    main()
