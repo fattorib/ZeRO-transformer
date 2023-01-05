@@ -7,7 +7,7 @@ training:
   total_steps: 210000
   end_learning_rate: 6.0e-5
   weight_decay: 0.1
-  gradient_accumulation_steps: 8
+  gradient_accumulation_steps: 4
   evaluation_frequency: 1000
   maximum_evaluation_steps: 500
   precision: 'fp32'
