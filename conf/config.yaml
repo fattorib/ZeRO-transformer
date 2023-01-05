@@ -1,36 +1,36 @@
 training:
   max_epochs: 20
-  batch_size: 64
-  peak_learning_rate: 2.0e-4
+  batch_size: 32
+  peak_learning_rate: 6.0e-4
   warmup_steps: 2000
-  decay_steps: 85000
-  total_steps: 90000
-  end_learning_rate: 2.0e-5
+  decay_steps: 230000
+  total_steps: 210000
+  end_learning_rate: 6.0e-5
   weight_decay: 0.1
-  gradient_accumulation_steps: 32
-  evaluation_frequency: 500
+  gradient_accumulation_steps: 8
+  evaluation_frequency: 1000
   maximum_evaluation_steps: 500
   precision: 'fp32'
-  staged_warmup_steps: 200001
-  warmup_train_context: 512
+  staged_warmup_steps: 1000001
+  warmup_train_context: 4096
 
 model:
-  size: "XXL"
-  warm_start: True
+  size: "bytelevelbase"
+  warm_start: False
   model_path: "warmstart_params/warmstart_params_XXL.msgpack"
 
 data:
   corpus: "openwebtext"
   train_shard_urls:
   validation_shard_urls: 
-  max_context: 2048
-  train_samples: 9741373
+  max_context: 4096
+  train_samples: 14809244
   checkpoint_directory: "checkpoints"
   bucket_path: "bfattoriwebtext2"
-  index_path_train: "data/index/openwebtext_extended_useast.train.index"
-  index_path_validation: "data/index/openwebtext_extended_useast.val.index"
+  index_path_train: "data/index/openwebtext2_train.index"
+  index_path_validation: "data/index/openwebtext2_validation.index"
   wandb_project: "jax-transformer"
-  resume_step: 20000
+  resume_step: 0
 
 device: 
   dp_devices: 32
