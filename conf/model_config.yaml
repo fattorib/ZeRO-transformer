@@ -51,11 +51,21 @@ smol:
 base:
   embedding_dim: 768
   vocab_size: 50304
-  num_head: 12
+  num_head: 16
   block_size: 1024
   dropout: 0.1
   N: 12
-  fused_residuals: True
+  fused_residuals: False
+  alibi_attn: True
+
+bytelevelbase:
+  embedding_dim: 1024
+  vocab_size: 384
+  num_head: 16
+  block_size: 4096
+  dropout: 0.1
+  N: 10
+  fused_residuals: False
   alibi_attn: True
 
 medium:
