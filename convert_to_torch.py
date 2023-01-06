@@ -5,7 +5,6 @@ make it a bit easier to push to HF Hub if I want to do that.
 """
 
 import argparse
-
 from torch_compatability.flax_to_pytorch import match_and_save
 from torch_compatability.GPT2 import model_getter
 

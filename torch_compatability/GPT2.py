@@ -645,6 +645,7 @@ def model_getter(model_name, vocab_size, num_ctx, model_checkpoint=None, **kwarg
         "flax-large": create_GPT2_flax_large,
         "flax-xlarge": create_GPT2_flax_xlarge,
         "flax-xxlarge": create_GPT2_flax_xxlarge,
+        "flax-bytelevel": create_GPT2_bytelevel,
     }
 
     assert (
