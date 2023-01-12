@@ -1,9 +1,11 @@
 import argparse
-import os 
-os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]="false"
+import os
+
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 from flax.core.frozen_dict import unfreeze
 from flax.serialization import msgpack_serialize
 from flax.training import checkpoints
+
 
 def parse():
     parser = argparse.ArgumentParser(description="Convert Flax to msgpack")
@@ -13,6 +15,7 @@ def parse():
 
     args = parser.parse_args()
     return args
+
 
 def flatten(p, label=None):
     if isinstance(p, dict):
@@ -43,6 +46,7 @@ def params_from_trainstate(state, out_path):
     with open(out_path, "wb") as f:
         f.write(param_bytes)
 
+
 def main():
 
     args = parse()
@@ -53,10 +57,11 @@ def main():
         prefix=args.prefix,
     )
     idx = args.prefix.split("_")[-1]
-    params_from_trainstate(state, out_path=f"{args.ckpt_dir}/model_params_{idx}.msgpack")
+    params_from_trainstate(
+        state, out_path=f"{args.ckpt_dir}/model_params_{idx}.msgpack"
+    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     main()
-

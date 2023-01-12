@@ -5,6 +5,7 @@ make it a bit easier to push to HF Hub if I want to do that.
 """
 
 import argparse
+
 from torch_compatability.flax_to_pytorch import match_and_save
 from torch_compatability.GPT2 import model_getter
 
@@ -31,5 +32,6 @@ def main():
 
     match_and_save(model, args.flax_path, args.torch_path)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

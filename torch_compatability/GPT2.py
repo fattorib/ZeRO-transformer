@@ -506,6 +506,7 @@ def create_GPT2_test(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
 
     return model
 
+
 def create_GPT2_bytelevel(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
     """
     TODO: Fill this in
@@ -530,6 +531,7 @@ def create_GPT2_bytelevel(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
         model.load_state_dict(state_dict)
 
     return model
+
 
 def create_GPT2_flax(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
     """

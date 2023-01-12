@@ -328,9 +328,7 @@ def main():
     if jax.process_index() == 0:
         logger.debug(f"VM setup with {num_devices} devices.")
         logger.debug(f"Host setup with {num_local_devices} devices.")
-        logger.debug(
-            f"Using platform: {platform}."
-        )
+        logger.debug(f"Using platform: {platform}.")
 
         logger.debug(
             f"Performing data parallel training. Model parameters are replicated across all devices. Optimizer state is sharded across {num_local_devices} devices"
@@ -354,8 +352,7 @@ def main():
                 for blob in blobs:
                     blob.delete()
 
-    local_batch_size = cfg.training.batch_size // (
-        jax.local_device_count())
+    local_batch_size = cfg.training.batch_size // (jax.local_device_count())
 
     total_tokens = num_host * (
         cfg.training.batch_size
