@@ -10,7 +10,6 @@ training:
   gradient_accumulation_steps: 4
   evaluation_frequency: 1000
   maximum_evaluation_steps: 500
-  precision: 'fp32'
   staged_warmup_steps: 1000001
   warmup_train_context: 2048
 

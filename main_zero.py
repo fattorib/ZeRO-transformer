@@ -229,13 +229,6 @@ def main():
     num_host = num_devices // num_local_devices
     platform = jax.local_devices()[0].platform
 
-    if cfg.training.precision == "fp16":
-        model_dtype = jnp.float16
-    elif cfg.training.precision == "bf16":
-        model_dtype = jnp.bfloat16
-    else:
-        model_dtype = jnp.float32
-
     # setting up GCP bucket/client info if training on TPU
     save_to_bucket = False
     client = None
@@ -256,7 +249,7 @@ def main():
         validation_shards = cfg.data.validation_shard_urls
 
     model, model_config = model_getter(
-        cfg.model.size, config_path=args.model_cfg, return_cfg=True, dtype=model_dtype
+        cfg.model.size, config_path=args.model_cfg, return_cfg=True, dtype=jnp.float32
     )
 
     learning_rate_fn = optax.warmup_cosine_decay_schedule(
@@ -336,7 +329,7 @@ def main():
         logger.debug(f"VM setup with {num_devices} devices.")
         logger.debug(f"Host setup with {num_local_devices} devices.")
         logger.debug(
-            f"Using platform: {platform}. Model weights stored as {model_dtype}"
+            f"Using platform: {platform}."
         )
 
         logger.debug(
