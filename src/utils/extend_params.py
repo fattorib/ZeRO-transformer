@@ -54,34 +54,3 @@ def create_mapping():
     num_layers_old = 18
     block_mapping = {i: [i + i, i + 1 + i] for i in range(num_layers_old)}
     return block_mapping
-
-
-if __name__ == "__main__":
-
-    # load in params pytree
-    with open("checkpoints/warmstart_params_large_params.msgpack", "rb") as f:
-        params_pytree = msgpack_restore(f.read())
-
-    model = model_getter(
-        "XXL", return_cfg=False
-    )  # init model to draw empty pytree from
-
-    # create empty target pytree
-    rng = jax.random.PRNGKey(0)
-    batch_tok = jax.random.randint(rng, shape=(1, 1024), maxval=50257, minval=0)
-    shape_pytree = jax.eval_shape(model.init, rng, batch_tok)
-
-    empty_pytree = jax.tree_util.tree_map(lambda x: jnp.empty(x.shape), shape_pytree)
-
-    extended_pytree = extend_params(unfreeze(empty_pytree), unfreeze(params_pytree))
-    del params_pytree
-
-    unfrozen = unfreeze(extended_pytree)
-
-    del extended_pytree
-    serialized = msgpack_serialize(unfrozen, in_place=False)
-
-    print("did we get here")
-
-    with open("checkpoints/warmstart_params_XXL.msgpack", "wb") as f:
-        f.write(serialized)
