@@ -256,7 +256,7 @@ def main():
         init_value=0,
         peak_value=cfg.training.peak_learning_rate,
         warmup_steps=cfg.training.warmup_steps,
-        decay_steps=cfg.training.decay_steps,
+        decay_steps=cfg.training.total_steps,
         end_value=cfg.training.end_learning_rate,
     )
 

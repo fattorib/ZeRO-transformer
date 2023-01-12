@@ -3,7 +3,6 @@ training:
   batch_size: 32
   peak_learning_rate: 6.0e-4
   warmup_steps: 2000
-  decay_steps: 230000
   total_steps: 210000
   end_learning_rate: 6.0e-5
   weight_decay: 0.1
