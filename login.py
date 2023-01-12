@@ -1,3 +1,6 @@
+""" 
+CLI to automatically login to WandB on all TPU hosts
+"""
 import argparse
 
 import wandb
