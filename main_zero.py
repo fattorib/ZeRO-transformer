@@ -246,7 +246,6 @@ def main():
     else:
         raise NotImplementedError("Training not currently supported on GPU.")
 
-
     model, model_config = model_getter(
         cfg.model.size, config_path=args.model_cfg, return_cfg=True, dtype=jnp.float32
     )
@@ -306,7 +305,7 @@ def main():
 
         else:
             raise NotImplementedError(
-                "Checkpointing not currently implemented for GPU/CPU"
+                "Checkpointing not currently implemented for GPU."
             )
 
         if jax.process_index() == 0:
@@ -458,7 +457,8 @@ def main():
 
         if i < int(cfg.data.resume_step):
             # skip through some of the dataset. Helpful since we've glued 2 datasets together
-            # doesn't have to be super precise since we go for multiple epochs
+            # doesn't have to be super precise since we go for multiple epochs and reshuffle dataset
+            # each resumed run.
             continue
 
         rng, dropout_rng = jax.random.split(rng, 2)
