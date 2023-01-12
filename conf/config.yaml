@@ -19,8 +19,6 @@ model:
 
 data:
   corpus: "openwebtext"
-  train_shard_urls:
-  validation_shard_urls: 
   max_context: 4096
   train_samples: 14809244
   checkpoint_directory: "checkpoints"
