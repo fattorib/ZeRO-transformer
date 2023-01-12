@@ -1,13 +1,12 @@
 import math
 from functools import partial
-from typing import Any, List, Tuple
+from typing import Any, List
 
 import flax.linen as nn
 import jax
 import jax.nn.initializers as initializers
 import jax.numpy as jnp
 from flax.linen import partitioning as nn_partitioning
-from jax.experimental import PartitionSpec
 
 
 def shard_noop(x, spec):

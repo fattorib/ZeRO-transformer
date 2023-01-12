@@ -1,10 +1,8 @@
 """ 
 Replication of GPT2 transformers in Flax
 """
-from functools import partial
 from typing import Any, Tuple, Union
 
-import flax
 import flax.linen as nn
 import jax
 import jax.nn.initializers as initializers
@@ -24,7 +22,6 @@ class TransformerBlock(nn.Module):
     residual_dropout: float = 0.0
     N: int = None
     dtype: Any = jnp.float32
-    fused_residuals: bool = False
     alibi_attn: bool = True
 
     @nn.compact
@@ -32,50 +29,25 @@ class TransformerBlock(nn.Module):
         self,
         x: jnp.array,
         train: bool = False,
-        use_cache: bool = False,
-        layer_past: Tuple[jnp.array, jnp.array] = None,
     ) -> jnp.array:
 
-        if self.fused_residuals:
-            norm = nn.LayerNorm(dtype=self.dtype)
-            attn_out = CausalAttention(
-                self.embedding_dim,
-                self.num_head,
-                self.block_size,
-                self.residual_dropout,
-                self.N,
-                self.alibi_attn,
-                self.dtype,
-            )(norm(x), train)
-            return (
-                x
-                + attn_out
-                + MLPBlock(
-                    self.embedding_dim,
-                    dropout=self.residual_dropout,
-                    N=self.N,
-                    dtype=self.dtype,
-                )(norm(x), train)
-            )
-
-        else:
-            attn_out = CausalAttention(
-                self.embedding_dim,
-                self.num_head,
-                self.block_size,
-                self.residual_dropout,
-                self.N,
-                self.alibi_attn,
-                self.dtype,
-            )(nn.LayerNorm(dtype=self.dtype)(x), train)
-            x = x + attn_out
-            x = x + MLPBlock(
-                self.embedding_dim,
-                dropout=self.residual_dropout,
-                N=self.N,
-                dtype=self.dtype,
-            )(nn.LayerNorm(dtype=self.dtype)(x), train)
-            return x
+        attn_out = CausalAttention(
+            self.embedding_dim,
+            self.num_head,
+            self.block_size,
+            self.residual_dropout,
+            self.N,
+            self.alibi_attn,
+            self.dtype,
+        )(nn.LayerNorm(dtype=self.dtype)(x), train)
+        x = x + attn_out
+        x = x + MLPBlock(
+            self.embedding_dim,
+            dropout=self.residual_dropout,
+            N=self.N,
+            dtype=self.dtype,
+        )(nn.LayerNorm(dtype=self.dtype)(x), train)
+        return x
 
 
 class Transformer(nn.Module):
@@ -90,7 +62,6 @@ class Transformer(nn.Module):
     dropout: float = 0.0
     N: int = None
     dtype: Any = jnp.float32
-    fused_residuals: bool = False
     alibi_attn: bool = False
 
     @nn.compact
@@ -131,7 +102,6 @@ class Transformer(nn.Module):
                 self.dropout,
                 self.N,
                 self.dtype,
-                self.fused_residuals,
                 self.alibi_attn,
             )(out, train)
 
