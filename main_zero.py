@@ -240,13 +240,12 @@ def main():
 
             client = storage.Client()
             save_to_bucket = True
-            bucket_path = cfg.data.bucket_path
             train_shards = open(cfg.data.index_path_train).read().splitlines()
             validation_shards = open(cfg.data.index_path_validation).read().splitlines()
 
     else:
-        train_shards = cfg.data.train_shard_urls
-        validation_shards = cfg.data.validation_shard_urls
+        raise NotImplementedError("Training not currently supported on GPU.")
+
 
     model, model_config = model_getter(
         cfg.model.size, config_path=args.model_cfg, return_cfg=True, dtype=jnp.float32
@@ -277,7 +276,7 @@ def main():
     if cfg.model.warm_start and not args.resume:
         if jax.process_index() == 0:
             logger.debug(
-                f"Warm starting model training from tiled checkpoint {cfg.model.model_path}"
+                f"Warm starting model training from checkpoint {cfg.model.model_path}"
             )
 
         del params
