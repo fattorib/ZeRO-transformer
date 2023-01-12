@@ -355,8 +355,7 @@ def main():
                     blob.delete()
 
     local_batch_size = cfg.training.batch_size // (
-        jax.local_device_count() // cfg.device.mp_devices
-    )
+        jax.local_device_count())
 
     total_tokens = num_host * (
         cfg.training.batch_size
