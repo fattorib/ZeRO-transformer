@@ -485,8 +485,6 @@ def main():
 
         rng_sharded = shard_prng_key(dropout_rng)
 
-        t0 = time.time()
-
         grads, metrics = train_step(
             params, text, rng_sharded, gradient_accumulation_steps, model
         )
@@ -508,8 +506,6 @@ def main():
         del grads  # manually free grad mem
 
         params = deshard(params)  # reshape params
-
-        metrics["Train Batch Time"] = time.time() - t0
         metrics["Train Sequence Length"] = seq_len
         metrics["Learning Rate"] = learning_rate_fn(resume_step + new_steps)
 
@@ -559,7 +555,6 @@ def main():
 
             if jax.process_index() == 0:
                 train_metrics_np.update(validation_metrics_np)
-                train_metrics_np.pop("Train Batch Time")
                 wandb.log(train_metrics_np)
 
                 if save_to_bucket:
@@ -581,10 +576,6 @@ def main():
 
         else:
             if jax.process_index() == 0:
-                train_metrics_np["Train Step Time"] = train_metrics_np[
-                    "Train Batch Time"
-                ]
-                train_metrics_np.pop("Train Batch Time")
                 wandb.log(train_metrics_np)
 
 
