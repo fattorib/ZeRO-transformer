@@ -252,7 +252,7 @@ class TextGenerator:
         for step in tqdm(range(steps)):
             if device != "cpu":
                 # autocast can hang with CPU
-                with torch.autocast(device_type=device):
+                with torch.autocast(device_type=device, cache_enabled=False):
                     logits, layer_past = model(
                         x_cond, use_cache=True, past_states=layer_past
                     )
