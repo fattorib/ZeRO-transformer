@@ -11,7 +11,7 @@ JAX codebase demonstrating an application of [ZeRO](https://arxiv.org/abs/1910.0
 
 # Configuration Setup
 
-## Models
+## Model Config
 
 Add your model config to ```conf/model_config.yaml```:
 
@@ -23,11 +23,10 @@ model_name:
   block_size: # maximum context length 
   dropout: 
   N: 
-  fused_residuals: # bool for fusing attn + mlp
   alibi_attn: # bool for using ALiBi attention 
 ```
 
-## Training 
+## Training Config
 Pretty much all other configuration is handled in ```conf/config.yaml```:
 
 ```yaml
