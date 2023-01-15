@@ -169,7 +169,6 @@ class TestGPT(unittest.TestCase):
     def tearDown(self) -> None:
         pass
 
-
     def test_gpt_create_standard(self):
 
         block = Transformer(
