@@ -113,9 +113,11 @@ def restore_opt_checkpoint(workdir: str) -> Tuple[Any, int]:
     mu_pytree = jax.tree_util.tree_map(
         lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["mu"]
     )
+
     nu_pytree = jax.tree_util.tree_map(
         lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["nu"]
     )
+
     count_pytree = jax.tree_util.tree_map(
         lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["count"]
     )
@@ -227,13 +229,6 @@ def main():
     num_host = num_devices // num_local_devices
     platform = jax.local_devices()[0].platform
 
-    if cfg.training.precision == "fp16":
-        model_dtype = jnp.float16
-    elif cfg.training.precision == "bf16":
-        model_dtype = jnp.bfloat16
-    else:
-        model_dtype = jnp.float32
-
     # setting up GCP bucket/client info if training on TPU
     save_to_bucket = False
     client = None
@@ -245,23 +240,21 @@ def main():
 
             client = storage.Client()
             save_to_bucket = True
-            bucket_path = cfg.data.bucket_path
             train_shards = open(cfg.data.index_path_train).read().splitlines()
             validation_shards = open(cfg.data.index_path_validation).read().splitlines()
 
     else:
-        train_shards = cfg.data.train_shard_urls
-        validation_shards = cfg.data.validation_shard_urls
+        raise NotImplementedError("Training not currently supported on GPU.")
 
     model, model_config = model_getter(
-        cfg.model.size, config_path=args.model_cfg, return_cfg=True, dtype=model_dtype
+        cfg.model.size, config_path=args.model_cfg, return_cfg=True, dtype=jnp.float32
     )
 
     learning_rate_fn = optax.warmup_cosine_decay_schedule(
         init_value=0,
         peak_value=cfg.training.peak_learning_rate,
         warmup_steps=cfg.training.warmup_steps,
-        decay_steps=cfg.training.decay_steps,
+        decay_steps=cfg.training.total_steps,
         end_value=cfg.training.end_learning_rate,
     )
 
@@ -282,7 +275,7 @@ def main():
     if cfg.model.warm_start and not args.resume:
         if jax.process_index() == 0:
             logger.debug(
-                f"Warm starting model training from tiled checkpoint {cfg.model.model_path}"
+                f"Warm starting model training from checkpoint {cfg.model.model_path}"
             )
 
         del params
@@ -295,33 +288,36 @@ def main():
 
     if args.resume:
         del params
+        del opt_state
 
         if save_to_bucket:
             opt_state, step = restore_opt_checkpoint(
                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/optimizer"
             )
+            opt_state = jax.device_get(opt_state)  # copy to CPU
+
             params = restore_param_checkpoint(
                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params"
             )
+            params = jax.device_get(params)  # copy to CPU
 
             resume_step = int(step)
 
         else:
             raise NotImplementedError(
-                "Checkpointing not currently implemented for GPU/CPU"
+                "Checkpointing not currently implemented for GPU."
             )
 
         if jax.process_index() == 0:
             logger.debug(f"Resuming training from step {resume_step}")
-            sample_params = params["params"]["TransformerBlock_0"]["MLPBlock_0"][
-                "fc_residual"
-            ]
-            logger.debug(
-                f"dtype of resumed weights {jax.tree_util.tree_map(lambda x: x.dtype, sample_params)}"
-            )
 
+    params = jax.device_get(params)  # copy params to VM CPU
+
+    opt_state = jax.device_get(opt_state)  # copy opt_state to VM CPU
     opt_state = partition_shard(
-        opt_state, jax.local_device_count(), jax.local_devices()
+        opt_state,
+        jax.local_device_count(),
+        jax.local_devices(),
     )
     opt_state = jax.pmap(lambda x: x, devices=jax.local_devices())(
         opt_state
@@ -330,9 +326,7 @@ def main():
     if jax.process_index() == 0:
         logger.debug(f"VM setup with {num_devices} devices.")
         logger.debug(f"Host setup with {num_local_devices} devices.")
-        logger.debug(
-            f"Using platform: {platform}. Model weights stored as {model_dtype}"
-        )
+        logger.debug(f"Using platform: {platform}.")
 
         logger.debug(
             f"Performing data parallel training. Model parameters are replicated across all devices. Optimizer state is sharded across {num_local_devices} devices"
@@ -356,9 +350,7 @@ def main():
                 for blob in blobs:
                     blob.delete()
 
-    local_batch_size = cfg.training.batch_size // (
-        jax.local_device_count() // cfg.device.mp_devices
-    )
+    local_batch_size = cfg.training.batch_size // (jax.local_device_count())
 
     total_tokens = num_host * (
         cfg.training.batch_size
@@ -448,7 +440,7 @@ def main():
 
     accum_steps = lambda x: cfg.training.gradient_accumulation_steps
 
-    params = flax.jax_utils.replicate(params)
+    params = flax.jax_utils.replicate(params, devices=jax.local_devices())
 
     rng = jax.random.fold_in(rng, resume_step)  # fold in resume step to create new rng
 
@@ -462,6 +454,12 @@ def main():
                 logger.debug(f"Training has completed.")
 
             return True
+
+        if i < int(cfg.data.resume_step):
+            # skip through some of the dataset. Helpful since we've glued 2 datasets together
+            # doesn't have to be super precise since we go for multiple epochs and reshuffle dataset
+            # each resumed run.
+            continue
 
         rng, dropout_rng = jax.random.split(rng, 2)
 
@@ -482,8 +480,6 @@ def main():
         text = shard(text)
 
         rng_sharded = shard_prng_key(dropout_rng)
-
-        t0 = time.time()
 
         grads, metrics = train_step(
             params, text, rng_sharded, gradient_accumulation_steps, model
@@ -506,8 +502,6 @@ def main():
         del grads  # manually free grad mem
 
         params = deshard(params)  # reshape params
-
-        metrics["Train Batch Time"] = time.time() - t0
         metrics["Train Sequence Length"] = seq_len
         metrics["Learning Rate"] = learning_rate_fn(resume_step + new_steps)
 
@@ -557,7 +551,6 @@ def main():
 
             if jax.process_index() == 0:
                 train_metrics_np.update(validation_metrics_np)
-                train_metrics_np.pop("Train Batch Time")
                 wandb.log(train_metrics_np)
 
                 if save_to_bucket:
@@ -579,10 +572,6 @@ def main():
 
         else:
             if jax.process_index() == 0:
-                train_metrics_np["Train Step Time"] = train_metrics_np[
-                    "Train Batch Time"
-                ]
-                train_metrics_np.pop("Train Batch Time")
                 wandb.log(train_metrics_np)
 
 
@@ -658,6 +647,7 @@ def train_step(
 
 @partial(jax.pmap, axis_name="shard", devices=jax.local_devices())
 def slice_grads(grads, device_index):
+    """pmappable way to access a 'slice' of grads by device index"""
     grad_slice = jax.tree_util.tree_map(lambda x: x[device_index, ...], grads)
     return grad_slice
 

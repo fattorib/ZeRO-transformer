@@ -1,10 +1,8 @@
 """ 
 Replication of GPT2 transformers in Flax
 """
-from functools import partial
 from typing import Any, Tuple, Union
 
-import flax
 import flax.linen as nn
 import jax
 import jax.nn.initializers as initializers
@@ -24,59 +22,32 @@ class TransformerBlock(nn.Module):
     residual_dropout: float = 0.0
     N: int = None
     dtype: Any = jnp.float32
-    fused_residuals: bool = False
-    alibi_attn: bool = False
-    qk_norm: bool = False
+    alibi_attn: bool = True
 
     @nn.compact
     def __call__(
         self,
         x: jnp.array,
         train: bool = False,
-        use_cache: bool = False,
-        layer_past: Tuple[jnp.array, jnp.array] = None,
     ) -> jnp.array:
 
-        if self.fused_residuals:
-            norm = nn.LayerNorm(dtype=self.dtype)
-            attn_out = CausalAttention(
-                self.embedding_dim,
-                self.num_head,
-                self.block_size,
-                self.residual_dropout,
-                self.N,
-                self.alibi_attn,
-                self.dtype,
-            )(norm(x), train)
-            return (
-                x
-                + attn_out
-                + MLPBlock(
-                    self.embedding_dim,
-                    dropout=self.residual_dropout,
-                    N=self.N,
-                    dtype=self.dtype,
-                )(norm(x), train)
-            )
-
-        else:
-            attn_out = CausalAttention(
-                self.embedding_dim,
-                self.num_head,
-                self.block_size,
-                self.residual_dropout,
-                self.N,
-                self.alibi_attn,
-                self.dtype,
-            )(nn.LayerNorm(dtype=self.dtype)(x), train)
-            x = x + attn_out
-            x = x + MLPBlock(
-                self.embedding_dim,
-                dropout=self.residual_dropout,
-                N=self.N,
-                dtype=self.dtype,
-            )(nn.LayerNorm(dtype=self.dtype)(x), train)
-            return x
+        attn_out = CausalAttention(
+            self.embedding_dim,
+            self.num_head,
+            self.block_size,
+            self.residual_dropout,
+            self.N,
+            self.alibi_attn,
+            self.dtype,
+        )(nn.LayerNorm(dtype=self.dtype)(x), train)
+        x = x + attn_out
+        x = x + MLPBlock(
+            self.embedding_dim,
+            dropout=self.residual_dropout,
+            N=self.N,
+            dtype=self.dtype,
+        )(nn.LayerNorm(dtype=self.dtype)(x), train)
+        return x
 
 
 class Transformer(nn.Module):
@@ -91,68 +62,7 @@ class Transformer(nn.Module):
     dropout: float = 0.0
     N: int = None
     dtype: Any = jnp.float32
-    fused_residuals: bool = False
     alibi_attn: bool = False
-
-    def generate(
-        self,
-        variables: flax.core.frozen_dict.FrozenDict,
-        context: jnp.array,
-        max_length: int = 30,
-        temperature: float = 1.0,
-        sample: bool = False,
-        sample_rng: jax.random.PRNGKey = None,
-    ) -> jnp.array:
-        """Performs basic text generation. Supports temperature-based sampling
-
-        Args:
-            context (list): tokenized text to continue
-            max_length (int): The maximum length of tokens to generate (sum of context tokens + *generated tokens*)
-            sample (bool): Boolean whether to sample from logits distribution
-            model (flax.linen.Module): Flax module structure
-            variables (flax.core.frozen_dict.FrozenDict): Serialized model variables
-            sample_rng (jax.random.PRNGKey): RNG key used if sampling from distribution
-
-        Returns:
-            jnp.array: Generated text, must be detokenized
-        """
-
-        context = jnp.array(context, dtype=jnp.int32)
-
-        x = context.reshape(1, -1)
-
-        num_generation_steps = max_length - x.shape[1]
-
-        if x.shape[1] > self.block_size:
-            x_cond = x[:, -self.block_size :]
-        else:
-            x_cond = x
-
-        layer_past = None
-        for _ in range(num_generation_steps):
-
-            if sample_rng is not None:
-                sample_rng, rng = jax.random.split(sample_rng, 2)
-            logits, layer_past = self.apply(
-                variables, x_cond, use_cache=True, past_states=layer_past
-            )
-            logits = logits[:, -1, :] / temperature
-
-            probs = jax.nn.softmax(logits, axis=-1)
-
-            if not sample:
-                x_cond = jnp.array(jnp.argmax(probs), dtype=jnp.int32).reshape(1, -1)
-                x = jnp.concatenate((x, x_cond), axis=1)
-
-            else:
-                assert (
-                    sample_rng is not None
-                ), "Must provide rng key when sampling from logit distribution"
-                sample = jax.random.categorical(rng, logits=logits)
-                x_cond = jnp.array(sample, dtype=jnp.int32).reshape(1, -1)
-                x = jnp.concatenate((x, x_cond), axis=1)
-
-        return jnp.squeeze(x)
 
     @nn.compact
     def __call__(
@@ -185,7 +95,6 @@ class Transformer(nn.Module):
             out += wpe
 
         for i in range(self.N):
-
             out = TransformerBlock(
                 self.embedding_dim,
                 self.num_head,
@@ -193,7 +102,6 @@ class Transformer(nn.Module):
                 self.dropout,
                 self.N,
                 self.dtype,
-                self.fused_residuals,
                 self.alibi_attn,
             )(out, train)
 

@@ -507,6 +507,32 @@ def create_GPT2_test(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
     return model
 
 
+def create_GPT2_bytelevel(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
+    """
+    TODO: Fill this in
+    """
+    model = GPT2(
+        num_ctx=num_ctx,
+        embedding_dim=1024,
+        N=10,
+        vocab_size=257,
+        num_head=16,
+        fused_residuals=False,
+        use_alibi=True,
+        **kwargs,
+    )
+
+    if model_checkpoint is not None:
+        state_dict = torch.load(
+            model_checkpoint,
+            map_location="cpu",
+        )
+
+        model.load_state_dict(state_dict)
+
+    return model
+
+
 def create_GPT2_flax(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
     """
     TODO: Fill this in
@@ -585,6 +611,32 @@ def create_GPT2_flax_xlarge(vocab_size, num_ctx, model_checkpoint=None, **kwargs
     return model
 
 
+def create_GPT2_flax_xxlarge(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
+    """
+    TODO: Fill this in
+    """
+    model = GPT2(
+        num_ctx=num_ctx,
+        embedding_dim=1536,
+        N=36,
+        vocab_size=vocab_size,
+        num_head=12,
+        fused_residuals=False,
+        use_alibi=True,
+        **kwargs,
+    )
+
+    if model_checkpoint is not None:
+        state_dict = torch.load(
+            model_checkpoint,
+            map_location="cpu",
+        )
+
+        model.load_state_dict(state_dict)
+
+    return model
+
+
 def model_getter(model_name, vocab_size, num_ctx, model_checkpoint=None, **kwargs):
     assert vocab_size > 0, "Vocab size must be positive"
     assert num_ctx > 0, "Model context must be positive"
@@ -594,6 +646,8 @@ def model_getter(model_name, vocab_size, num_ctx, model_checkpoint=None, **kwarg
         "flax-distill": create_GPT2_flax,
         "flax-large": create_GPT2_flax_large,
         "flax-xlarge": create_GPT2_flax_xlarge,
+        "flax-xxlarge": create_GPT2_flax_xxlarge,
+        "flax-bytelevel": create_GPT2_bytelevel,
     }
 
     assert (

@@ -34,15 +34,16 @@ class TestMLP(unittest.TestCase):
             train=True,
             rngs={"dropout": self.rng},
         )
-        self.assertEqual(out.shape, batch_cts.shape)
 
-        out = mlp.apply(
+        out_nodrop = mlp.apply(
             {"params": params["params"]},
             batch_cts,
             train=False,
             rngs={"dropout": self.rng},
         )
-        self.assertEqual(out.shape, batch_cts.shape)
+        self.assertEqual(
+            (out.shape, out_nodrop.shape), (batch_cts.shape, batch_cts.shape)
+        )
 
 
 class TestAttn(unittest.TestCase):
@@ -74,15 +75,16 @@ class TestAttn(unittest.TestCase):
             train=True,
             rngs={"dropout": self.rng},
         )
-        self.assertEqual(out.shape, batch_cts.shape)
 
-        out = attn.apply(
+        out_nodrop = attn.apply(
             {"params": params["params"]},
             batch_cts,
             train=False,
             rngs={"dropout": self.rng},
         )
-        self.assertEqual(out.shape, batch_cts.shape)
+        self.assertEqual(
+            (out.shape, out_nodrop.shape), (batch_cts.shape, batch_cts.shape)
+        )
 
     def test_attn_fwd_ALiBi(self):
         attn = CausalAttention(
@@ -102,15 +104,16 @@ class TestAttn(unittest.TestCase):
             train=True,
             rngs={"dropout": self.rng},
         )
-        self.assertEqual(out.shape, batch_cts.shape)
 
-        out = attn.apply(
+        out_nodrop = attn.apply(
             {"params": params["params"]},
             batch_cts,
             train=False,
             rngs={"dropout": self.rng},
         )
-        self.assertEqual(out.shape, batch_cts.shape)
+        self.assertEqual(
+            (out.shape, out_nodrop.shape), (batch_cts.shape, batch_cts.shape)
+        )
 
 
 class TestTransformerBlock(unittest.TestCase):
@@ -121,63 +124,6 @@ class TestTransformerBlock(unittest.TestCase):
     def tearDown(self) -> None:
         pass
 
-    def test_block_create_fused(self):
-
-        block = TransformerBlock(
-            embedding_dim=128,
-            num_head=8,
-            block_size=512,
-            residual_dropout=0.1,
-            N=6,
-            dtype=None,
-            fused_residuals=True,
-        )
-        batch_cts = random.normal(self.rng, shape=(1, 512, 128))
-        params = block.init(self.init_rng, batch_cts, False)
-
-    def test_block_fwd_fused(self):
-
-        block = TransformerBlock(
-            embedding_dim=128,
-            num_head=8,
-            block_size=512,
-            residual_dropout=0.1,
-            N=6,
-            dtype=None,
-            fused_residuals=True,
-        )
-        batch_cts = random.normal(self.rng, shape=(1, 512, 128))
-        params = block.init(self.init_rng, batch_cts, False)
-
-        out = block.apply(
-            {"params": params["params"]},
-            batch_cts,
-            train=True,
-            rngs={"dropout": self.rng},
-        )
-        self.assertEqual(out.shape, batch_cts.shape)
-
-        block = TransformerBlock(
-            embedding_dim=128,
-            num_head=8,
-            block_size=512,
-            residual_dropout=0.1,
-            N=6,
-            dtype=None,
-            fused_residuals=True,
-            alibi_attn=True,
-        )
-        batch_cts = random.normal(self.rng, shape=(1, 512, 128))
-        params = block.init(self.init_rng, batch_cts, False)
-
-        out = block.apply(
-            {"params": params["params"]},
-            batch_cts,
-            train=True,
-            rngs={"dropout": self.rng},
-        )
-        self.assertEqual(out.shape, batch_cts.shape)
-
     def test_block_create_standard(self):
 
         block = TransformerBlock(
@@ -187,7 +133,6 @@ class TestTransformerBlock(unittest.TestCase):
             residual_dropout=0.1,
             N=6,
             dtype=None,
-            fused_residuals=False,
         )
         batch_cts = random.normal(self.rng, shape=(1, 512, 128))
         params = block.init(self.init_rng, batch_cts, False)
@@ -201,27 +146,6 @@ class TestTransformerBlock(unittest.TestCase):
             residual_dropout=0.1,
             N=6,
             dtype=None,
-            fused_residuals=False,
-        )
-        batch_cts = random.normal(self.rng, shape=(1, 512, 128))
-        params = block.init(self.init_rng, batch_cts, False)
-
-        out = block.apply(
-            {"params": params["params"]},
-            batch_cts,
-            train=True,
-            rngs={"dropout": self.rng},
-        )
-        self.assertEqual(out.shape, batch_cts.shape)
-
-        block = TransformerBlock(
-            embedding_dim=128,
-            num_head=8,
-            block_size=512,
-            residual_dropout=0.1,
-            N=6,
-            dtype=None,
-            fused_residuals=False,
             alibi_attn=True,
         )
         batch_cts = random.normal(self.rng, shape=(1, 512, 128))
@@ -245,66 +169,6 @@ class TestGPT(unittest.TestCase):
     def tearDown(self) -> None:
         pass
 
-    def test_gpt_create_fused(self):
-
-        block = Transformer(
-            embedding_dim=128,
-            vocab_size=256,
-            num_head=8,
-            block_size=512,
-            dropout=0.1,
-            N=6,
-            dtype=None,
-            fused_residuals=True,
-        )
-        batch_tok = random.randint(self.rng, shape=(1, 512), maxval=256, minval=0)
-        params = block.init(self.init_rng, batch_tok, None, False)
-
-    def test_gpt_fwd_fused(self):
-
-        block = Transformer(
-            embedding_dim=128,
-            vocab_size=self.vocab_size,
-            num_head=8,
-            block_size=512,
-            dropout=0.1,
-            N=6,
-            dtype=None,
-            fused_residuals=True,
-        )
-        batch_tok = random.randint(self.rng, shape=(1, 512), maxval=256, minval=0)
-        params = block.init(self.init_rng, batch_tok, None, False)
-
-        out = block.apply(
-            {"params": params["params"]},
-            batch_tok,
-            train=True,
-            rngs={"dropout": self.rng},
-        )
-        self.assertEqual((1, self.block_size, self.vocab_size), out.shape)
-
-        block = Transformer(
-            embedding_dim=128,
-            vocab_size=self.vocab_size,
-            num_head=8,
-            block_size=512,
-            dropout=0.1,
-            N=6,
-            dtype=None,
-            fused_residuals=True,
-            alibi_attn=True,
-        )
-        batch_tok = random.randint(self.rng, shape=(1, 512), maxval=256, minval=0)
-        params = block.init(self.init_rng, batch_tok, None, False)
-
-        out = block.apply(
-            {"params": params["params"]},
-            batch_tok,
-            train=True,
-            rngs={"dropout": self.rng},
-        )
-        self.assertEqual((1, self.block_size, self.vocab_size), out.shape)
-
     def test_gpt_create_standard(self):
 
         block = Transformer(
@@ -315,7 +179,6 @@ class TestGPT(unittest.TestCase):
             dropout=0.1,
             N=6,
             dtype=None,
-            fused_residuals=False,
         )
         batch_tok = random.randint(self.rng, shape=(1, 512), maxval=256, minval=0)
         params = block.init(self.init_rng, batch_tok, None, False)
@@ -330,28 +193,6 @@ class TestGPT(unittest.TestCase):
             dropout=0.1,
             N=6,
             dtype=None,
-            fused_residuals=False,
-        )
-        batch_tok = random.randint(self.rng, shape=(1, 512), maxval=256, minval=0)
-        params = block.init(self.init_rng, batch_tok, None, False)
-
-        out = block.apply(
-            {"params": params["params"]},
-            batch_tok,
-            train=True,
-            rngs={"dropout": self.rng},
-        )
-        self.assertEqual((1, self.block_size, self.vocab_size), out.shape)
-
-        block = Transformer(
-            embedding_dim=128,
-            vocab_size=self.vocab_size,
-            num_head=8,
-            block_size=512,
-            dropout=0.1,
-            N=6,
-            dtype=None,
-            fused_residuals=False,
             alibi_attn=True,
         )
         batch_tok = random.randint(self.rng, shape=(1, 512), maxval=256, minval=0)
@@ -375,28 +216,6 @@ class TestGPT(unittest.TestCase):
             dropout=0.1,
             N=6,
             dtype=jnp.float16,
-            fused_residuals=False,
-        )
-        batch_tok = random.randint(self.rng, shape=(1, 512), maxval=256, minval=0)
-        params = block.init(self.init_rng, batch_tok, None, False)
-
-        out = block.apply(
-            {"params": params["params"]},
-            batch_tok,
-            train=True,
-            rngs={"dropout": self.rng},
-        )
-        self.assertEqual((1, self.block_size, self.vocab_size), out.shape)
-
-        block = Transformer(
-            embedding_dim=128,
-            vocab_size=self.vocab_size,
-            num_head=8,
-            block_size=512,
-            dropout=0.1,
-            N=6,
-            dtype=jnp.float16,
-            fused_residuals=False,
             alibi_attn=True,
         )
         batch_tok = random.randint(self.rng, shape=(1, 512), maxval=256, minval=0)
@@ -420,7 +239,7 @@ class TestGPT(unittest.TestCase):
             dropout=0.1,
             N=6,
             dtype=None,
-            fused_residuals=False,
+            alibi_attn=True,
         )
         batch_tok = random.randint(self.rng, shape=(1, 512), maxval=256, minval=0)
         params = block.init(self.init_rng, batch_tok, None, False)

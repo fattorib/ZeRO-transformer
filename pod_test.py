@@ -1,3 +1,10 @@
+""" 
+Helpful script to run to see if JAX has lost connection to TPU cores. 
+
+I've only noticed this happen in multi-host settings and it can usually resolved
+by killing the still-running Python process on each of the hosts ('sudo pkill python3')
+"""
+
 import jax
 
 # The total number of TPU cores in the Pod
