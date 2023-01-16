@@ -66,7 +66,7 @@ TODO HERE
 ```bash 
 python main_zero.py
 ```
-If resuming a run, pass the ``--resume``` flag to your script. 
+If resuming a run, pass the ```--resume``` flag to your script. 
 
 ## Trained Models
 
