@@ -1,4 +1,4 @@
-# Transformer - JAX
+# ZeRO Optimizer Sharding with jax.pmap
 
 JAX codebase demonstrating an application of [ZeRO](https://arxiv.org/abs/1910.02054)-style optimizer sharding using only ```jax.pmap```. This codebase was used to train a 1.1B parameter transformer model on a TPU v3-32, something that would not be possible with standard data parallel training. 
 
