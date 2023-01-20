@@ -27,7 +27,7 @@ from time import time
 if __name__ == '__main__':
 
     # CONSTANTS
-    GRAD_ACCUM_STEPS = 4
+    GRAD_ACCUM_STEPS = 32
     BATCH_SIZE = 512
     CTX_LEN = 512
     NUM_PASSES = 20
