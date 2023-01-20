@@ -45,7 +45,7 @@ def train_step(
 
     def loss_and_grad(grad_idx):
         minibatch = get_minibatch(batch, grad_idx) if grad_idx is not None else batch
-
+        minibatch = with_sharding_constraint(minibatch, PartitionSpec("dp"))
         loss, grads = grad_fn(params, minibatch)
 
         return loss, grads
