@@ -47,7 +47,7 @@ def train_step(
         minibatch = get_minibatch(batch, grad_idx) if grad_idx is not None else batch
         minibatch = with_sharding_constraint(minibatch, PartitionSpec("dp"))
         loss, grads = grad_fn(params, minibatch)
-
+        grads = with_sharding_constraint(grads,PartitionSpec("dp"))
         return loss, grads
 
     init_minibatch = (0.0, jax.tree_util.tree_map(jnp.zeros_like, params))
