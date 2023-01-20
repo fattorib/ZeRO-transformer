@@ -113,7 +113,7 @@ if __name__ == '__main__':
 
         times = []
 
-        for i in tqdm(range(N_ITER)):
+        for i in tqdm(range(NUM_PASSES)):
 
             t0 = time()
             grads, metrics = train_step_pjit(params, batch, dropout_rng,GRAD_ACCUM_STEPS, model)
