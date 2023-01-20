@@ -27,7 +27,7 @@ from time import time
 if __name__ == '__main__':
 
     # CONSTANTS
-    GRAD_ACCUM_STEPS = 32
+    GRAD_ACCUM_STEPS = 4
     BATCH_SIZE = 512
     CTX_LEN = 512
     NUM_PASSES = 20
@@ -111,19 +111,23 @@ if __name__ == '__main__':
         grads, metrics = train_step_pjit(params, batch, dropout_rng,GRAD_ACCUM_STEPS, model)
         params, opt_state = update_opt_state_pjit(grads, opt_state, params, tx)
 
-        times = []
-
+        times_grads = []
+        times_update_opt = []
         for i in tqdm(range(NUM_PASSES)):
 
             t0 = time()
             grads, metrics = train_step_pjit(params, batch, dropout_rng,GRAD_ACCUM_STEPS, model)
+            times_grads.append(time() - t0)
+            
+            t0 = time()
             params, opt_state = update_opt_state_pjit(grads, opt_state, params, tx)
-            times.append(time() - t0)
+            times_update_opt.append(time() - t0)
 
         print(
             f"ZeRO Step - Global BS {BATCH_SIZE} - accum steps {GRAD_ACCUM_STEPS} - Num Executions {NUM_PASSES}"
         )
         print(f"Mesh Layout (dp): (8)")
         print(f"Model Size: {MODEL_SIZE}")
-        print(f"Mean Batch Time {np.mean(times):.4f} Seconds")
+        print(f"Mean Grad Time {np.mean(times_grads):.4f} Seconds")
+        print(f"Mean Opt Time {np.mean(times_update_opt):.4f} Seconds")
         print()
