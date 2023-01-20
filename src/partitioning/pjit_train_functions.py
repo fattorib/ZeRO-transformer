@@ -75,7 +75,7 @@ def train_step(
         "Train LM Loss": loss,
         "Train LM PPL": jnp.exp(loss),
     }
-    grads = with_sharding_constraint(grads, grad_param_spec) 
+    # grads = with_sharding_constraint(grads, grad_param_spec) 
 
     return grads, metrics
 
