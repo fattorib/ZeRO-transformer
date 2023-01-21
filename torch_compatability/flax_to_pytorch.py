@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from flax.serialization import msgpack_restore
 
-from torch_compatability.GPT2 import model_getter
+from GPT2 import model_getter
 
 
 def create_transformer_block_mapping(block_idx: int):
@@ -25,6 +25,8 @@ def create_transformer_block_mapping(block_idx: int):
         "MLPBlock_0.fc_in.bias": f"blocks.{block_idx}.mlp.fc1.bias",
         "MLPBlock_0.fc_residual.kernel": f"blocks.{block_idx}.mlp.fc_resid.weight",
         "MLPBlock_0.fc_residual.bias": f"blocks.{block_idx}.mlp.fc_resid.bias",
+        "MLPBlock_0.LayerNorm_0.scale": f"blocks.{block_idx}.mlp.solu_ln.weight",
+        "MLPBlock_0.LayerNorm_0.bias": f"blocks.{block_idx}.mlp.solu_ln.bias",
         "LayerNorm_0.scale": f"blocks.{block_idx}.ln1.weight",
         "LayerNorm_0.bias": f"blocks.{block_idx}.ln1.bias",
         "LayerNorm_1.scale": f"blocks.{block_idx}.ln2.weight",

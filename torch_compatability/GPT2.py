@@ -43,6 +43,11 @@ def _embedding_init(m):
     if isinstance(m, nn.Linear) and m.bias is None:
         m.weight.data.normal_(mean=0.0, std=0.02)
 
+class SolU(nn.Module):
+
+    def forward(self,x):
+
+        return x*F.softmax(x,dim = -1)
 
 class MLPBlock(nn.Module):
     def __init__(self, dim1: int, dim2: int, p: float, num_layers: int) -> None:
@@ -65,7 +70,9 @@ class MLPBlock(nn.Module):
         self.fc1 = nn.Linear(self.dim1, self.dim2)
         self.fc_resid = nn.Linear(self.dim2, self.dim1)
         self.dropout = nn.Dropout(p=self.p)
-        self.solu_ln = nn.LayerNorm()
+        self.solu_ln = nn.LayerNorm(self.dim2)
+        
+        self.solu = SolU()
 
         init_function_partial = partial(
             _weights_init, **{"num_layers": self.num_layers}
@@ -75,7 +82,8 @@ class MLPBlock(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.fc1(x)
-        x = self.solu_ln(x*F.softmax(x,dim = -1))
+        x = self.solu(x)
+        x = self.solu_ln(x)
         x = self.fc_resid(x)
         return self.dropout(x)
 
@@ -533,6 +541,31 @@ def create_GPT2_bytelevel(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
 
     return model
 
+def create_GPT2_1l(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
+    """
+    TODO: Fill this in
+    """
+    model = GPT2(
+        num_ctx=num_ctx,
+        embedding_dim=512,
+        N=1,
+        vocab_size=257,
+        num_head=8,
+        fused_residuals=False,
+        use_alibi=True,
+        **kwargs,
+    )
+
+    if model_checkpoint is not None:
+        state_dict = torch.load(
+            model_checkpoint,
+            map_location="cpu",
+        )
+
+        model.load_state_dict(state_dict)
+
+    return model
+
 
 def create_GPT2_flax(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
     """
@@ -649,6 +682,7 @@ def model_getter(model_name, vocab_size, num_ctx, model_checkpoint=None, **kwarg
         "flax-xlarge": create_GPT2_flax_xlarge,
         "flax-xxlarge": create_GPT2_flax_xxlarge,
         "flax-bytelevel": create_GPT2_bytelevel,
+        "flax-solu1l": create_GPT2_1l,
     }
 
     assert (
