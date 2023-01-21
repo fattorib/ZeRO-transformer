@@ -65,6 +65,7 @@ class MLPBlock(nn.Module):
         self.fc1 = nn.Linear(self.dim1, self.dim2)
         self.fc_resid = nn.Linear(self.dim2, self.dim1)
         self.dropout = nn.Dropout(p=self.p)
+        self.solu_ln = nn.LayerNorm()
 
         init_function_partial = partial(
             _weights_init, **{"num_layers": self.num_layers}
@@ -74,7 +75,7 @@ class MLPBlock(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.fc1(x)
-        x = self.gelu(x)
+        x = self.solu_ln(x*F.softmax(x,dim = -1))
         x = self.fc_resid(x)
         return self.dropout(x)
 

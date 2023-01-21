@@ -50,7 +50,7 @@ class MLPBlock(nn.Module):
     dimension_multiplier: int = 4
     dropout: float = 0.0
     N: int = None
-
+    
     dtype: Any = jnp.float32
 
     @nn.compact
@@ -63,7 +63,7 @@ class MLPBlock(nn.Module):
             bias_init=initializers.zeros,
             dtype=self.dtype,
         )(x)
-        x = nn.gelu(x)
+        x = nn.LayerNorm(dtype=self.dtype)(solu(x))
         out = nn.Dense(
             features=self.embedding_dim,
             name="fc_residual",
