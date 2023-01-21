@@ -1,3 +1,5 @@
+**Note**: This is an experimental branch experimenting with tiny models for token examination as done in Neel Nanda's [Neuroscope](https://neuroscope.io/)
+
 # ZeRO Optimizer Sharding with jax.pmap
 
 JAX codebase demonstrating an application of [ZeRO](https://arxiv.org/abs/1910.02054)-style optimizer sharding using only ```jax.pmap```. This codebase was used to train a 1.1B parameter transformer model on a TPU v3-32, something that would not be possible with standard data parallel training. 
@@ -5,6 +7,7 @@ JAX codebase demonstrating an application of [ZeRO](https://arxiv.org/abs/1910.0
 # Todos: 
 - [ ] Finish readme install instructions, etc 
 - [ ] Write up how everything works 
+- [ ] Gradio apps + setup
 
 # Configuration Setup
 
