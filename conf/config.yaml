@@ -10,20 +10,17 @@ training:
   evaluation_frequency: 1000
   maximum_evaluation_steps: 500
   staged_warmup_steps: 1000001
-  warmup_train_context: 4096
+  warmup_train_context: 2048
 
 model:
-  size: "bytelevelbase"
-  warm_start: False
-  model_path: "warmstart_params/warmstart_params_XXL.msgpack"
+  size: "solu-1l"
 
 data:
   corpus: "openwebtext"
   max_context: 4096
   train_samples: 14809244
   checkpoint_directory: "checkpoints"
-  bucket_path: "bfattoriwebtext2"
-  index_path_train: "data/index/openwebtext2_train.index"
-  index_path_validation: "data/index/openwebtext2_validation.index"
+  shard_path_train: "data/index/openwebtext2_train.index"
+  shard_path_validation: "data/index/openwebtext2_validation.index"
   wandb_project: "jax-transformer"
   resume_step: 2000

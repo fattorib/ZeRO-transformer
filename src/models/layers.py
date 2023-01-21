@@ -9,10 +9,6 @@ import jax.numpy as jnp
 from flax.linen import partitioning as nn_partitioning
 
 
-def shard_noop(x, spec):
-    return nn_partitioning.with_sharding_constraint(x, spec)
-
-
 def get_slopes(n: int) -> List:
     def get_slopes_power_of_2(n):
         start = 2 ** (-(2 ** -(math.log2(n) - 3)))
@@ -42,6 +38,9 @@ def create_mask(seq_len_k, slopes):
 
     return alibi_mask
 
+
+def solu(x: jnp.array) -> jnp.array:
+    return x*jax.nn.softmax(x, axis = -1)
 
 class MLPBlock(nn.Module):
     """Standard MLP Block"""
