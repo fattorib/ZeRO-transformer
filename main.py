@@ -22,6 +22,7 @@ from src.models.GPT import model_getter
 from src.training.training_utils import compute_tokens_seen, initialized
 from src.utils.configs import flatten_dict
 from src.utils.dataloader import numpy_collate
+from functools import partial
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -166,8 +167,8 @@ def main():
     num_host = num_devices // num_local_devices
     platform = jax.local_devices()[0].platform
 
-    train_shards = cfg.data.shard_path_train
-    validation_shards = cfg.data.shard_path_validation
+    train_shards = open(cfg.data.shard_path_train).read().splitlines()
+    validation_shards = open(cfg.data.shard_path_validation).read().splitlines()
 
     model, model_config = model_getter(
         cfg.model.size, config_path=args.model_cfg, return_cfg=True, dtype=jnp.float32
@@ -311,6 +312,8 @@ def main():
 
     params = flax.jax_utils.replicate(params, devices=jax.local_devices())
 
+    opt_state = flax.jax_utils.replicate(opt_state, devices=jax.local_devices())
+
     rng = jax.random.fold_in(rng, resume_step)  # fold in resume step to create new rng
 
     # quick way to track global step count when resuming a run
@@ -429,7 +432,7 @@ def main():
             if jax.process_index() == 0:
                 wandb.log(train_metrics_np)
 
-
+@partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=(3, 4))
 def train_step(
     params: Any,
     batch: jnp.array,
@@ -488,6 +491,9 @@ def train_step(
 
     loss, grads = jax.tree_util.tree_map(lambda x: x / accum_steps, (loss, grads))
 
+    loss = jax.lax.pmean(loss, axis_name="batch")
+    grads = jax.lax.pmean(grads, axis_name="batch")
+
     metrics = {
         "Train LM Loss": loss,
         "Train LM PPL": jnp.exp(loss),
@@ -495,7 +501,12 @@ def train_step(
 
     return grads, metrics
 
-
+@partial(
+    jax.pmap,
+    axis_name="batch",
+    devices=jax.local_devices(),
+    static_broadcasted_argnums=(3,),
+)
 def update_state(
     grads: Any,
     optimizer_state: Any,
@@ -512,13 +523,15 @@ def update_state(
 
     return new_params, new_opt_state
 
-
+@partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=(1,))
 def eval_step(params: Any, model: Any, batch: jnp.array):
     """Evaluate on a single batch"""
 
     _, loss = model.apply(
         {"params": params["params"]}, x=batch, labels=batch, train=False
     )
+
+    loss = jax.lax.pmean(loss, axis_name="batch")
 
     metrics = {"Validation LM Loss": loss, "Validation LM PPL": jnp.exp(loss)}
 
