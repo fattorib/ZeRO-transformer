@@ -40,7 +40,8 @@ def create_mask(seq_len_k, slopes):
 
 
 def solu(x: jnp.array) -> jnp.array:
-    return x*jax.nn.softmax(x, axis = -1)
+    return x * jax.nn.softmax(x, axis=-1)
+
 
 class MLPBlock(nn.Module):
     """Standard MLP Block"""

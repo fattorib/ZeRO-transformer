@@ -88,8 +88,6 @@ def _get_partition_rules_zero():
     ]
 
 
-
-
 def set_partitions_zero(in_dict):
     """
     Takes a FrozenDict and returns the associated PartitionSpec rule

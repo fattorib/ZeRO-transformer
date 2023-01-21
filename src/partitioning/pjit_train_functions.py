@@ -4,13 +4,13 @@ Move these to a separate function temporarily
 
 
 from typing import Any
-from jax.experimental.pjit import with_sharding_constraint
-from jax.experimental import PartitionSpec
-
 
 import jax
 import jax.numpy as jnp
 import optax
+from jax.experimental import PartitionSpec
+from jax.experimental.pjit import with_sharding_constraint
+
 
 def train_step(
     params: Any,
@@ -18,7 +18,7 @@ def train_step(
     rng_key: jax.random.PRNGKey = None,
     accum_steps: int = 8,
     model: Any = None,
-    grad_param_spec: Any = None
+    grad_param_spec: Any = None,
 ):
     """
     Computes loss/grads for a single batch of data, pmeans across all devices/hosts to sync grads
@@ -47,7 +47,7 @@ def train_step(
         minibatch = get_minibatch(batch, grad_idx) if grad_idx is not None else batch
         minibatch = with_sharding_constraint(minibatch, PartitionSpec("dp"))
         loss, grads = grad_fn(params, minibatch)
-        grads = with_sharding_constraint(grads,PartitionSpec("dp"))
+        grads = with_sharding_constraint(grads, PartitionSpec("dp"))
         return loss, grads
 
     init_minibatch = (0.0, jax.tree_util.tree_map(jnp.zeros_like, params))
@@ -75,7 +75,7 @@ def train_step(
         "Train LM Loss": loss,
         "Train LM PPL": jnp.exp(loss),
     }
-    # grads = with_sharding_constraint(grads, grad_param_spec) 
+    # grads = with_sharding_constraint(grads, grad_param_spec)
 
     return grads, metrics
 
@@ -85,15 +85,14 @@ def update_opt_state(
     optimizer_state: Any,
     params: Any,
     optimizer: Any,
-    grad_param_spec: Any, 
-    opt_state_spec: Any, 
-
+    grad_param_spec: Any,
+    opt_state_spec: Any,
 ):
     """
     Updates the sharded optimizer state
     """
     optimizer_state = with_sharding_constraint(optimizer_state, opt_state_spec)
-    grads = with_sharding_constraint(grads, grad_param_spec) 
+    grads = with_sharding_constraint(grads, grad_param_spec)
 
     updates, new_opt_state = optimizer.update(grads, optimizer_state, params)
 
