@@ -1,8 +1,6 @@
 import argparse
 import logging
 import random as pyrandom
-import time
-from functools import partial
 from typing import Any, Callable, Tuple, Union
 
 import flax
@@ -13,7 +11,6 @@ import numpy as np
 import optax
 import torch
 import webdataset as wds
-from flax.serialization import msgpack_restore
 from flax.training import checkpoints, train_state
 from flax.training.common_utils import shard, shard_prng_key
 from omegaconf import OmegaConf
@@ -124,7 +121,6 @@ def restore_opt_checkpoint(workdir: str) -> Tuple[Any, int]:
     return restored_state, opt_state_restored["step"]
 
 
-
 def create_train_state(
     rng: jax.random.PRNGKey,
     learning_rate_fn: Union[float, Callable],
@@ -199,19 +195,14 @@ def main():
     params = state.params
     del state
 
-    
     if args.resume:
         del params
         del opt_state
 
-        opt_state, step = restore_opt_checkpoint(
-            workdir=f"checkpoints/solu/optimizer"
-        )
+        opt_state, step = restore_opt_checkpoint(workdir=f"checkpoints/solu/optimizer")
         opt_state = jax.device_get(opt_state)  # copy to CPU
 
-        params = restore_param_checkpoint(
-            workdir=f"checkpoints/solu/params"
-        )
+        params = restore_param_checkpoint(workdir=f"checkpoints/solu/params")
         params = jax.device_get(params)  # copy to CPU
 
         resume_step = int(step)
@@ -222,7 +213,7 @@ def main():
     params = jax.device_get(params)  # copy params to CPU
 
     opt_state = jax.device_get(opt_state)  # copy opt_state to CPU
-    
+
     opt_state = jax.pmap(lambda x: x, devices=jax.local_devices())(
         opt_state
     )  # shard opt state to free up memory
@@ -231,7 +222,6 @@ def main():
         logger.debug(f"Training setup with {num_devices} devices.")
         logger.debug(f"Host setup with {num_local_devices} devices.")
         logger.debug(f"Using platform: {platform}.")
-
 
     local_batch_size = cfg.training.batch_size // (jax.local_device_count())
 
@@ -429,10 +419,10 @@ def main():
                 wandb.log(train_metrics_np)
 
                 save_checkpoint_params(
-                        params,
-                        absolute_step,
-                        workdir=f"checkpoints/solu/params",
-                    )
+                    params,
+                    absolute_step,
+                    workdir=f"checkpoints/solu/params",
+                )
                 save_checkpoint_optimizer(
                     opt_state,
                     absolute_step,
@@ -508,7 +498,6 @@ def train_step(
     }
 
     return grads, metrics
-
 
 
 def update_state(
