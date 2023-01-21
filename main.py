@@ -214,10 +214,6 @@ def main():
 
     opt_state = jax.device_get(opt_state)  # copy opt_state to CPU
 
-    opt_state = jax.pmap(lambda x: x, devices=jax.local_devices())(
-        opt_state
-    )  # shard opt state to free up memory
-
     if jax.process_index() == 0:
         logger.debug(f"Training setup with {num_devices} devices.")
         logger.debug(f"Host setup with {num_local_devices} devices.")
