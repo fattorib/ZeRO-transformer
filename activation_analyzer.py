@@ -34,6 +34,11 @@ def model_creator(size: str, path: str) -> torch.nn.Module:
         num_ctx = 4096
         tokenizer = ByteTokenizer()
         vocab_size=257
+    
+    elif "solu" in size:
+        num_ctx = 1024
+        tokenizer = ByteTokenizer()
+        vocab_size=257
 
     else:
         num_ctx = 1024 
@@ -95,7 +100,7 @@ def pull_act_from_text(
 
         return hook
 
-    h = model.blocks[layer_idx].mlp.gelu.register_forward_hook(
+    h = model.blocks[layer_idx].mlp.solu.register_forward_hook(
         getActivation("neuron_act")
     )
 
@@ -107,10 +112,14 @@ def pull_act_from_text(
 
     h.remove()
 
-
-    return activation["neuron_act"].cpu().numpy()[0, :], [
-        tokenizer.decode(tokens[0, i]) for i in range(tokens.shape[1])
-    ]
+    if model.vocab_size > 257:
+        return activation["neuron_act"].cpu().numpy()[0, :], [
+            tokenizer.decode(tokens[0, i]) for i in range(tokens.shape[1])
+        ]
+    else:
+        return activation["neuron_act"].cpu().numpy()[0, :], [
+            chr(tokens[0, i]) for i in range(tokens.shape[1])
+        ]
 
 
 if __name__ == "__main__":
