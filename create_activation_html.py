@@ -50,7 +50,8 @@ def pull_act_from_text(
 
     tokens = tokens.cuda()
 
-    model(tokens)
+    with torch.cuda.amp.autocast():
+        model(tokens)
 
     h.remove()
 
