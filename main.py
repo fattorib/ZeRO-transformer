@@ -17,8 +17,6 @@ from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from flax.training import dynamic_scale as dynamic_scale_lib
-
 import wandb
 from src.models.GPT import model_getter
 from src.training.training_utils import compute_tokens_seen, initialized
@@ -329,7 +327,7 @@ def main():
 
             return True
 
-        if i < int(cfg.data.resume_step):
+        if (i < int(cfg.data.resume_step)) and (resume_step > 0):
             # skip through some of the dataset. Helpful since we've glued 2 datasets together
             # doesn't have to be super precise since we go for multiple epochs and reshuffle dataset
             # each resumed run.
