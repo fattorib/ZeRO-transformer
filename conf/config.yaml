@@ -1,10 +1,10 @@
 training:
   max_epochs: 1
   batch_size: 16
-  peak_learning_rate: 8.0e-3
+  peak_learning_rate: 1.0e-2
   warmup_steps: 2000
-  total_steps: 200000
-  end_learning_rate: 8.0e-4
+  total_steps: 100000
+  end_learning_rate: 1.0e-3
   weight_decay: 0.1
   gradient_accumulation_steps: 8
   evaluation_frequency: 1000
@@ -13,7 +13,7 @@ training:
   warmup_train_context: 1024
 
 model:
-  size: "solu-1l"
+  size: "solu-2l"
 
 data:
   corpus: "openwebtext"
@@ -23,4 +23,4 @@ data:
   shard_path_train: "data/index/local_openwebtext2_train.index"
   shard_path_validation: "data/index/local_openwebtext2_validation.index"
   wandb_project: "jax-transformer-micro"
-  resume_step: 128
+  resume_step: 15000
