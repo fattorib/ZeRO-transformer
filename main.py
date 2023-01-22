@@ -17,6 +17,8 @@ from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from flax.training import dynamic_scale as dynamic_scale_lib
+
 import wandb
 from src.models.GPT import model_getter
 from src.training.training_utils import compute_tokens_seen, initialized
@@ -66,7 +68,7 @@ def save_checkpoint_optimizer(opt_state: Any, step: int, workdir: str) -> None:
 
     """
     if jax.process_index() == 0:
-        opt_state = jax.device_get(opt_state)
+        opt_state = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], opt_state))
 
         faux_state = train_state.TrainState(
             step=step, apply_fn=None, params=None, tx=None, opt_state=opt_state
@@ -269,7 +271,7 @@ def main():
         wds.SimpleShardList(train_shards),
         split_by_jax_process,
         wds.tarfile_to_samples(handler=wds.warn_and_continue),
-        wds.shuffle(1e7, initial=1e7, rng=pyrandom.Random(23 + resume_step)),
+        wds.shuffle(1e4, initial=1e4, rng=pyrandom.Random(23 + resume_step)),
         wds.decode(handler=wds.warn_and_continue),
         wds.map(preprocess),
     ).repeat(nepochs=cfg.training.max_epochs)
@@ -278,7 +280,7 @@ def main():
         wds.SimpleShardList(validation_shards),
         split_by_jax_process,
         wds.tarfile_to_samples(handler=wds.warn_and_continue),
-        wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23 + resume_step)),
+        wds.shuffle(1e4, initial=1e4, rng=pyrandom.Random(23 + resume_step)),
         wds.decode(handler=wds.warn_and_continue),
         wds.map(preprocess),
     )
@@ -309,9 +311,9 @@ def main():
         step_to_seq = lambda x: cfg.data.max_context
 
     accum_steps = lambda x: cfg.training.gradient_accumulation_steps
-
+    
     params = flax.jax_utils.replicate(params, devices=jax.local_devices())
-
+    
     opt_state = flax.jax_utils.replicate(opt_state, devices=jax.local_devices())
 
     rng = jax.random.fold_in(rng, resume_step)  # fold in resume step to create new rng
@@ -363,6 +365,8 @@ def main():
             params,
             optimizer,
         )
+
+        # print(jax.tree_map(lambda x: x.shape, params))
 
         del grads  # manually free grad mem
 
