@@ -50,7 +50,7 @@ class SolU(nn.Module):
         return x*F.softmax(x,dim = -1)
 
 class MLPBlock(nn.Module):
-    def __init__(self, dim1: int, dim2: int, p: float, num_layers: int) -> None:
+    def __init__(self, dim1: int, dim2: int, p: float, num_layers: int, use_solu: bool = True) -> None:
         """An MLP block.
 
         Args:
@@ -65,14 +65,17 @@ class MLPBlock(nn.Module):
         self.dim2 = dim2
         self.p = p
         self.num_layers = num_layers
+        self.use_solu = use_solu
 
         self.gelu = nn.GELU()
         self.fc1 = nn.Linear(self.dim1, self.dim2)
         self.fc_resid = nn.Linear(self.dim2, self.dim1)
         self.dropout = nn.Dropout(p=self.p)
-        self.solu_ln = nn.LayerNorm(self.dim2)
-        
-        self.solu = SolU()
+
+        if self.use_solu:
+            self.solu_ln = nn.LayerNorm(self.dim2)  
+            
+            self.solu = SolU()
 
         init_function_partial = partial(
             _weights_init, **{"num_layers": self.num_layers}
@@ -82,8 +85,11 @@ class MLPBlock(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.fc1(x)
-        x = self.solu(x)
-        x = self.solu_ln(x)
+        if self.use_solu:
+            x = self.solu(x)
+            x = self.solu_ln(x)
+        else:
+            x = self.gelu(x)
         x = self.fc_resid(x)
         return self.dropout(x)
 
@@ -259,15 +265,13 @@ class GPT2Block(nn.Module):
         block_size: int,
         resid_dropout: float,
         num_layers: int,
-        fused_residuals: bool = False,
         use_alibi: bool = True,
+        use_solu: bool = True
     ) -> None:
         super().__init__()
         self.ln1 = nn.LayerNorm(embedding_dim)
-        self.fused_residuals = fused_residuals
 
-        if not self.fused_residuals:
-            self.ln2 = nn.LayerNorm(embedding_dim)
+        self.ln2 = nn.LayerNorm(embedding_dim)
 
         if use_alibi:
             self.attn = ALiBi(
@@ -286,6 +290,7 @@ class GPT2Block(nn.Module):
             4 * embedding_dim,
             resid_dropout,
             num_layers,
+            use_solu,
         )
 
     def forward(
@@ -294,14 +299,10 @@ class GPT2Block(nn.Module):
         use_cache: bool = False,
         layer_past: Tuple[torch.Tensor, torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        if self.fused_residuals:
-            mlp_out = self.mlp(self.ln1(x))
-            attn_out = self.attn(self.ln1(x), use_cache, layer_past)
-            x = x + mlp_out + attn_out[0]
-        else:
-            attn_out = self.attn(self.ln1(x), use_cache, layer_past)
-            x = x + attn_out[0]
-            x = x + self.mlp(self.ln2(x))
+        
+        attn_out = self.attn(self.ln1(x), use_cache, layer_past)
+        x = x + attn_out[0]
+        x = x + self.mlp(self.ln2(x))
 
         return x, attn_out[1]
 
@@ -314,11 +315,11 @@ class GPT2(nn.Module):
         N: int,
         vocab_size: int,
         num_head: int = 12,
-        fused_residuals: bool = False,
         mlp_dropout: float = 0.0,
         resid_dropout: float = 0.0,
         embedding_dropout: float = 0.0,
         use_alibi: bool = False,
+        use_solu: bool = True
     ):
         super().__init__()
         self.num_ctx = num_ctx
@@ -330,7 +331,7 @@ class GPT2(nn.Module):
         self.embedding_dropout = embedding_dropout
         self.num_head = num_head
         self.use_alibi = use_alibi
-        self.fused_residuals = fused_residuals
+        self.use_solu = use_solu
 
         """
         Basic GPT2 transformer module
@@ -352,8 +353,8 @@ class GPT2(nn.Module):
                         block_size=self.num_ctx,
                         resid_dropout=resid_dropout,
                         num_layers=N,
-                        fused_residuals=fused_residuals,
                         use_alibi=self.use_alibi,
+                        use_solu=use_solu
                     )
                 )
                 for i in range(self.N)
@@ -500,7 +501,6 @@ def create_GPT2_test(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
         N=2,
         vocab_size=vocab_size,
         num_head=8,
-        fused_residuals=False,
         use_alibi=True,
         **kwargs,
     )
@@ -526,8 +526,8 @@ def create_GPT2_bytelevel(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
         N=10,
         vocab_size=257,
         num_head=16,
-        fused_residuals=False,
         use_alibi=True,
+        use_solu=False,
         **kwargs,
     )
 
@@ -551,7 +551,6 @@ def create_GPT2_1l(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
         N=1,
         vocab_size=257,
         num_head=8,
-        fused_residuals=False,
         use_alibi=True,
         **kwargs,
     )
@@ -577,8 +576,8 @@ def create_GPT2_flax(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
         N=6,
         vocab_size=vocab_size,
         num_head=12,
-        fused_residuals=False,
         use_alibi=True,
+        use_solu=False,
         **kwargs,
     )
 
@@ -603,8 +602,8 @@ def create_GPT2_flax_large(vocab_size, num_ctx, model_checkpoint=None, **kwargs)
         N=18,
         vocab_size=vocab_size,
         num_head=12,
-        fused_residuals=False,
         use_alibi=True,
+        use_solu=False,
         **kwargs,
     )
 
@@ -629,8 +628,8 @@ def create_GPT2_flax_xlarge(vocab_size, num_ctx, model_checkpoint=None, **kwargs
         N=24,
         vocab_size=vocab_size,
         num_head=12,
-        fused_residuals=False,
         use_alibi=True,
+        use_solu=False,
         **kwargs,
     )
 
@@ -655,8 +654,8 @@ def create_GPT2_flax_xxlarge(vocab_size, num_ctx, model_checkpoint=None, **kwarg
         N=36,
         vocab_size=vocab_size,
         num_head=12,
-        fused_residuals=False,
         use_alibi=True,
+        use_solu=False,
         **kwargs,
     )
 
