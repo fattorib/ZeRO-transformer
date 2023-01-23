@@ -233,19 +233,19 @@ def main():
     if jax.process_index() == 0:
         if resume_step > 0:
             id = cfg.data.wandb_id
+            wandb.init(id=id, resume="allow", project=cfg.data.wandb_project)
         else:
             id = wandb.util.generate_id()
-        wandb.init(id=id, resume="allow", project=cfg.data.wandb_project)
-        flat_dict = flatten_dict(cfg)
+            flat_dict = flatten_dict(cfg)
 
-        for key in model_config.keys():
-            flat_dict[f"model.{key}"] = model_config[key]
+            for key in model_config.keys():
+                flat_dict[f"model.{key}"] = model_config[key]
 
-        flat_dict["training.local_batch_size"] = local_batch_size
-        flat_dict["runtime"] = platform
-        flat_dict["Total Training Tokens"] = total_tokens / 1e9
-        flat_dict["Total Devices"] = num_devices
-        wandb.config.update(flat_dict)
+            flat_dict["training.local_batch_size"] = local_batch_size
+            flat_dict["runtime"] = platform
+            flat_dict["Total Training Tokens"] = total_tokens / 1e9
+            flat_dict["Total Devices"] = num_devices
+            wandb.config.update(flat_dict)
 
     def preprocess(batch):
         x = batch["input_id.pth"][: cfg.data.max_context]
