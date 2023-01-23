@@ -1,6 +1,7 @@
 import argparse
 import logging
 import random as pyrandom
+from functools import partial
 from typing import Any, Callable, Tuple, Union
 
 import flax
@@ -11,7 +12,9 @@ import numpy as np
 import optax
 import torch
 import webdataset as wds
-from flax.training import checkpoints, train_state
+from flax.training import checkpoints
+from flax.training import dynamic_scale as dynamic_scale_lib
+from flax.training import train_state
 from flax.training.common_utils import shard, shard_prng_key
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
@@ -22,7 +25,6 @@ from src.models.GPT import model_getter
 from src.training.training_utils import compute_tokens_seen, initialized
 from src.utils.configs import flatten_dict
 from src.utils.dataloader import numpy_collate
-from functools import partial
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -46,65 +48,51 @@ def parse():
     return args
 
 
-def save_checkpoint_params(params: Any, step: int, workdir: str) -> None:
+class TrainState(train_state.TrainState):
+    dynamic_scale: dynamic_scale_lib.DynamicScale
+
+
+def save_checkpoint_params(
+    params: Any, opt_state: Any, dynamic_scale: Any, step: int, workdir: str
+) -> None:
     """
     Save a copy of params.
     """
     if jax.process_index() == 0:
         params = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], params))
-        faux_state = train_state.TrainState(
-            step=step, apply_fn=None, params=params, tx=None, opt_state=None
-        )
-        checkpoints.save_checkpoint(
-            workdir, faux_state, step, keep=5, overwrite=True, prefix="params_"
-        )
-
-
-def save_checkpoint_optimizer(opt_state: Any, step: int, workdir: str) -> None:
-    """
-    Function to gather and save the sharded optimizer state.
-
-    """
-    if jax.process_index() == 0:
         opt_state = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], opt_state))
+        dynamic_scale = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], dynamic_scale))
 
-        faux_state = train_state.TrainState(
-            step=step, apply_fn=None, params=None, tx=None, opt_state=opt_state
+        faux_state = TrainState(
+            step=step,
+            apply_fn=None,
+            params=params,
+            tx=None,
+            opt_state=opt_state,
+            dynamic_scale=dynamic_scale,
         )
         checkpoints.save_checkpoint(
-            workdir, faux_state, step, keep=5, overwrite=True, prefix="optimizer_"
+            workdir, faux_state, step, keep=5, overwrite=True, prefix="state_"
         )
 
 
-def restore_param_checkpoint(workdir: str) -> Any:
+def restore_state(workdir: str) -> Any:
     """
-    Restores the most recent parameter dict
+    Restores the most trainstate parameter dict
     """
-    params = checkpoints.restore_checkpoint(workdir, target=None, prefix="params_")
 
-    return flax.core.freeze(params["params"])
-
-
-def restore_opt_checkpoint(workdir: str) -> Tuple[Any, int]:
-    """
-    Function to restore optimizer state from a sequence of serialized Flax
-    state dicts. By default, restoring a flax state dict to an optax state
-    doesn't work so we manually recreate the optimizer state and return it.
-    """
-    opt_state_restored = checkpoints.restore_checkpoint(
-        workdir, target=None, prefix="optimizer_"
-    )
+    state = checkpoints.restore_checkpoint(workdir, target=None, prefix="state_")
 
     mu_pytree = jax.tree_util.tree_map(
-        lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["mu"]
+        lambda x: jnp.array(x), state["opt_state"]["1"]["0"]["mu"]
     )
 
     nu_pytree = jax.tree_util.tree_map(
-        lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["nu"]
+        lambda x: jnp.array(x), state["opt_state"]["1"]["0"]["nu"]
     )
 
     count_pytree = jax.tree_util.tree_map(
-        lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["count"]
+        lambda x: jnp.array(x), state["opt_state"]["1"]["0"]["count"]
     )
 
     restoredadamstate = optax.ScaleByAdamState(
@@ -115,11 +103,16 @@ def restore_opt_checkpoint(workdir: str) -> Tuple[Any, int]:
         (
             restoredadamstate,
             optax.MaskedState(inner_state=optax.EmptyState()),
-            optax.ScaleByScheduleState(count=jnp.array(opt_state_restored["step"])),
+            optax.ScaleByScheduleState(count=jnp.array(state["step"])),
         ),
     )
 
-    return restored_state, opt_state_restored["step"]
+    return (
+        flax.core.freeze(state["params"]),
+        state["dynamic_scale"],
+        restored_state,
+        state["step"],
+    )
 
 
 def create_train_state(
@@ -171,7 +164,7 @@ def main():
     validation_shards = open(cfg.data.shard_path_validation).read().splitlines()
 
     model, model_config = model_getter(
-        cfg.model.size, config_path=args.model_cfg, return_cfg=True, dtype=jnp.float32
+        cfg.model.size, config_path=args.model_cfg, return_cfg=True, dtype=jnp.float16
     )
 
     learning_rate_fn = optax.warmup_cosine_decay_schedule(
@@ -200,11 +193,9 @@ def main():
         del params
         del opt_state
 
-        opt_state, step = restore_opt_checkpoint(workdir=f"checkpoints/solu/optimizer")
-        opt_state = jax.device_get(opt_state)  # copy to CPU
-
-        params = restore_param_checkpoint(workdir=f"checkpoints/solu/params")
-        params = jax.device_get(params)  # copy to CPU
+        params, dynamic_scale, opt_state, step = restore_state(
+            workdir=f"checkpoints/solu"
+        )
 
         resume_step = int(step)
 
@@ -214,6 +205,8 @@ def main():
     params = jax.device_get(params)  # copy params to CPU
 
     opt_state = jax.device_get(opt_state)  # copy opt_state to CPU
+
+    dynamic_scale = dynamic_scale_lib.DynamicScale()
 
     if jax.process_index() == 0:
         logger.debug(f"Training setup with {num_devices} devices.")
@@ -236,6 +229,7 @@ def main():
             wandb.init(id=id, resume="allow", project=cfg.data.wandb_project)
         else:
             id = wandb.util.generate_id()
+            wandb.init(id=id, resume="allow", project=cfg.data.wandb_project)
             flat_dict = flatten_dict(cfg)
 
             for key in model_config.keys():
@@ -312,10 +306,10 @@ def main():
         step_to_seq = lambda x: cfg.data.max_context
 
     accum_steps = lambda x: cfg.training.gradient_accumulation_steps
-    
+
     params = flax.jax_utils.replicate(params, devices=jax.local_devices())
-    
     opt_state = flax.jax_utils.replicate(opt_state, devices=jax.local_devices())
+    dynamic_scale = flax.jax_utils.replicate(dynamic_scale, devices=jax.local_devices())
 
     rng = jax.random.fold_in(rng, resume_step)  # fold in resume step to create new rng
 
@@ -353,21 +347,18 @@ def main():
 
         rng_sharded = shard_prng_key(dropout_rng)
 
-        grads, metrics = train_step(
-            params, text, rng_sharded, gradient_accumulation_steps, model
+        grads, metrics, dynamic_scale, is_fin = train_step(
+            params, text, rng_sharded, gradient_accumulation_steps, model, dynamic_scale
         )
 
-        params, opt_state = update_state(
-            grads,
-            opt_state,
-            params,
-            optimizer,
-        )
+        params, opt_state = update_state(grads, opt_state, params, optimizer, is_fin)
 
         del grads  # manually free grad mem
 
         metrics["Train Sequence Length"] = seq_len
         metrics["Learning Rate"] = learning_rate_fn(resume_step + new_steps)
+
+        metrics["Scaler"] = dynamic_scale.scale
 
         running_metrics.append(metrics)
 
@@ -419,18 +410,16 @@ def main():
 
                 save_checkpoint_params(
                     params,
-                    absolute_step,
-                    workdir=f"checkpoints/solu/params",
-                )
-                save_checkpoint_optimizer(
                     opt_state,
+                    dynamic_scale,
                     absolute_step,
-                    workdir=f"checkpoints/solu/optimizer",
+                    workdir=f"checkpoints/solu",
                 )
 
         else:
             if jax.process_index() == 0:
                 wandb.log(train_metrics_np)
+
 
 @partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=(3, 4))
 def train_step(
@@ -439,6 +428,7 @@ def train_step(
     rng_key: jax.random.PRNGKey = None,
     accum_steps: int = 8,
     model: Any = None,
+    dynamic_scale: Any = None,
 ):
     """
     Computes loss/grads for a single batch of data, pmeans across all devices/hosts to sync grads
@@ -461,28 +451,30 @@ def train_step(
         )
         return loss
 
-    grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
+    grad_fn = dynamic_scale.value_and_grad(loss_fn, has_aux=False, axis_name="batch")
 
     def loss_and_grad(grad_idx):
         minibatch = get_minibatch(batch, grad_idx) if grad_idx is not None else batch
 
-        loss, grads = grad_fn(params, minibatch)
+        dynamic_scale, is_fin, loss, grads = grad_fn(params, minibatch)
 
-        return loss, grads
+        return dynamic_scale, is_fin, loss, grads
 
-    init_minibatch = (0.0, jax.tree_util.tree_map(jnp.zeros_like, params))
+    init_minibatch = (dynamic_scale, True, 0.0, jax.tree_util.tree_map(jnp.zeros_like, params))
 
-    # accumulate gradients
     def cumul_minibatch_step(grad_idx, cumul_loss_grad):
-        cumul_loss, cumul_grads = cumul_loss_grad
-        loss, grads = loss_and_grad(grad_idx)
+        _, cumul_is_fin, cumul_loss, cumul_grads = cumul_loss_grad
+        dynamic_scale, is_fin, loss, grads = loss_and_grad(grad_idx)
+
         cumul_loss, cumul_grads = jax.tree_util.tree_map(
             jnp.add, (cumul_loss, cumul_grads), (loss, grads)
         )
 
-        return cumul_loss, cumul_grads
+        cumul_is_fin = jax.tree_util.tree_map(jnp.logical_and, cumul_is_fin, is_fin)
 
-    loss, grads = jax.lax.fori_loop(
+        return dynamic_scale, cumul_is_fin, cumul_loss, cumul_grads
+
+    dynamic_scale, is_fin, loss, grads = jax.lax.fori_loop(
         0,
         accum_steps,
         cumul_minibatch_step,
@@ -499,7 +491,8 @@ def train_step(
         "Train LM PPL": jnp.exp(loss),
     }
 
-    return grads, metrics
+    return grads, metrics, dynamic_scale, is_fin
+
 
 @partial(
     jax.pmap,
@@ -508,10 +501,7 @@ def train_step(
     static_broadcasted_argnums=(3,),
 )
 def update_state(
-    grads: Any,
-    optimizer_state: Any,
-    params: Any,
-    optimizer: Any,
+    grads: Any, optimizer_state: Any, params: Any, optimizer: Any, is_fin: Any
 ):
     """
     Updates the sharded optimizer state
@@ -521,7 +511,14 @@ def update_state(
     updates, new_opt_state = optimizer.update(grads, optimizer_state, params)
     new_params = optax.apply_updates(params, updates)
 
+    new_opt_state = jax.tree_util.tree_map(
+        partial(jnp.where, is_fin), new_opt_state, optimizer_state
+    )
+
+    new_params = jax.tree_util.tree_map(partial(jnp.where, is_fin), new_params, params)
+
     return new_params, new_opt_state
+
 
 @partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=(1,))
 def eval_step(params: Any, model: Any, batch: jnp.array):
