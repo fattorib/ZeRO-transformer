@@ -50,7 +50,7 @@ class MLPBlock(nn.Module):
     dimension_multiplier: int = 4
     dropout: float = 0.0
     N: int = None
-    
+
     dtype: Any = jnp.float32
 
     @nn.compact

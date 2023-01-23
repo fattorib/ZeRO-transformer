@@ -43,14 +43,17 @@ def _embedding_init(m):
     if isinstance(m, nn.Linear) and m.bias is None:
         m.weight.data.normal_(mean=0.0, std=0.02)
 
+
 class SolU(nn.Module):
+    def forward(self, x):
 
-    def forward(self,x):
+        return x * F.softmax(x, dim=-1)
 
-        return x*F.softmax(x,dim = -1)
 
 class MLPBlock(nn.Module):
-    def __init__(self, dim1: int, dim2: int, p: float, num_layers: int, use_solu: bool = True) -> None:
+    def __init__(
+        self, dim1: int, dim2: int, p: float, num_layers: int, use_solu: bool = True
+    ) -> None:
         """An MLP block.
 
         Args:
@@ -73,8 +76,8 @@ class MLPBlock(nn.Module):
         self.dropout = nn.Dropout(p=self.p)
 
         if self.use_solu:
-            self.solu_ln = nn.LayerNorm(self.dim2)  
-            
+            self.solu_ln = nn.LayerNorm(self.dim2)
+
             self.solu = SolU()
 
         init_function_partial = partial(
@@ -266,7 +269,7 @@ class GPT2Block(nn.Module):
         resid_dropout: float,
         num_layers: int,
         use_alibi: bool = True,
-        use_solu: bool = True
+        use_solu: bool = True,
     ) -> None:
         super().__init__()
         self.ln1 = nn.LayerNorm(embedding_dim)
@@ -299,7 +302,7 @@ class GPT2Block(nn.Module):
         use_cache: bool = False,
         layer_past: Tuple[torch.Tensor, torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        
+
         attn_out = self.attn(self.ln1(x), use_cache, layer_past)
         x = x + attn_out[0]
         x = x + self.mlp(self.ln2(x))
@@ -319,7 +322,7 @@ class GPT2(nn.Module):
         resid_dropout: float = 0.0,
         embedding_dropout: float = 0.0,
         use_alibi: bool = False,
-        use_solu: bool = True
+        use_solu: bool = True,
     ):
         super().__init__()
         self.num_ctx = num_ctx
@@ -354,7 +357,7 @@ class GPT2(nn.Module):
                         resid_dropout=resid_dropout,
                         num_layers=N,
                         use_alibi=self.use_alibi,
-                        use_solu=use_solu
+                        use_solu=use_solu,
                     )
                 )
                 for i in range(self.N)
@@ -541,6 +544,7 @@ def create_GPT2_bytelevel(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
 
     return model
 
+
 def create_GPT2_1l(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
     """
     TODO: Fill this in
@@ -564,6 +568,7 @@ def create_GPT2_1l(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
         model.load_state_dict(state_dict)
 
     return model
+
 
 def create_GPT2_2l(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
     """

@@ -2,12 +2,13 @@
 Hack of https://colab.research.google.com/github/neelnanda-io/TransformerLens/blob/main/Interactive%20Neuroscope.ipynb
 """
 import argparse
-
+from functools import partial
 from typing import Any, List
+
 import gradio as gr
 import torch
 from transformers import GPTNeoXTokenizerFast
-from functools import partial
+
 from torch_compatability.GPT2 import model_getter
 
 DEVICE = "cpu"
@@ -22,28 +23,29 @@ def parse():
     args = parser.parse_args()
     return args
 
+
 def model_creator(size: str, path: str) -> torch.nn.Module:
 
     tokenizer = None
     if "distill" in size:
         num_ctx = 2048
         tokenizer = GPTNeoXTokenizerFast.from_pretrained("EleutherAI/gpt-neox-20b")
-        vocab_size=50304
-    
+        vocab_size = 50304
+
     elif "byte" in size:
         num_ctx = 4096
         tokenizer = ByteTokenizer()
-        vocab_size=257
-    
+        vocab_size = 257
+
     elif "solu" in size:
         num_ctx = 1024
         tokenizer = ByteTokenizer()
-        vocab_size=257
+        vocab_size = 257
 
     else:
-        num_ctx = 1024 
+        num_ctx = 1024
         tokenizer = GPTNeoXTokenizerFast.from_pretrained("EleutherAI/gpt-neox-20b")
-        vocab_size=50304
+        vocab_size = 50304
 
     model = model_getter(
         size,
@@ -58,8 +60,6 @@ def model_creator(size: str, path: str) -> torch.nn.Module:
     return model, tokenizer
 
 
-
-
 style_string = """<style> 
     span.token {
         border: 1px solid rgb(123, 123, 123)
@@ -72,6 +72,7 @@ def calculate_color(val, max_val, min_val):
     # We return a string of the form "rgb(240, 240, 240)" which is a color CSS knows
     normalized_val = (val - min_val) / max_val
     return f"rgb(240, {240*(1-normalized_val)}, {240*(1-normalized_val)})"
+
 
 class ByteTokenizer:
     def __init__(self) -> None:
@@ -128,7 +129,6 @@ if __name__ == "__main__":
 
     model, tokenizer = model_creator(args.model_size, args.model_path)
 
-
     default_text = "Default Text."
     default_layer = 0
     default_neuron_index = 0
@@ -153,7 +153,9 @@ if __name__ == "__main__":
         if neuron_index is None:
             return "Please select a Neuron"
 
-        acts, str_tokens = pull_act_from_text(model, text, neuron_index, layer, tokenizer)
+        acts, str_tokens = pull_act_from_text(
+            model, text, neuron_index, layer, tokenizer
+        )
 
         act_max = acts.max()
         act_min = acts.min()
@@ -167,7 +169,9 @@ if __name__ == "__main__":
         htmls = [style_string]
         # We then add some text to tell us what layer and neuron we're looking at - we're just dealing with strings and can use f-strings as normal
         # h4 means "small heading"
-        htmls.append(f"<h4>Layer: <b>{layer}</b>. Neuron Index: <b>{neuron_index}</b></h4>")
+        htmls.append(
+            f"<h4>Layer: <b>{layer}</b>. Neuron Index: <b>{neuron_index}</b></h4>"
+        )
         # We then add a line telling us the limits of our range
         htmls.append(
             f"<h4>Max Range: <b>{max_val:.4f}</b>. Min Range: <b>{min_val:.4f}</b></h4>"
@@ -188,7 +192,6 @@ if __name__ == "__main__":
             )
 
         return "".join(htmls)
-
 
     default_html_string = basic_neuron_vis(
         default_text,
@@ -221,4 +224,3 @@ if __name__ == "__main__":
             inp.change(basic_neuron_vis, inputs, out)
 
     demo.launch(share=False, height=1000)
-

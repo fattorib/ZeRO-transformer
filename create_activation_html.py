@@ -3,34 +3,42 @@ From a corpus of tokens, run through model and keep largest activations for
 a specific neuron and layer
 """
 import argparse
-from typing import Any, List
-import gradio as gr
-import torch
 from functools import partial
-from activation_analyzer import model_creator, ByteTokenizer
+from typing import Any, List
+
+import gradio as gr
+import numpy as np
+import torch
 import webdataset as wds
-import numpy as np 
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+
+from activation_analyzer import ByteTokenizer, model_creator
 
 DEVICE = "cpu"
 if torch.cuda.is_available():
     DEVICE = "cuda"
 
+
 def parse():
     parser = argparse.ArgumentParser(description="Gradio Inspection App")
     parser.add_argument("--model-size", default="medium", type=str)
     parser.add_argument("--model-path", default="medium", type=str)
-    parser.add_argument("--layer-idx", type = int)
-    parser.add_argument("--neuron-idx", type = int)
-    parser.add_argument("--topk", type = int)
-    parser.add_argument("--max-samples", type = int)
+    parser.add_argument("--layer-idx", type=int)
+    parser.add_argument("--neuron-idx", type=int)
+    parser.add_argument("--topk", type=int)
+    parser.add_argument("--max-samples", type=int)
     args = parser.parse_args()
     return args
 
+
 @torch.no_grad()
 def pull_act_from_text(
-    model: torch.nn.Module, tokens: torch.Tensor, neuron_idx: int, layer_idx: int, tokenizer: Any
+    model: torch.nn.Module,
+    tokens: torch.Tensor,
+    neuron_idx: int,
+    layer_idx: int,
+    tokenizer: Any,
 ):
 
     activation = {}
@@ -46,7 +54,7 @@ def pull_act_from_text(
         h = model.blocks[layer_idx].mlp.solu.register_forward_hook(
             getActivation("neuron_act")
         )
-    
+
     else:
         h = model.blocks[layer_idx].mlp.gelu.register_forward_hook(
             getActivation("neuron_act")
@@ -70,6 +78,7 @@ def pull_act_from_text(
             chr(tokens[0, i]) for i in range(tokens.shape[1])
         ]
 
+
 style_string = """<style> 
     span.token {
         border: 0px solid rgb(123, 123, 123)
@@ -84,7 +93,7 @@ def calculate_color(val, max_val, min_val):
     return f"rgb(240, {240*(1-normalized_val)}, {240*(1-normalized_val)})"
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     args = parse()
 
@@ -94,7 +103,7 @@ if __name__ == '__main__':
     model, tokenizer = model_creator(args.model_size, args.model_path)
 
     def preprocess(batch):
-        x = batch["input_id.pth"][: 1024]
+        x = batch["input_id.pth"][:1024]
         return torch.from_numpy(x.astype(np.int32)).long()
 
     validation_dataset = wds.DataPipeline(
@@ -111,8 +120,8 @@ if __name__ == '__main__':
     )
 
     def create_html(text, activations):
-        """ 
-        From a collection of tuples and activations, turn this into 
+        """
+        From a collection of tuples and activations, turn this into
         visible HTML for rendering
         """
         act_max = activations.max()
@@ -124,7 +133,9 @@ if __name__ == '__main__':
         htmls = [style_string]
         # We then add some text to tell us what layer and neuron we're looking at - we're just dealing with strings and can use f-strings as normal
         # h4 means "small heading"
-        htmls.append(f"<h4>Layer: <b>{LAYER_IDX}</b>. Neuron Index: <b>{NEURON_IDX}</b></h4>")
+        htmls.append(
+            f"<h4>Layer: <b>{LAYER_IDX}</b>. Neuron Index: <b>{NEURON_IDX}</b></h4>"
+        )
         # We then add a line telling us the limits of our range
         htmls.append(
             f"<h4>Max Range: <b>{max_val:.4f}</b>. Min Range: <b>{min_val:.4f}</b></h4>"
@@ -143,35 +154,41 @@ if __name__ == '__main__':
             htmls.append(
                 f"<span class='token' style='background-color:{calculate_color(act, max_val, min_val)}' >{tok}</span>"
             )
-        
 
         return "".join(htmls)
 
     topk = args.topk
-    topk_activations = [] # tuple of (max_activation, activations, text)
+    topk_activations = []  # tuple of (max_activation, activations, text)
     max_evaluation = args.max_samples
 
     for i, text in tqdm(enumerate(tl), total=max_evaluation):
-        
 
-        acts, text = pull_act_from_text(model,text,neuron_idx=NEURON_IDX, layer_idx=LAYER_IDX, tokenizer=ByteTokenizer())     
+        acts, text = pull_act_from_text(
+            model,
+            text,
+            neuron_idx=NEURON_IDX,
+            layer_idx=LAYER_IDX,
+            tokenizer=ByteTokenizer(),
+        )
 
         max_act, min_act = acts.max(), acts.min()
 
         if len(topk_activations) < topk:
             topk_activations.append((max_act, acts, text))
 
-            topk_activations.sort(key=lambda x:x[0], reverse=True) # sorted smallest to largest
+            topk_activations.sort(
+                key=lambda x: x[0], reverse=True
+            )  # sorted smallest to largest
 
         else:
             min_topk_act = topk_activations[-1][0]
             if max_act > min_topk_act:
-                topk_activations.pop(-1) 
+                topk_activations.pop(-1)
                 topk_activations.append((max_act, acts, text))
-                topk_activations.sort(key=lambda x:x[0], reverse=True)
-        
+                topk_activations.sort(key=lambda x: x[0], reverse=True)
+
         if i > max_evaluation:
-            break 
+            break
 
     html = ""
 
@@ -181,4 +198,3 @@ if __name__ == '__main__':
 
     with open(f"neurons/layer_{LAYER_IDX}_{NEURON_IDX}.html", "w") as f:
         f.write(header + html)
-

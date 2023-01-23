@@ -3,7 +3,6 @@ from typing import OrderedDict
 import numpy as np
 import torch
 from flax.serialization import msgpack_restore
-
 from GPT2 import model_getter
 
 
