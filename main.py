@@ -231,7 +231,10 @@ def main():
     )
 
     if jax.process_index() == 0:
-        id = wandb.util.generate_id()
+        if resume_step > 0:
+            id = cfg.data.wandb_id
+        else:
+            id = wandb.util.generate_id()
         wandb.init(id=id, resume="allow", project=cfg.data.wandb_project)
         flat_dict = flatten_dict(cfg)
 
@@ -328,9 +331,6 @@ def main():
             return True
 
         if (i < int(cfg.data.resume_step)) and (resume_step > 0):
-            # skip through some of the dataset. Helpful since we've glued 2 datasets together
-            # doesn't have to be super precise since we go for multiple epochs and reshuffle dataset
-            # each resumed run.
             continue
 
         rng, dropout_rng = jax.random.split(rng, 2)
@@ -363,8 +363,6 @@ def main():
             params,
             optimizer,
         )
-
-        # print(jax.tree_map(lambda x: x.shape, params))
 
         del grads  # manually free grad mem
 
