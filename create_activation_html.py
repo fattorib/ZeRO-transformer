@@ -151,7 +151,7 @@ if __name__ == '__main__':
     topk_activations = [] # tuple of (max_activation, activations, text)
     max_evaluation = args.max_samples
 
-    for i, text in tqdm(enumerate(tl)):
+    for i, text in tqdm(enumerate(tl), total=max_evaluation):
         
 
         acts, text = pull_act_from_text(model,text,neuron_idx=NEURON_IDX, layer_idx=LAYER_IDX, tokenizer=ByteTokenizer())     
@@ -175,7 +175,7 @@ if __name__ == '__main__':
 
     html = ""
 
-    header = f"<h1>Model: SoLU Model: 1 Layer, 2048 Neurons per Layer</h1><h1>Dataset: OpenWebText2</h1><h2>Neuron {NEURON_IDX} in Layer {LAYER_IDX} </h2>"
+    header = f"<h1>Model: SoLU Model: {model.N} Layer(s), 2048 Neurons per Layer</h1><h1>Dataset: OpenWebText2</h1><h2>Neuron {NEURON_IDX} in Layer {LAYER_IDX} </h2>"
     for activation_data in topk_activations:
         html += create_html(activation_data[-1], activation_data[1])
 
