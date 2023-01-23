@@ -187,6 +187,8 @@ def main():
         model=model,
     )
     params = state.params
+    dynamic_scale = dynamic_scale_lib.DynamicScale()
+
     del state
 
     if args.resume:
@@ -205,8 +207,6 @@ def main():
     params = jax.device_get(params)  # copy params to CPU
 
     opt_state = jax.device_get(opt_state)  # copy opt_state to CPU
-
-    dynamic_scale = dynamic_scale_lib.DynamicScale()
 
     if jax.process_index() == 0:
         logger.debug(f"Training setup with {num_devices} devices.")
