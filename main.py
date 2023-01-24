@@ -355,12 +355,19 @@ def main():
 
         params, opt_state = update_state(grads, opt_state, params, optimizer, is_fin)
 
-        del grads  # manually free grad mem
+        
 
         metrics["Train Sequence Length"] = seq_len
         metrics["Learning Rate"] = learning_rate_fn(resume_step + new_steps)
 
         metrics["Scaler"] = dynamic_scale.scale
+
+        metrics["l2_norm/embedding/param"] = jax.tree_util.tree_map(lambda x : jnp.sqrt(jnp.linalg.norm(x)), params["params"]["wte"]["embedding"])
+        metrics["l2_norm/embedding/second_moment_sqrt"] = jax.tree_util.tree_map(lambda x : jnp.sqrt(jnp.linalg.norm(x)), opt_state[1][0].mu['params']["wte"]["embedding"])
+        metrics["l2_norm/embedding/first_moment"] = jax.tree_util.tree_map(lambda x : jnp.linalg.norm(x), opt_state[1][0].mu['params']["wte"]["embedding"])
+        metrics["l2_norm/embedding/gradient"] = jax.tree_util.tree_map(lambda x : jnp.linalg.norm(x), grads['params']["wte"]["embedding"])
+
+        del grads  # manually free grad mem
 
         running_metrics.append(metrics)
 
