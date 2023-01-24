@@ -195,7 +195,7 @@ def main():
         del params
         del opt_state
 
-        params, dynamic_scale, opt_state, step = restore_state(
+        params, dynamic_scale_dict, opt_state, step = restore_state(
             workdir=f"checkpoints/solu"
         )
 
@@ -203,7 +203,7 @@ def main():
 
         if jax.process_index() == 0:
             logger.debug(f"Resuming training from step {resume_step}")
-
+        dynamic_scale = dynamic_scale_lib.DynamicScale(fin_steps=dynamic_scale_dict['fin_steps'], scale=dynamic_scale_dict['scale'])
     params = jax.device_get(params)  # copy params to CPU
 
     opt_state = jax.device_get(opt_state)  # copy opt_state to CPU
@@ -310,6 +310,8 @@ def main():
     params = flax.jax_utils.replicate(params, devices=jax.local_devices())
     opt_state = flax.jax_utils.replicate(opt_state, devices=jax.local_devices())
     dynamic_scale = flax.jax_utils.replicate(dynamic_scale, devices=jax.local_devices())
+
+    
 
     rng = jax.random.fold_in(rng, resume_step)  # fold in resume step to create new rng
 
