@@ -28,6 +28,10 @@ def parse():
     parser.add_argument("--neuron-idx", type=int)
     parser.add_argument("--topk", type=int)
     parser.add_argument("--max-samples", type=int)
+    parser.add_argument("--random-sample",
+        default=False,
+        action="store_true")
+
     args = parser.parse_args()
     return args
 
@@ -97,8 +101,7 @@ if __name__ == "__main__":
 
     args = parse()
 
-    NEURON_IDX = args.neuron_idx
-    LAYER_IDX = args.layer_idx
+    
 
     model, tokenizer = model_creator(args.model_size, args.model_path)
 
@@ -119,82 +122,92 @@ if __name__ == "__main__":
         drop_last=True,
     )
 
-    def create_html(text, activations):
-        """
-        From a collection of tuples and activations, turn this into
-        visible HTML for rendering
-        """
-        act_max = activations.max()
-        act_min = activations.min()
+    if args.random_sample:
+        # randomly sample neuron/layer pairs
+        neuron_lst = list(np.random.choice(4*model.embedding_dim, size = 10))
+        layer_lst = list(np.random.choice(model.N, size = 10))
 
-        max_val = act_max
-        min_val = act_min
+    else:
+        neuron_lst = [args.neuron_idx]
+        layer_lst = [args.layer_idx]
 
-        htmls = [style_string]
-        # We then add some text to tell us what layer and neuron we're looking at - we're just dealing with strings and can use f-strings as normal
-        # h4 means "small heading"
-        htmls.append(
-            f"<h4>Layer: <b>{LAYER_IDX}</b>. Neuron Index: <b>{NEURON_IDX}</b></h4>"
-        )
-        # We then add a line telling us the limits of our range
-        htmls.append(
-            f"<h4>Max Range: <b>{max_val:.4f}</b>. Min Range: <b>{min_val:.4f}</b></h4>"
-        )
-        # If we added a custom range, print a line telling us the range of our activations too.
-        if act_max != max_val or act_min != min_val:
+    for NEURON_IDX, LAYER_IDX in zip(neuron_lst, layer_lst):
+        def create_html(text, activations):
+            """
+            From a collection of tuples and activations, turn this into
+            visible HTML for rendering
+            """
+            act_max = activations.max()
+            act_min = activations.min()
+
+            max_val = act_max
+            min_val = act_min
+
+            htmls = [style_string]
+            # We then add some text to tell us what layer and neuron we're looking at - we're just dealing with strings and can use f-strings as normal
+            # h4 means "small heading"
             htmls.append(
-                f"<h4>Custom Range Set. Max Act: <b>{act_max:.4f}</b>. Min Act: <b>{act_min:.4f}</b></h4>"
+                f"<h4>Layer: <b>{LAYER_IDX}</b>. Neuron Index: <b>{NEURON_IDX}</b></h4>"
+            )
+            # We then add a line telling us the limits of our range
+            htmls.append(
+                f"<h4>Max Range: <b>{max_val:.4f}</b>. Min Range: <b>{min_val:.4f}</b></h4>"
+            )
+            # If we added a custom range, print a line telling us the range of our activations too.
+            if act_max != max_val or act_min != min_val:
+                htmls.append(
+                    f"<h4>Custom Range Set. Max Act: <b>{act_max:.4f}</b>. Min Act: <b>{act_min:.4f}</b></h4>"
+                )
+
+            # Convert the text to a list of tokens
+            for tok, act in zip(text, activations):
+                # A span is an HTML element that lets us style a part of a string (and remains on the same line by default)
+                # We set the background color of the span to be the color we calculated from the activation
+                # We set the contents of the span to be the token
+                htmls.append(
+                    f"<span class='token' style='background-color:{calculate_color(act, max_val, min_val)}' >{tok}</span>"
+                )
+
+            return "".join(htmls)
+
+        topk = args.topk
+        topk_activations = []  # tuple of (max_activation, activations, text)
+        max_evaluation = args.max_samples
+
+        for i, text in tqdm(enumerate(tl), total=max_evaluation):
+
+            acts, text = pull_act_from_text(
+                model,
+                text,
+                neuron_idx=NEURON_IDX,
+                layer_idx=LAYER_IDX,
+                tokenizer=ByteTokenizer(),
             )
 
-        # Convert the text to a list of tokens
-        for tok, act in zip(text, activations):
-            # A span is an HTML element that lets us style a part of a string (and remains on the same line by default)
-            # We set the background color of the span to be the color we calculated from the activation
-            # We set the contents of the span to be the token
-            htmls.append(
-                f"<span class='token' style='background-color:{calculate_color(act, max_val, min_val)}' >{tok}</span>"
-            )
+            max_act, min_act = acts.max(), acts.min()
 
-        return "".join(htmls)
-
-    topk = args.topk
-    topk_activations = []  # tuple of (max_activation, activations, text)
-    max_evaluation = args.max_samples
-
-    for i, text in tqdm(enumerate(tl), total=max_evaluation):
-
-        acts, text = pull_act_from_text(
-            model,
-            text,
-            neuron_idx=NEURON_IDX,
-            layer_idx=LAYER_IDX,
-            tokenizer=ByteTokenizer(),
-        )
-
-        max_act, min_act = acts.max(), acts.min()
-
-        if len(topk_activations) < topk:
-            topk_activations.append((max_act, acts, text))
-
-            topk_activations.sort(
-                key=lambda x: x[0], reverse=True
-            )  # sorted smallest to largest
-
-        else:
-            min_topk_act = topk_activations[-1][0]
-            if max_act > min_topk_act:
-                topk_activations.pop(-1)
+            if len(topk_activations) < topk:
                 topk_activations.append((max_act, acts, text))
-                topk_activations.sort(key=lambda x: x[0], reverse=True)
 
-        if i > max_evaluation:
-            break
+                topk_activations.sort(
+                    key=lambda x: x[0], reverse=True
+                )  # sorted smallest to largest
 
-    html = ""
+            else:
+                min_topk_act = topk_activations[-1][0]
+                if max_act > min_topk_act:
+                    topk_activations.pop(-1)
+                    topk_activations.append((max_act, acts, text))
+                    topk_activations.sort(key=lambda x: x[0], reverse=True)
 
-    header = f"<h1>Model: SoLU Model: {model.N} Layer(s), 2048 Neurons per Layer</h1><h1>Dataset: OpenWebText2</h1><h2>Neuron {NEURON_IDX} in Layer {LAYER_IDX} </h2>"
-    for activation_data in topk_activations:
-        html += create_html(activation_data[-1], activation_data[1])
+            if i > max_evaluation:
+                break
 
-    with open(f"neurons/layer_{LAYER_IDX}_{NEURON_IDX}.html", "w") as f:
-        f.write(header + html)
+        html = ""
+
+        header = f"<h1>Model: SoLU Model: {model.N} Layer(s), 2048 Neurons per Layer</h1><h1>Dataset: OpenWebText2</h1><h2>Neuron {NEURON_IDX} in Layer {LAYER_IDX} </h2>"
+        for activation_data in topk_activations:
+            html += create_html(activation_data[-1], activation_data[1])
+
+        with open(f"neurons/layer_{LAYER_IDX}_{NEURON_IDX}.html", "w") as f:
+            f.write(header + html)
