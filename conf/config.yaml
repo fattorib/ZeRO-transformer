@@ -1,11 +1,11 @@
 training:
   max_epochs: 1
   batch_size: 16
-  peak_learning_rate: 1.0e-3
+  peak_learning_rate: 6.0e-4
   warmup_steps: 2000
   total_steps: 250000
-  end_learning_rate: 1.0e-6
-  weight_decay: 0.01
+  end_learning_rate: 6.0e-6
+  weight_decay: 0.1
   gradient_accumulation_steps: 8
   evaluation_frequency: 1000
   maximum_evaluation_steps: 500
@@ -13,7 +13,7 @@ training:
   warmup_train_context: 1024
 
 model:
-  size: "solu-3l"
+  size: "solu-4l"
 
 data:
   corpus: "openwebtext"
