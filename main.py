@@ -404,6 +404,11 @@ def main():
 
         new_steps += 1
 
+        if dynamic_scale.scale == 0:
+            if jax.process_index() == 0:
+                logger.error(f"Loss scalar has decayed to 0. Check your configs!")
+            break 
+
         if (i) % (cfg.training.evaluation_frequency) == 0:
             for val_it, val_text in enumerate(
                 tqdm(vl, disable=not jax.process_index() == 0)
