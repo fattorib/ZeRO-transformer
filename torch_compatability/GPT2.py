@@ -570,16 +570,16 @@ def create_GPT2_1l(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
     return model
 
 
-def create_GPT2_2l(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
+def create_GPT2_4l(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
     """
     TODO: Fill this in
     """
     model = GPT2(
         num_ctx=num_ctx,
-        embedding_dim=512,
-        N=2,
+        embedding_dim=256,
+        N=4,
         vocab_size=257,
-        num_head=8,
+        num_head=4,
         use_alibi=True,
         **kwargs,
     )
@@ -711,7 +711,7 @@ def model_getter(model_name, vocab_size, num_ctx, model_checkpoint=None, **kwarg
         "flax-xxlarge": create_GPT2_flax_xxlarge,
         "flax-bytelevel": create_GPT2_bytelevel,
         "flax-solu1l": create_GPT2_1l,
-        "flax-solu2l": create_GPT2_2l,
+        "flax-solu4l": create_GPT2_4l,
     }
 
     assert (
