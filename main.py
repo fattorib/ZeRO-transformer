@@ -203,7 +203,16 @@ def main():
 
         if jax.process_index() == 0:
             logger.debug(f"Resuming training from step {resume_step}")
-        dynamic_scale = dynamic_scale_lib.DynamicScale(fin_steps=dynamic_scale_dict['fin_steps'], scale=dynamic_scale_dict['scale'])
+        
+        if dynamic_scale_dict['scale'] > 0:
+            scale = dynamic_scale_dict['scale']
+            fin_steps = dynamic_scale_dict['fin_steps']
+        else:
+            scale = 65536.0
+            fin_steps = 0
+
+        dynamic_scale = dynamic_scale_lib.DynamicScale(fin_steps=fin_steps, scale=scale)
+
     params = jax.device_get(params)  # copy params to CPU
 
     opt_state = jax.device_get(opt_state)  # copy opt_state to CPU

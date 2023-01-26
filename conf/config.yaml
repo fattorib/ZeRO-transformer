@@ -23,5 +23,5 @@ data:
   shard_path_train: "data/index/local_openwebtext2_train.index"
   shard_path_validation: "data/index/local_openwebtext2_validation.index"
   wandb_project: "jax-transformer-micro"
-  resume_step: 7000
+  resume_step: 145000
   wandb_id: "3hh61zh2"
