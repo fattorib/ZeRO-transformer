@@ -1,10 +1,11 @@
 # ZeRO Optimizer Sharding with jax.pmap
 
-JAX codebase demonstrating an application of [ZeRO](https://arxiv.org/abs/1910.02054)-style optimizer sharding using only ```jax.pmap```. This codebase was used to train a 1.1B parameter transformer model on a TPU v3-32, something that would not be possible with standard data parallel training. 
+JAX codebase demonstrating an application of [ZeRO](https://arxiv.org/abs/1910.02054)-style optimizer sharding using only ```jax.pmap```. This codebase was used to train a 1.1B parameter transformer model on a TPU v3-32, something that would not be possible with standard data parallel training.
 
-# Todos: 
-- [ ] Finish readme install instructions, etc 
-- [ ] Write up how everything works 
+# Todos
+
+- [ ] Finish readme install instructions, etc
+- [ ] Write up how everything works
 
 # Configuration Setup
 
@@ -24,6 +25,7 @@ model_name:
 ```
 
 ## Training Config
+
 All other configuration is handled in ```conf/config.yaml```:
 
 ```yaml
@@ -58,17 +60,17 @@ data:
   resume_step: # if resuming training, step to resume from
 ```
 
+## Training
 
-## Training 
 This assumes you have your data setup on a GCP bucket and .index files created for your datasets. In addition, you must have a running TPU VM instance and be connected to it.
 
-```bash 
+```bash
 python main_zero.py
 ```
-If resuming a run, pass the ```--resume``` flag to your script. 
+
+If resuming a run, pass the ```--resume``` flag to your script.
 
 ## Trained Models
-
 
 ## TPU Setup
 
@@ -79,5 +81,5 @@ bash prepareTPUVM.sh
 ```
 
 # Acknowledgements
-TPU Development and training supported with Cloud TPUs from Google's TPU Research Cloud (TRC)
 
+TPU Development and training supported with Cloud TPUs from Google's TPU Research Cloud (TRC)
