@@ -80,6 +80,8 @@ cd transformer
 bash prepareTPUVM.sh
 ```
 
+**Note** Due to the jax.Array [changes](https://jax.readthedocs.io/en/latest/jax_array_migration.html#jax-array-migration) in Jax 0.4.1, JAX pre-0.4.1 must be used. JAX 0.3.25 is sufficient and the pmapped code has been tested up to this version.
+
 # Acknowledgements
 
 TPU Development and training supported with Cloud TPUs from Google's TPU Research Cloud (TRC)
