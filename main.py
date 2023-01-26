@@ -183,7 +183,7 @@ def main():
     state, optimizer, opt_state = create_train_state(
         init_rng,
         learning_rate_fn,
-        weight_decay=0.1,
+        weight_decay=cfg.training.weight_decay,
         model=model,
     )
     params = state.params
