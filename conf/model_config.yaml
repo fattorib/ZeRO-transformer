@@ -34,13 +34,13 @@ solu-1l:
   N: 1
   alibi_attn: True
 
-solu-4l:
-  embedding_dim: 512
+solu-6l:
+  embedding_dim: 256
   vocab_size: 257
   num_head: 8
   block_size: 1024
   dropout: 0.0
-  N: 4
+  N: 6
   alibi_attn: True
 
 
