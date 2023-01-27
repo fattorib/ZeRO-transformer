@@ -236,6 +236,7 @@ def main():
         logger.debug(f"Training setup with {num_devices} devices.")
         logger.debug(f"Host setup with {num_local_devices} devices.")
         logger.debug(f"Using platform: {platform}.")
+        logger.debug(f"Computations will be performed in precision: {cfg.model.precision}")
 
     local_batch_size = cfg.training.batch_size // (jax.local_device_count())
 
@@ -413,7 +414,7 @@ def main():
 
         new_steps += 1
 
-        if dynamic_scale.scale == 0:
+        if dynamic_scale is not None and dynamic_scale.scale == 0:
             if jax.process_index() == 0:
                 logger.error(f"Loss scalar has decayed to 0. Check your configs!")
             break
@@ -586,11 +587,12 @@ def update_state(
     updates, new_opt_state = optimizer.update(grads, optimizer_state, params)
     new_params = optax.apply_updates(params, updates)
 
-    new_opt_state = jax.tree_util.tree_map(
-        partial(jnp.where, is_fin), new_opt_state, optimizer_state
-    )
+    
 
     if is_fin is not None:
+        new_opt_state = jax.tree_util.tree_map(
+            partial(jnp.where, is_fin), new_opt_state, optimizer_state
+        )
         new_params = jax.tree_util.tree_map(
             partial(jnp.where, is_fin), new_params, params
         )
