@@ -28,9 +28,7 @@ def parse():
     parser.add_argument("--neuron-idx", type=int)
     parser.add_argument("--topk", type=int)
     parser.add_argument("--max-samples", type=int)
-    parser.add_argument("--random-sample",
-        default=False,
-        action="store_true")
+    parser.add_argument("--random-sample", default=False, action="store_true")
 
     args = parser.parse_args()
     return args
@@ -101,8 +99,6 @@ if __name__ == "__main__":
 
     args = parse()
 
-    
-
     model, tokenizer = model_creator(args.model_size, args.model_path)
 
     def preprocess(batch):
@@ -124,14 +120,15 @@ if __name__ == "__main__":
 
     if args.random_sample:
         # randomly sample neuron/layer pairs
-        neuron_lst = list(np.random.choice(4*model.embedding_dim, size = 20))
-        layer_lst = list(np.random.choice(model.N, size = 20))
+        neuron_lst = list(np.random.choice(4 * model.embedding_dim, size=20))
+        layer_lst = list(np.random.choice(model.N, size=20))
 
     else:
         neuron_lst = [args.neuron_idx]
         layer_lst = [args.layer_idx]
 
     for NEURON_IDX, LAYER_IDX in zip(neuron_lst, layer_lst):
+
         def create_html(text, activations):
             """
             From a collection of tuples and activations, turn this into
@@ -161,12 +158,13 @@ if __name__ == "__main__":
                 htmls.append(
                     f"<h4>Custom Range Set. Max Act: <b>{act_max:.4f}</b>. Min Act: <b>{act_min:.4f}</b></h4>"
                 )
-            
+
             # strip text to only get @ most 256 tokens on either side
 
-            text = text[max(idx_max-256, 0): min(idx_max + 256, len(text))]
-            activations = activations[max(idx_max-256, 0): min(idx_max + 256, len(activations))]
-
+            text = text[max(idx_max - 256, 0) : min(idx_max + 256, len(text))]
+            activations = activations[
+                max(idx_max - 256, 0) : min(idx_max + 256, len(activations))
+            ]
 
             # Convert the text to a list of tokens
             for tok, act in zip(text, activations):
