@@ -26,3 +26,4 @@ data:
   wandb_project: "jax-transformer-micro"
   resume_step: 0
   wandb_id: ""
+  bucket_path: "bfattoribooks2"

@@ -456,14 +456,24 @@ def main():
                 train_metrics_np.update(validation_metrics_np)
                 wandb.log(train_metrics_np)
 
-                save_checkpoint_params(
-                    params,
-                    opt_state,
-                    dynamic_scale,
-                    absolute_step,
-                    # workdir=f"checkpoints/solu",
-                    workdir=f"gs://bfattoribooks2/checkpoints/"
-                )
+                if save_to_bucket:
+                    save_checkpoint_params(
+                        params,
+                        opt_state,
+                        dynamic_scale,
+                        absolute_step,
+                        workdir=f"gs://bfattoribooks2/checkpoints/"
+                    )
+                else:
+                                        
+                    save_checkpoint_params(
+                        params,
+                        opt_state,
+                        dynamic_scale,
+                        absolute_step,
+                        workdir=f"checkpoints/solu",                    
+                    )
+
 
         else:
             if jax.process_index() == 0:
