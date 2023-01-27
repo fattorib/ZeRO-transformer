@@ -13,7 +13,7 @@ training:
   warmup_train_context: 1024
 
 model:
-  size: "solu-6l"
+  size: "solu-4l"
 
 data:
   corpus: "openwebtext"
