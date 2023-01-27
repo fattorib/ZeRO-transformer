@@ -61,7 +61,11 @@ def save_checkpoint_params(
     if jax.process_index() == 0:
         params = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], params))
         opt_state = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], opt_state))
-        dynamic_scale = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], dynamic_scale))
+
+        if dynamic_scale is not None:
+            dynamic_scale = jax.device_get(
+                jax.tree_util.tree_map(lambda x: x[0], dynamic_scale)
+            )
 
         faux_state = TrainState(
             step=step,
@@ -140,7 +144,7 @@ def create_train_state(
             weight_decay=weight_decay,
             mask=mask,
             b2=0.95,
-            mu_dtype=jnp.float32
+            mu_dtype=jnp.float32,
         ),
     )
 
@@ -165,7 +169,10 @@ def main():
     validation_shards = open(cfg.data.shard_path_validation).read().splitlines()
 
     model, model_config = model_getter(
-        cfg.model.size, config_path=args.model_cfg, return_cfg=True, dtype=jnp.float16 if cfg.model.precision == "float16" else jnp.float32
+        cfg.model.size,
+        config_path=args.model_cfg,
+        return_cfg=True,
+        dtype=jnp.float16 if cfg.model.precision == "float16" else jnp.float32,
     )
 
     learning_rate_fn = optax.warmup_cosine_decay_schedule(
@@ -208,16 +215,18 @@ def main():
 
         if jax.process_index() == 0:
             logger.debug(f"Resuming training from step {resume_step}")
-        
+
         if cfg.model.precision == "float16":
-            if dynamic_scale_dict['scale'] > 0:
-                scale = dynamic_scale_dict['scale']
-                fin_steps = dynamic_scale_dict['fin_steps']
+            if dynamic_scale_dict["scale"] > 0:
+                scale = dynamic_scale_dict["scale"]
+                fin_steps = dynamic_scale_dict["fin_steps"]
             else:
                 scale = 65536.0
                 fin_steps = 0
 
-            dynamic_scale = dynamic_scale_lib.DynamicScale(fin_steps=fin_steps, scale=scale)
+            dynamic_scale = dynamic_scale_lib.DynamicScale(
+                fin_steps=fin_steps, scale=scale
+            )
 
     params = jax.device_get(params)  # copy params to CPU
 
@@ -326,7 +335,9 @@ def main():
     opt_state = flax.jax_utils.replicate(opt_state, devices=jax.local_devices())
 
     if cfg.model.precision == "float16":
-        dynamic_scale = flax.jax_utils.replicate(dynamic_scale, devices=jax.local_devices())
+        dynamic_scale = flax.jax_utils.replicate(
+            dynamic_scale, devices=jax.local_devices()
+        )
 
     # quick way to track global step count when resuming a run
     new_steps = 0
@@ -368,17 +379,11 @@ def main():
 
         params, opt_state = update_state(grads, opt_state, params, optimizer, is_fin)
 
-        
-
         metrics["Train Sequence Length"] = seq_len
         metrics["Learning Rate"] = learning_rate_fn(resume_step + new_steps)
 
-        metrics["Scaler"] = dynamic_scale.scale
-
-        metrics["l2_norm/embedding/param"] = jax.tree_util.tree_map(lambda x : jnp.sqrt(jnp.linalg.norm(x)), params["params"]["wte"]["embedding"])
-        metrics["l2_norm/embedding/second_moment_sqrt"] = jax.tree_util.tree_map(lambda x : jnp.sqrt(jnp.linalg.norm(x)), opt_state[1][0].mu['params']["wte"]["embedding"])
-        metrics["l2_norm/embedding/first_moment"] = jax.tree_util.tree_map(lambda x : jnp.linalg.norm(x), opt_state[1][0].mu['params']["wte"]["embedding"])
-        metrics["l2_norm/embedding/gradient"] = jax.tree_util.tree_map(lambda x : jnp.linalg.norm(x), grads['params']["wte"]["embedding"])
+        if dynamic_scale is not None:
+            metrics["Scaler"] = dynamic_scale.scale
 
         del grads  # manually free grad mem
 
@@ -411,7 +416,7 @@ def main():
         if dynamic_scale.scale == 0:
             if jax.process_index() == 0:
                 logger.error(f"Loss scalar has decayed to 0. Check your configs!")
-            break 
+            break
 
         if (i) % (cfg.training.evaluation_frequency) == 0:
             for val_it, val_text in enumerate(
@@ -478,35 +483,78 @@ def train_step(
         )
         return loss
 
-    grad_fn = dynamic_scale.value_and_grad(loss_fn, has_aux=False, axis_name="batch")
-
-    def loss_and_grad(grad_idx):
-        minibatch = get_minibatch(batch, grad_idx) if grad_idx is not None else batch
-
-        dynamic_scale, is_fin, loss, grads = grad_fn(params, minibatch)
-
-        return dynamic_scale, is_fin, loss, grads
-
-    init_minibatch = (dynamic_scale, True, 0.0, jax.tree_util.tree_map(jnp.zeros_like, params))
-
-    def cumul_minibatch_step(grad_idx, cumul_loss_grad):
-        _, cumul_is_fin, cumul_loss, cumul_grads = cumul_loss_grad
-        dynamic_scale, is_fin, loss, grads = loss_and_grad(grad_idx)
-
-        cumul_loss, cumul_grads = jax.tree_util.tree_map(
-            jnp.add, (cumul_loss, cumul_grads), (loss, grads)
+    if dynamic_scale is not None:
+        grad_fn = dynamic_scale.value_and_grad(
+            loss_fn, has_aux=False, axis_name="batch"
         )
 
-        cumul_is_fin = jax.tree_util.tree_map(jnp.logical_and, cumul_is_fin, is_fin)
+        def loss_and_grad(grad_idx):
+            minibatch = (
+                get_minibatch(batch, grad_idx) if grad_idx is not None else batch
+            )
 
-        return dynamic_scale, cumul_is_fin, cumul_loss, cumul_grads
+            dynamic_scale, is_fin, loss, grads = grad_fn(params, minibatch)
 
-    dynamic_scale, is_fin, loss, grads = jax.lax.fori_loop(
-        0,
-        accum_steps,
-        cumul_minibatch_step,
-        init_minibatch,
-    )
+            return dynamic_scale, is_fin, loss, grads
+
+        init_minibatch = (
+            dynamic_scale,
+            True,
+            0.0,
+            jax.tree_util.tree_map(jnp.zeros_like, params),
+        )
+
+        def cumul_minibatch_step(grad_idx, cumul_loss_grad):
+            _, cumul_is_fin, cumul_loss, cumul_grads = cumul_loss_grad
+            dynamic_scale, is_fin, loss, grads = loss_and_grad(grad_idx)
+
+            cumul_loss, cumul_grads = jax.tree_util.tree_map(
+                jnp.add, (cumul_loss, cumul_grads), (loss, grads)
+            )
+
+            cumul_is_fin = jax.tree_util.tree_map(jnp.logical_and, cumul_is_fin, is_fin)
+
+            return dynamic_scale, cumul_is_fin, cumul_loss, cumul_grads
+
+        dynamic_scale, is_fin, loss, grads = jax.lax.fori_loop(
+            0,
+            accum_steps,
+            cumul_minibatch_step,
+            init_minibatch,
+        )
+
+    else:
+        grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
+
+        def loss_and_grad(grad_idx):
+            minibatch = (
+                get_minibatch(batch, grad_idx) if grad_idx is not None else batch
+            )
+
+            loss, grads = grad_fn(params, minibatch)
+
+            return loss, grads
+
+        init_minibatch = (0.0, jax.tree_util.tree_map(jnp.zeros_like, params))
+
+        # accumulate gradients
+        def cumul_minibatch_step(grad_idx, cumul_loss_grad):
+            cumul_loss, cumul_grads = cumul_loss_grad
+            loss, grads = loss_and_grad(grad_idx)
+            cumul_loss, cumul_grads = jax.tree_util.tree_map(
+                jnp.add, (cumul_loss, cumul_grads), (loss, grads)
+            )
+
+            return cumul_loss, cumul_grads
+
+        loss, grads = jax.lax.fori_loop(
+            0,
+            accum_steps,
+            cumul_minibatch_step,
+            init_minibatch,
+        )
+
+        is_fin = None
 
     loss, grads = jax.tree_util.tree_map(lambda x: x / accum_steps, (loss, grads))
 
@@ -542,7 +590,10 @@ def update_state(
         partial(jnp.where, is_fin), new_opt_state, optimizer_state
     )
 
-    new_params = jax.tree_util.tree_map(partial(jnp.where, is_fin), new_params, params)
+    if is_fin is not None:
+        new_params = jax.tree_util.tree_map(
+            partial(jnp.where, is_fin), new_params, params
+        )
 
     return new_params, new_opt_state
 
