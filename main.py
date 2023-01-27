@@ -165,8 +165,21 @@ def main():
     num_host = num_devices // num_local_devices
     platform = jax.local_devices()[0].platform
 
-    train_shards = open(cfg.data.shard_path_train).read().splitlines()
-    validation_shards = open(cfg.data.shard_path_validation).read().splitlines()
+    save_to_bucket = False
+    client = None
+    if platform == "tpu":
+        if cfg.data.bucket_path is not None:
+            # use GCP
+            from google.cloud import storage
+            from google.cloud.exceptions import NotFound
+
+            client = storage.Client()
+            save_to_bucket = True
+            train_shards = open(cfg.data.index_path_train).read().splitlines()
+            validation_shards = open(cfg.data.index_path_validation).read().splitlines()
+    else:
+        train_shards = open(cfg.data.shard_path_train).read().splitlines()
+        validation_shards = open(cfg.data.shard_path_validation).read().splitlines()
 
     model, model_config = model_getter(
         cfg.model.size,
@@ -448,7 +461,8 @@ def main():
                     opt_state,
                     dynamic_scale,
                     absolute_step,
-                    workdir=f"checkpoints/solu",
+                    # workdir=f"checkpoints/solu",
+                    workdir=f"gs://bfattoribooks2/checkpoints/"
                 )
 
         else:
