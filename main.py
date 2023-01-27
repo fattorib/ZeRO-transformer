@@ -236,7 +236,9 @@ def main():
         logger.debug(f"Training setup with {num_devices} devices.")
         logger.debug(f"Host setup with {num_local_devices} devices.")
         logger.debug(f"Using platform: {platform}.")
-        logger.debug(f"Computations will be performed in precision: {cfg.model.precision}")
+        logger.debug(
+            f"Computations will be performed in precision: {cfg.model.precision}"
+        )
 
     local_batch_size = cfg.training.batch_size // (jax.local_device_count())
 
@@ -586,8 +588,6 @@ def update_state(
     # These two lines update the specific shard of state/parameters sitting on device 'i'
     updates, new_opt_state = optimizer.update(grads, optimizer_state, params)
     new_params = optax.apply_updates(params, updates)
-
-    
 
     if is_fin is not None:
         new_opt_state = jax.tree_util.tree_map(
