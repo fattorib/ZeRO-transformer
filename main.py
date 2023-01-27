@@ -175,8 +175,8 @@ def main():
 
             client = storage.Client()
             save_to_bucket = True
-            train_shards = open(cfg.data.index_path_train).read().splitlines()
-            validation_shards = open(cfg.data.index_path_validation).read().splitlines()
+            train_shards = open(cfg.data.shard_path_train).read().splitlines()
+            validation_shards = open(cfg.data.shard_path_validation).read().splitlines()
     else:
         train_shards = open(cfg.data.shard_path_train).read().splitlines()
         validation_shards = open(cfg.data.shard_path_validation).read().splitlines()
