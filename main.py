@@ -165,7 +165,7 @@ def main():
     validation_shards = open(cfg.data.shard_path_validation).read().splitlines()
 
     model, model_config = model_getter(
-        cfg.model.size, config_path=args.model_cfg, return_cfg=True, dtype=jnp.float16
+        cfg.model.size, config_path=args.model_cfg, return_cfg=True, dtype=jnp.float16 if cfg.model.precision == "float16" else jnp.float32
     )
 
     learning_rate_fn = optax.warmup_cosine_decay_schedule(
@@ -188,7 +188,11 @@ def main():
         model=model,
     )
     params = state.params
-    dynamic_scale = dynamic_scale_lib.DynamicScale()
+
+    if cfg.model.precision == "float16":
+        dynamic_scale = dynamic_scale_lib.DynamicScale()
+    else:
+        dynamic_scale = None
 
     del state
 
@@ -205,14 +209,15 @@ def main():
         if jax.process_index() == 0:
             logger.debug(f"Resuming training from step {resume_step}")
         
-        if dynamic_scale_dict['scale'] > 0:
-            scale = dynamic_scale_dict['scale']
-            fin_steps = dynamic_scale_dict['fin_steps']
-        else:
-            scale = 65536.0
-            fin_steps = 0
+        if cfg.model.precision == "float16":
+            if dynamic_scale_dict['scale'] > 0:
+                scale = dynamic_scale_dict['scale']
+                fin_steps = dynamic_scale_dict['fin_steps']
+            else:
+                scale = 65536.0
+                fin_steps = 0
 
-        dynamic_scale = dynamic_scale_lib.DynamicScale(fin_steps=fin_steps, scale=scale)
+            dynamic_scale = dynamic_scale_lib.DynamicScale(fin_steps=fin_steps, scale=scale)
 
     params = jax.device_get(params)  # copy params to CPU
 
@@ -276,7 +281,7 @@ def main():
         wds.SimpleShardList(train_shards),
         split_by_jax_process,
         wds.tarfile_to_samples(handler=wds.warn_and_continue),
-        wds.shuffle(1e4, initial=1e4, rng=pyrandom.Random(23 + resume_step)),
+        wds.shuffle(1e4, initial=1e4, rng=pyrandom.Random(23)),
         wds.decode(handler=wds.warn_and_continue),
         wds.map(preprocess),
     ).repeat(nepochs=cfg.training.max_epochs)
@@ -285,7 +290,7 @@ def main():
         wds.SimpleShardList(validation_shards),
         split_by_jax_process,
         wds.tarfile_to_samples(handler=wds.warn_and_continue),
-        wds.shuffle(1e4, initial=1e4, rng=pyrandom.Random(23 + resume_step)),
+        wds.shuffle(1e4, initial=1e4, rng=pyrandom.Random(23)),
         wds.decode(handler=wds.warn_and_continue),
         wds.map(preprocess),
     )
@@ -319,11 +324,9 @@ def main():
 
     params = flax.jax_utils.replicate(params, devices=jax.local_devices())
     opt_state = flax.jax_utils.replicate(opt_state, devices=jax.local_devices())
-    dynamic_scale = flax.jax_utils.replicate(dynamic_scale, devices=jax.local_devices())
 
-    
-
-    rng = jax.random.fold_in(rng, resume_step)  # fold in resume step to create new rng
+    if cfg.model.precision == "float16":
+        dynamic_scale = flax.jax_utils.replicate(dynamic_scale, devices=jax.local_devices())
 
     # quick way to track global step count when resuming a run
     new_steps = 0
