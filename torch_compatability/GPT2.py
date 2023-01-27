@@ -579,7 +579,7 @@ def create_GPT2_4l(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
         embedding_dim=256,
         N=4,
         vocab_size=257,
-        num_head=4,
+        num_head=8,
         use_alibi=True,
         **kwargs,
     )
