@@ -220,9 +220,15 @@ def main():
         del params
         del opt_state
 
-        params, dynamic_scale_dict, opt_state, step = restore_state(
-            workdir=f"checkpoints/solu"
-        )
+        if platform == "tpu":
+            params, dynamic_scale_dict, opt_state, step = restore_state(
+                workdir=f"gs://{cfg.data.bucket_path}/checkpoints/"
+            )
+
+        else:
+            params, dynamic_scale_dict, opt_state, step = restore_state(
+                workdir=f"checkpoints/solu"
+            )
 
         resume_step = int(step)
 
@@ -462,18 +468,17 @@ def main():
                         opt_state,
                         dynamic_scale,
                         absolute_step,
-                        workdir=f"gs://bfattoribooks2/checkpoints/"
+                        workdir=f"gs://{cfg.data.bucket_path}/checkpoints/",
                     )
                 else:
-                                        
+
                     save_checkpoint_params(
                         params,
                         opt_state,
                         dynamic_scale,
                         absolute_step,
-                        workdir=f"checkpoints/solu",                    
+                        workdir=f"checkpoints/solu",
                     )
-
 
         else:
             if jax.process_index() == 0:
