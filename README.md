@@ -1,4 +1,4 @@
-**Note**: This is an experimental branch experimenting with tiny models for token examination as done in Neel Nanda's [Neuroscope](https://neuroscope.io/)
+**Note**: This is an experimental branch experimenting with much smaller models for neuron examination as done in Neel Nanda's [Neuroscope](https://neuroscope.io/)
 
 # ZeRO Optimizer Sharding with jax.pmap
 
