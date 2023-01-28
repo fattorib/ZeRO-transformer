@@ -20,14 +20,19 @@ def create_transformer_block_mapping(block_idx: int):
         "CausalAttention_0.query_proj.bias": f"blocks.{block_idx}.attn.query.bias",
         "CausalAttention_0.residual_out.kernel": f"blocks.{block_idx}.attn.fc_resid.weight",
         "CausalAttention_0.residual_out.bias": f"blocks.{block_idx}.attn.fc_resid.bias",
+
         "MLPBlock_0.fc_in.kernel": f"blocks.{block_idx}.mlp.fc1.weight",
         "MLPBlock_0.fc_in.bias": f"blocks.{block_idx}.mlp.fc1.bias",
+
         "MLPBlock_0.fc_residual.kernel": f"blocks.{block_idx}.mlp.fc_resid.weight",
         "MLPBlock_0.fc_residual.bias": f"blocks.{block_idx}.mlp.fc_resid.bias",
+        
         "MLPBlock_0.LayerNorm_0.scale": f"blocks.{block_idx}.mlp.solu_ln.weight",
         "MLPBlock_0.LayerNorm_0.bias": f"blocks.{block_idx}.mlp.solu_ln.bias",
+
         "LayerNorm_0.scale": f"blocks.{block_idx}.ln1.weight",
         "LayerNorm_0.bias": f"blocks.{block_idx}.ln1.bias",
+        
         "LayerNorm_1.scale": f"blocks.{block_idx}.ln2.weight",
         "LayerNorm_1.bias": f"blocks.{block_idx}.ln2.bias",
     }
