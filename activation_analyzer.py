@@ -101,9 +101,15 @@ def pull_act_from_text(
 
         return hook
 
-    h = model.blocks[layer_idx].mlp.solu.register_forward_hook(
-        getActivation("neuron_act")
-    )
+    if model.use_solu:
+        h = model.blocks[layer_idx].mlp.solu.register_forward_hook(
+            getActivation("neuron_act")
+        )
+
+    else:
+        h = model.blocks[layer_idx].mlp.gelu.register_forward_hook(
+            getActivation("neuron_act")
+        )
 
     tokens = torch.tensor(tokenizer.encode(text)).cuda()
 
