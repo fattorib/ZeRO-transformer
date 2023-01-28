@@ -27,7 +27,7 @@ def parse():
     parser.add_argument("--layer-idx", type=int)
     parser.add_argument("--neuron-idx", type=int)
     parser.add_argument("--topk", type=int)
-    parser.add_argument("--max-samples", type=int)
+    parser.add_argument("--max-samples-per-neuron", type=int)
     parser.add_argument("--random-sample", default=False, action="store_true")
 
     args = parser.parse_args()
@@ -120,8 +120,16 @@ if __name__ == "__main__":
 
     if args.random_sample:
         # randomly sample neuron/layer pairs
-        neuron_lst = list(np.random.choice(4 * model.embedding_dim, size=20))
-        layer_lst = list(np.random.choice(model.N, size=20))
+
+        if args.neuron_idx is not None:
+            neuron_lst = [args.neuron_idx]*20
+        else:
+            neuron_lst = list(np.random.choice(4 * model.embedding_dim, size=20))
+        
+        if args.layer_idx is not None:
+            layer_lst = [args.layer_idx]*20
+        else:
+            layer_lst = list(np.random.choice(model.N, size=20))
 
     else:
         neuron_lst = [args.neuron_idx]
@@ -179,7 +187,7 @@ if __name__ == "__main__":
 
         topk = args.topk
         topk_activations = []  # tuple of (max_activation, activations, text)
-        max_evaluation = args.max_samples
+        max_evaluation = args.max_samples_per_neuron
 
         for i, text in tqdm(enumerate(tl), total=max_evaluation):
 
@@ -212,7 +220,7 @@ if __name__ == "__main__":
 
         html = ""
 
-        header = f"<h1>Model: SoLU Model: {model.N} Layer(s), 2048 Neurons per Layer</h1><h1>Dataset: OpenWebText2</h1><h2>Neuron {NEURON_IDX} in Layer {LAYER_IDX} </h2>"
+        header = f"<h1>Model: {'SOLU' if model.use_solu else 'GeLU'} Model: {model.N} Layer(s), {4*model.embedding_dim} Neurons per Layer</h1><h1>Dataset: OpenWebText2</h1><h2>Neuron {NEURON_IDX} in Layer {LAYER_IDX} </h2>"
         for activation_data in topk_activations:
             html += create_html(activation_data[-1], activation_data[1])
 
