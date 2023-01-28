@@ -487,10 +487,10 @@ def create_GPT2_test(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
     """
     model = GPT2(
         num_ctx=num_ctx,
-        embedding_dim=128,
+        embedding_dim=64,
         N=2,
         vocab_size=vocab_size,
-        num_head=8,
+        num_head=4,
         fused_residuals=False,
         use_alibi=True,
         **kwargs,
