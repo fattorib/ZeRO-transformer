@@ -1,3 +1,19 @@
+# Table of Contents
+
+1. [ZeRO Optimizer Sharding with jax.pmap](#zero-optimizer-sharding-with-jax.pmap)
+
+2. [Configuration Setup](#configuration-setup)
+
+3. [Training](#training)
+
+4. [Trained Models](#trained-models)
+
+5. [How This Works](#how-this-works)
+
+6. [Acknowledgements](#acknowledgements)
+
+7. [TODO](#todo)
+
 # ZeRO Optimizer Sharding with jax.pmap
 
 JAX codebase demonstrating an application of [ZeRO](https://arxiv.org/abs/1910.02054)-style optimizer sharding using only ```jax.pmap```. This codebase was used to train a 1.1B parameter transformer model on a TPU v3-32, something that would not be possible with standard data parallel training[^1].
@@ -148,5 +164,10 @@ bash prepareTPUVM.sh
 # Acknowledgements
 
 TPU Development and training supported with Cloud TPUs from Google's TPU Research Cloud (TRC)
+
+# TODO
+
+- [] Upload trained models to public storage
+- [] Add text section for ```app.py```
 
 [^1]: Naively, a 1.1B param model requires ~16.4 GiB to store the params and optimizer states alone, which is already more than the 16.0 GiB of memory each TPU V3 core has access to. The total memory requirements during training are even higher due to the need for storing activations + misc. temporary buffers.
