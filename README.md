@@ -1,17 +1,11 @@
 # Table of Contents
 
 1. [ZeRO Optimizer Sharding with jax.pmap](#zero-optimizer-sharding-with-jax.pmap)
-
 2. [Configuration Setup](#configuration-setup)
-
 3. [Training](#training)
-
 4. [Trained Models](#trained-models)
-
 5. [How This Works](#how-this-works)
-
 6. [Acknowledgements](#acknowledgements)
-
 7. [TODO](#todo)
 
 # ZeRO Optimizer Sharding with jax.pmap
