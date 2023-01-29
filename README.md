@@ -157,7 +157,7 @@ bash prepareTPUVM.sh
 
 # Acknowledgements
 
-TPU Development and training supported with Cloud TPUs from Google's TPU Research Cloud (TRC)
+TPU Development and training supported with Cloud TPUs from Google's [TPU Research Cloud (TRC)](https://sites.research.google/trc/about/). Thank you to the excellent TRC team for granting me access to upgraded TPU VMs and for the extensions I received while working on this project! 
 
 # TODO
 
