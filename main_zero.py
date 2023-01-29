@@ -645,12 +645,6 @@ def train_step(
     return grads, metrics
 
 
-@partial(jax.pmap, axis_name="shard", devices=jax.local_devices())
-def slice_grads(grads, device_index):
-    """pmappable way to access a 'slice' of grads by device index"""
-    grad_slice = jax.tree_util.tree_map(lambda x: x[device_index, ...], grads)
-    return grad_slice
-
 
 @partial(
     jax.pmap,
