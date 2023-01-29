@@ -6,13 +6,6 @@ Section G3.3. from `Scaling Language Models: Methods, Analysis
 """
 import os
 
-import jax
-import jax.numpy as jnp
-from flax.core import freeze, unfreeze
-from flax.serialization import msgpack_restore, msgpack_serialize
-
-from src.models.GPT import model_getter
-
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 

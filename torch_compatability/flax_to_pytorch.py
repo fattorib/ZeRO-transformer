@@ -1,10 +1,6 @@
-from typing import OrderedDict
-
 import numpy as np
 import torch
 from flax.serialization import msgpack_restore
-
-from torch_compatability.GPT2 import model_getter
 
 
 def create_transformer_block_mapping(block_idx: int):
