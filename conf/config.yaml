@@ -1,29 +1,29 @@
 training:
   max_epochs: 1
-  batch_size: 16
+  batch_size: 2
   peak_learning_rate: 8.0e-4
   warmup_steps: 2000
-  total_steps: 100000
+  total_steps: 10000
   end_learning_rate: 8.0e-5
   weight_decay: 0.1
-  gradient_accumulation_steps: 16
+  gradient_accumulation_steps: 4
   evaluation_frequency: 500
   maximum_evaluation_steps: 500
-  staged_warmup_steps: 1000001
-  warmup_train_context: 1024
+  staged_warmup_steps: 7500
+  warmup_train_context: 128
 
 model:
-  size: "solu-6l"
-  precision: "float32"
+  size: "smol"
+  precision: "float16"
 
 data:
-  corpus: "openwebtext"
-  max_context: 4096
-  train_samples: 14809244
+  corpus: "openwebtext1"
+  max_context: 1024
+  train_samples: -1
   checkpoint_directory: "checkpoints"
-  shard_path_train: "data/index/local_openwebtext2_train.index"
-  shard_path_validation: "data/index/local_openwebtext2_validation.index"
-  wandb_project: "jax-transformer-micro"
-  resume_step: 2000
-  wandb_id: "2pwwiuk2"
-  bucket_path: "bfattoribooks2"
+  shard_path_train: "data/index/openwebtext_local.train.index"
+  shard_path_validation: "data/index/openwebtext_local.val.index"
+  wandb_project: "jax-transformer-small"
+  resume_step: 0
+  wandb_id: ""
+  bucket_path: ""
