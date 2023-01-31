@@ -272,7 +272,6 @@ def main():
     params = state.params
     del state
 
-
     if args.resume:
         del params
         del opt_state
@@ -443,10 +442,10 @@ def main():
             return True
 
         if i < int(cfg.data.resume_step):
-            # skip through some of the dataset. 
+            # skip through some of the dataset.
             continue
 
-        rng, dropout_rng,layer_rng = jax.random.split(rng, 3)
+        rng, dropout_rng, layer_rng = jax.random.split(rng, 3)
 
         seq_len = step_to_seq(resume_step + new_steps)
 
@@ -462,7 +461,7 @@ def main():
             seq_len,
         ).transpose(1, 0, 2)
 
-        text = shard(text)  
+        text = shard(text)
 
         rng_sharded = shard_prng_key(dropout_rng)
         rng_layer = shard_prng_key(layer_rng)
@@ -630,7 +629,6 @@ def train_step(
     }
 
     return grads, metrics
-
 
 
 @partial(

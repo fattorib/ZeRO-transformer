@@ -62,7 +62,6 @@ class MLPBlock(nn.Module):
             kernel_init=initializers.normal(stddev=0.02),
             use_bias=False,
             dtype=self.dtype,
-
         )(x)
         x = nn.gelu(x)
         out = nn.Dense(
