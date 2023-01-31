@@ -10,7 +10,7 @@ training:
   evaluation_frequency: 1000
   maximum_evaluation_steps: 500
   staged_warmup_steps: 100000
-  warmup_train_context: 1024
+  warmup_train_context: 128
 
 model:
   size: "base-fast"
