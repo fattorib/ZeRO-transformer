@@ -560,7 +560,7 @@ def main():
                 wandb.log(train_metrics_np)
 
 
-@partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=(3, 4))
+@partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=(4, 5))
 def train_step(
     params: Any,
     batch: jnp.array,
