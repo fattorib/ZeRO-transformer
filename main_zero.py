@@ -451,7 +451,7 @@ def main():
 
         gradient_accumulation_steps = accum_steps(resume_step + new_steps)
 
-        if seq_len < cfg.data.max_context:
+        if seq_len < 2048:
             text = text.reshape(-1, seq_len)
 
         # we add a 'grad_accum' batch dimension which we then iterate through in train_step
