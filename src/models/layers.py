@@ -60,15 +60,16 @@ class MLPBlock(nn.Module):
             features=self.dimension_multiplier * self.embedding_dim,
             name="fc_in",
             kernel_init=initializers.normal(stddev=0.02),
-            bias_init=initializers.zeros,
+            use_bias=False,
             dtype=self.dtype,
+
         )(x)
         x = nn.gelu(x)
         out = nn.Dense(
             features=self.embedding_dim,
             name="fc_residual",
             kernel_init=initializers.normal(stddev=(0.02 / jnp.sqrt(2 * self.N))),
-            bias_init=initializers.zeros,
+            use_bias=False,
             dtype=self.dtype,
         )(x)
         return dropout()(out)
@@ -112,7 +113,7 @@ class CausalAttention(nn.Module):
                 name="key_proj",
                 features=self.embedding_dim,
                 kernel_init=initializers.normal(stddev=0.02),
-                bias_init=initializers.zeros,
+                use_bias=False,
                 dtype=self.dtype,
             )(x)
             .reshape(-1, T, self.num_head, self.embedding_dim // self.num_head)
@@ -125,7 +126,7 @@ class CausalAttention(nn.Module):
                 name="value_proj",
                 features=self.embedding_dim,
                 kernel_init=initializers.normal(stddev=0.02),
-                bias_init=initializers.zeros,
+                use_bias=False,
                 dtype=self.dtype,
             )(x)
             .reshape(-1, T, self.num_head, self.embedding_dim // self.num_head)
@@ -138,7 +139,7 @@ class CausalAttention(nn.Module):
                 name="query_proj",
                 features=self.embedding_dim,
                 kernel_init=initializers.normal(stddev=0.02),
-                bias_init=initializers.zeros,
+                use_bias=False,
                 dtype=self.dtype,
             )(x)
             .reshape(-1, T, self.num_head, self.embedding_dim // self.num_head)
@@ -173,7 +174,7 @@ class CausalAttention(nn.Module):
             kernel_init=jax.nn.initializers.normal(
                 stddev=(0.02 / jnp.sqrt(2 * self.N))
             ),
-            bias_init=initializers.zeros,
+            use_bias=False,
             dtype=self.dtype,
         )(attn_out)
 

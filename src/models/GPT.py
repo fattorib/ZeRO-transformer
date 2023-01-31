@@ -39,14 +39,14 @@ class TransformerBlock(nn.Module):
             self.N,
             self.alibi_attn,
             self.dtype,
-        )(nn.LayerNorm(dtype=self.dtype)(x), train)
+        )(nn.LayerNorm(dtype=self.dtype,use_bias=False)(x), train)
         x = x + attn_out
         x = x + MLPBlock(
             self.embedding_dim,
             dropout=self.residual_dropout,
             N=self.N,
             dtype=self.dtype,
-        )(nn.LayerNorm(dtype=self.dtype)(x), train)
+        )(nn.LayerNorm(dtype=self.dtype,use_bias=False)(x), train)
         return x
 
 
@@ -93,6 +93,11 @@ class Transformer(nn.Module):
             )(jnp.ones((T), dtype=jnp.uint8))
 
             out += wpe
+        
+        if train:
+            keep_prob = [1-((i/(self.N))*(0.5)) for i in range(1, (self.N)+1)]
+            keep_prob[0] = 1.0
+            drop_key = self.make_rng('stochastic_depth')
 
         for i in range(self.N):
             out = TransformerBlock(
@@ -104,8 +109,13 @@ class Transformer(nn.Module):
                 self.dtype,
                 self.alibi_attn,
             )(out, train)
+            
+            if train: 
+                mask = jax.random.bernoulli(key=drop_key, p=keep_prob[i], shape=(out.shape[0], 1, 1))
+                mask = jnp.broadcast_to(mask, out.shape)
+                out = jax.lax.select(mask, out / keep_prob, jnp.zeros_like(out))
 
-        out = nn.LayerNorm(dtype=self.dtype)(out)
+        out = nn.LayerNorm(dtype=self.dtype, use_bias=False)(out)
 
         logits = embed.attend(out)
 
