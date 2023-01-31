@@ -586,7 +586,7 @@ def train_step(
             x=batch,
             labels=batch,
             train=True,
-            rngs={"dropout": rng_key, "stochastic_depth": rng_layer_key},
+            rngs={"dropout": rng_key},
         )
         return loss
 
