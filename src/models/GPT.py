@@ -72,6 +72,10 @@ class Transformer(nn.Module):
         train: bool = False,
     ) -> Union[jnp.array, Tuple[jnp.array, jnp.array]]:
         T = x.shape[-1]
+
+        if train:
+            layer_key = self.make_rng('stochastic_depth')
+
         embed = nn.Embed(
             name="wte",
             num_embeddings=self.vocab_size,
@@ -94,10 +98,7 @@ class Transformer(nn.Module):
 
             out += wpe
         
-        if train:
-            keep_prob = [1-((i/(self.N))*(0.5)) for i in range(1, (self.N)+1)]
-            keep_prob[0] = 1.0
-            drop_key = self.make_rng('stochastic_depth')
+        
 
         for i in range(self.N):
             out = TransformerBlock(
@@ -110,8 +111,10 @@ class Transformer(nn.Module):
                 self.alibi_attn,
             )(out, train)
             
-            if train: 
-                mask = jax.random.bernoulli(key=drop_key, p=keep_prob[i], shape=(out.shape[0], 1, 1))
+            if train: # keep_prob is fixed at 0.5
+                key, layer_key = jax.random.split(layer_key)
+                keep_prob = (1-((i/(self.N))*(0.5))) if i > 1 else 1.0
+                mask = jax.random.bernoulli(key=key, p=keep_prob, shape=(out.shape[0], 1, 1))
                 mask = jnp.broadcast_to(mask, out.shape)
                 out = jax.lax.select(mask, out / keep_prob, jnp.zeros_like(out))
 
