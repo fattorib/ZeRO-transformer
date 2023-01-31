@@ -272,19 +272,6 @@ def main():
     params = state.params
     del state
 
-    if cfg.model.warm_start and not args.resume:
-        if jax.process_index() == 0:
-            logger.debug(
-                f"Warm starting model training from checkpoint {cfg.model.model_path}"
-            )
-
-        del params
-
-        bucket = client.bucket(cfg.data.bucket_path)
-        blob = bucket.blob(cfg.model.model_path)
-        param_bytes = msgpack_restore(blob.download_as_bytes())
-
-        params = flax.core.freeze(param_bytes)
 
     if args.resume:
         del params
@@ -456,12 +443,10 @@ def main():
             return True
 
         if i < int(cfg.data.resume_step):
-            # skip through some of the dataset. Helpful since we've glued 2 datasets together
-            # doesn't have to be super precise since we go for multiple epochs and reshuffle dataset
-            # each resumed run.
+            # skip through some of the dataset. 
             continue
 
-        rng, dropout_rng = jax.random.split(rng, 2)
+        rng, dropout_rng,layer_rng = jax.random.split(rng, 3)
 
         seq_len = step_to_seq(resume_step + new_steps)
 
@@ -477,12 +462,13 @@ def main():
             seq_len,
         ).transpose(1, 0, 2)
 
-        text = shard(text)
+        text = shard(text)  
 
         rng_sharded = shard_prng_key(dropout_rng)
+        rng_layer = shard_prng_key(layer_rng)
 
         grads, metrics = train_step(
-            params, text, rng_sharded, gradient_accumulation_steps, model
+            params, text, rng_sharded, rng_layer, gradient_accumulation_steps, model
         )
 
         grads = split_sharded_device_array(
@@ -580,6 +566,7 @@ def train_step(
     params: Any,
     batch: jnp.array,
     rng_key: jax.random.PRNGKey = None,
+    rng_layer_key: jax.random.PRNGKey = None,
     accum_steps: int = 8,
     model: Any = None,
 ):
@@ -600,7 +587,7 @@ def train_step(
             x=batch,
             labels=batch,
             train=True,
-            rngs={"dropout": rng_key},
+            rngs={"dropout": rng_key, "stochastic_depth": rng_layer_key},
         )
         return loss
 
