@@ -1,6 +1,6 @@
 training:
   max_epochs: 20
-  batch_size: 256
+  batch_size: 128
   peak_learning_rate: 6.0e-4
   warmup_steps: 2000
   total_steps: 100000
@@ -10,7 +10,7 @@ training:
   evaluation_frequency: 1000
   maximum_evaluation_steps: 500
   staged_warmup_steps: 60000
-  warmup_train_context: 1024
+  warmup_train_context: 128
 
 model:
   size: "base-fast"
