@@ -73,8 +73,8 @@ class Transformer(nn.Module):
     ) -> Union[jnp.array, Tuple[jnp.array, jnp.array]]:
         T = x.shape[-1]
 
-        if train:
-            layer_key = self.make_rng("stochastic_depth")
+        # if train:
+        #     layer_key = self.make_rng("stochastic_depth")
 
         embed = nn.Embed(
             name="wte",
@@ -109,14 +109,14 @@ class Transformer(nn.Module):
                 self.alibi_attn,
             )(out, train)
 
-            if train:  # keep_prob is fixed at 0.5
-                key, layer_key = jax.random.split(layer_key)
-                keep_prob = (1 - ((i / (self.N)) * (0.5))) if i > 1 else 1.0
-                mask = jax.random.bernoulli(
-                    key=key, p=keep_prob, shape=(out.shape[0], 1, 1)
-                )
-                mask = jnp.broadcast_to(mask, out.shape)
-                out = jax.lax.select(mask, out / keep_prob, jnp.zeros_like(out))
+            # if train:  # keep_prob is fixed at 0.5
+            #     key, layer_key = jax.random.split(layer_key)
+            #     keep_prob = (1 - ((i / (self.N)) * (0.5))) if i > 1 else 1.0
+            #     mask = jax.random.bernoulli(
+            #         key=key, p=keep_prob, shape=(out.shape[0], 1, 1)
+            #     )
+            #     mask = jnp.broadcast_to(mask, out.shape)
+            #     out = jax.lax.select(mask, out / keep_prob, jnp.zeros_like(out))
 
         out = nn.LayerNorm(dtype=self.dtype, use_bias=False)(out)
 
