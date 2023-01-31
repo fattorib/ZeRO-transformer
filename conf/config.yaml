@@ -1,12 +1,12 @@
 training:
   max_epochs: 20
   batch_size: 128
-  peak_learning_rate: 9.0e-4
+  peak_learning_rate: 6.0e-4
   warmup_steps: 2000
   total_steps: 100000
-  end_learning_rate: 9.0e-5
+  end_learning_rate: 6.0e-5
   weight_decay: 0.1
-  gradient_accumulation_steps: 32
+  gradient_accumulation_steps: 16
   evaluation_frequency: 1000
   maximum_evaluation_steps: 500
   staged_warmup_steps: 60000
@@ -25,3 +25,5 @@ data:
   index_path_validation: "data/index/openwebtext.val.index"
   wandb_project: "jax-transformer-fast"
   resume_step: 0
+
+
