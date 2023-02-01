@@ -3,12 +3,12 @@ import torch
 from flax.serialization import msgpack_restore
 
 
-def create_transformer_block_mapping(block_idx: int):
+def create_transformer_block_mapping(block_idx: int, include_bias: bool):
     """
     Creates required flax -> PyTorch mapping for a specific transformer block
     """
 
-    return {
+    torch_flax_dict = {
         "CausalAttention_0.key_proj.kernel": f"blocks.{block_idx}.attn.key.weight",
         "CausalAttention_0.value_proj.kernel": f"blocks.{block_idx}.attn.value.weight",
         "CausalAttention_0.query_proj.kernel": f"blocks.{block_idx}.attn.query.weight",
@@ -27,6 +27,13 @@ def create_transformer_block_mapping(block_idx: int):
         "LayerNorm_1.bias": f"blocks.{block_idx}.ln2.bias",
     }
 
+    if not include_bias:
+        for key in torch_flax_dict.keys():
+            if "bias" in key:
+                torch_flax_dict.pop(key)
+
+
+    return torch_flax_dict
 
 def flatten(p, label=None):
     if isinstance(p, dict):
@@ -60,7 +67,7 @@ def match_transformer_block(pytree, state_dict, block_idx):
     return state_dict
 
 
-def match_and_save(model: torch.nn.Module, flax_save_path: str, out_save_path: str):
+def match_and_save(model: torch.nn.Module, include_bias: bool, flax_save_path: str, out_save_path: str):
     """
     Top-level function which performs matching for all blocks, including wte/LN
 
@@ -85,9 +92,11 @@ def match_and_save(model: torch.nn.Module, flax_save_path: str, out_save_path: s
     state_dict["norm.weight"] = torch.from_numpy(
         np.array(pytree["params"]["LayerNorm_0"]["scale"])
     )
-    state_dict["norm.bias"] = torch.from_numpy(
-        np.array(pytree["params"]["LayerNorm_0"]["bias"])
-    )
+
+    if include_bias:
+        state_dict["norm.bias"] = torch.from_numpy(
+            np.array(pytree["params"]["LayerNorm_0"]["bias"])
+        )
     state_dict["wte.weight"] = torch.from_numpy(
         np.array(pytree["params"]["wte"]["embedding"])[
             : model.vocab_size,
