@@ -63,6 +63,7 @@ class Transformer(nn.Module):
     N: int = None
     dtype: Any = jnp.float32
     alibi_attn: bool = False
+    head_qk_trick: bool = False
 
     @nn.compact
     def __call__(
@@ -109,18 +110,34 @@ class Transformer(nn.Module):
                 self.alibi_attn,
             )(out, train)
 
-            # if train:  # keep_prob is fixed at 0.5
-            #     key, layer_key = jax.random.split(layer_key)
-            #     keep_prob = (1 - ((i / (self.N)) * (0.5))) if i > 1 else 1.0
-            #     mask = jax.random.bernoulli(
-            #         key=key, p=keep_prob, shape=(out.shape[0], 1, 1)
-            #     )
-            #     mask = jnp.broadcast_to(mask, out.shape)
-            #     out = jax.lax.select(mask, out / keep_prob, jnp.zeros_like(out))
-
         out = nn.LayerNorm(dtype=self.dtype, use_bias=False)(out)
 
         logits = embed.attend(out)
+
+        if self.head_qk_trick:
+            # from: https://github.com/BlinkDL/RWKV-LM#the-head-qk-trick-learning-to-copy-and-avoid-tokens
+            q_head = nn.Dense(
+                name="head_q",
+                features=256,
+                kernel_init=initializers.zeros,
+                use_bias=False,
+            )(out)
+
+            k_head = nn.Dense(
+                name="head_k",
+                features=256,
+                kernel_init=initializers.orthogonal(scale=0.1),
+                use_bias=False,
+            )(out)
+
+            c = (q_head @ k_head.transpose(0, 2, 1)) / (k_head.shape[-1])
+
+            mask = jnp.tril(jnp.ones((T, T), dtype=jnp.int8)).reshape(1, T, T)
+            c = jnp.where(mask, c, 0)
+
+            c = c @ jax.nn.one_hot(x, num_classes=self.vocab_size)
+
+            logits = logits + c
 
         if labels is None:
             return logits
