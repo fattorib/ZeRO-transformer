@@ -94,12 +94,6 @@ def generate_text(
 if __name__ == "__main__":
     args = parse()
 
-    assert args.model_size in [
-        "flax-distill",
-        "flax-large",
-        "flax-xlarge",
-        "flax-xxlarge",
-    ], f"Invalid model name provided, expected one of {['flax-distill', 'flax-large', 'flax-xlarge']}"
     assert len(args.model_path) > 0, "Must provide a valid model checkpoint"
 
     model = model_creator(args.model_size, args.model_path)
