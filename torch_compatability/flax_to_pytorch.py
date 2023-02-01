@@ -3,7 +3,7 @@ import torch
 from flax.serialization import msgpack_restore
 
 
-def create_transformer_block_mapping(block_idx: int, include_bias: bool):
+def create_transformer_block_mapping(block_idx: int):
     """
     Creates required flax -> PyTorch mapping for a specific transformer block
     """
@@ -26,12 +26,6 @@ def create_transformer_block_mapping(block_idx: int, include_bias: bool):
         "LayerNorm_1.scale": f"blocks.{block_idx}.ln2.weight",
         "LayerNorm_1.bias": f"blocks.{block_idx}.ln2.bias",
     }
-
-    if not include_bias:
-        for key in torch_flax_dict.keys():
-            if "bias" in key:
-                torch_flax_dict.pop(key)
-
 
     return torch_flax_dict
 
