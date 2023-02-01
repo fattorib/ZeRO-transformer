@@ -419,7 +419,7 @@ def main():
         step_to_seq = (
             lambda x: cfg.training.warmup_train_context
             if x < cfg.training.staged_warmup_steps
-            else cfg.training.max_context
+            else cfg.data.max_context
         )
     else:
         step_to_seq = lambda x: cfg.data.max_context
