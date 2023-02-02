@@ -74,9 +74,6 @@ class Transformer(nn.Module):
     ) -> Union[jnp.array, Tuple[jnp.array, jnp.array]]:
         T = x.shape[-1]
 
-        # if train:
-        #     layer_key = self.make_rng("stochastic_depth")
-
         embed = nn.Embed(
             name="wte",
             num_embeddings=self.vocab_size,
