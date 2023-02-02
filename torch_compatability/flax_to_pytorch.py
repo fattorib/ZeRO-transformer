@@ -101,6 +101,16 @@ def match_and_save(model: torch.nn.Module, include_bias: bool, flax_save_path: s
             : model.vocab_size,
         ]
     )
+
+    if model.head_qk_trick:
+        state_dict["head_q.weight"] = np.transpose(torch.from_numpy(
+        np.array(pytree["params"]["head_q"]["kernel"])
+        ), (1, 0))
+
+        state_dict["head_k.weight"] = np.transpose(torch.from_numpy(
+        np.array(pytree["params"]["head_k"]["kernel"])
+        ), (1, 0))
+
     model.load_state_dict(state_dict)
 
     torch.save(model.state_dict(), out_save_path)

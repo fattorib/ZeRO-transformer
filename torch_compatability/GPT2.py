@@ -310,6 +310,7 @@ class GPT2(nn.Module):
         resid_dropout: float = 0.0,
         embedding_dropout: float = 0.0,
         use_alibi: bool = False,
+        head_qk_trick: bool = False
     ):
         super().__init__()
         self.num_ctx = num_ctx
@@ -322,6 +323,7 @@ class GPT2(nn.Module):
         self.num_head = num_head
         self.use_alibi = use_alibi
         self.fused_residuals = fused_residuals
+        self.head_qk_trick = head_qk_trick
 
         """
         Basic GPT2 transformer module
@@ -360,6 +362,15 @@ class GPT2(nn.Module):
 
         # Tying embedding weights
         self.lm_head.weight = self.wte.weight
+
+        if self.head_qk_trick:
+            self.head_q = nn.Linear(self.embedding_dim, 256, bias=False)
+            self.head_k = nn.Linear(self.embedding_dim, 256, bias=False)
+
+            self.register_buffer("copy_mask", torch.tril(
+                torch.ones(self.num_ctx, self.num_ctx)))
+
+
 
         self.apply(_embedding_init)
 
@@ -413,13 +424,13 @@ class GPT2(nn.Module):
 
     def forward(
         self,
-        x: torch.Tensor,
+        idx: torch.Tensor,
         labels: torch.Tensor = None,
         use_cache: bool = False,
         past_states: Tuple[torch.Tensor, torch.Tensor] = None,
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
 
-        b, t = x.size()
+        b, t = idx.size()
 
         if not self.use_alibi:
             if past_states is None:
@@ -438,7 +449,7 @@ class GPT2(nn.Module):
                 position_ids = position_ids.unsqueeze(0).expand_as(x)
                 position_embeds = self.wpe(position_ids)
 
-        x = self.wte(x)
+        x = self.wte(idx)
 
         if not self.use_alibi:
             x = self.dropout(x + position_embeds)
@@ -460,6 +471,15 @@ class GPT2(nn.Module):
         x = self.norm(x)
 
         logits_lm = self.lm_head(x)
+
+        if self.head_qk_trick:
+            q = self.head_q(x)[:, :t, :]
+            k = self.head_k(x)[:, :t, :]
+            c = (q @ k.transpose(-2, -1)) * (1.0 / 256)
+            c = c.masked_fill(self.copy_mask[:t, :t] == 0, 0)
+
+            c = c @ F.one_hot(idx, num_classes=self.vocab_size).float()
+            logits_lm = logits_lm + c
 
         loss = None
         if labels is not None:
@@ -643,11 +663,12 @@ def create_GPT2_flax_small(vocab_size, num_ctx, model_checkpoint=None, **kwargs)
     model = GPT2(
         num_ctx=num_ctx,
         embedding_dim=768,
-        N=8,
+        N=12,
         vocab_size=vocab_size,
-        num_head=8,
+        num_head=12,
         fused_residuals=False,
         use_alibi=True,
+        head_qk_trick=True,
         **kwargs,
     )
 
