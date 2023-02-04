@@ -361,7 +361,7 @@ def main():
         wandb.config.update(flat_dict)
 
     def preprocess(batch):
-        x = batch["input_id.pth"][: cfg.data.max_context]
+        x = batch["input_id.pth"][: 2048]
         if type(x) == torch.tensor:
             return jnp.array(x.long(), dtype=jnp.int32)
         else:
