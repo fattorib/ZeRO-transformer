@@ -429,16 +429,12 @@ def main():
 
     running_metrics = []
 
-    if cfg.training.warmup_train_context < cfg.data.max_context:
-        step_to_seq = (
-            lambda x: cfg.training.warmup_train_context
-            if x < cfg.training.staged_warmup_steps
-            else cfg.training.max_context
-        )
+    if cfg.training.train_context < cfg.data.max_context:
+        seq_len = cfg.training.train_context
     else:
-        step_to_seq = lambda x: cfg.data.max_context
+        seq_len = cfg.data.max_context
 
-    accum_steps = lambda x: cfg.training.gradient_accumulation_steps
+    accum_steps = cfg.training.gradient_accumulation_steps
 
     params = flax.jax_utils.replicate(params, devices=jax.local_devices())
 
@@ -456,16 +452,11 @@ def main():
             return True
 
         if i < int(cfg.data.resume_step):
-            # skip through some of the dataset. Helpful since we've glued 2 datasets together
-            # doesn't have to be super precise since we go for multiple epochs and reshuffle dataset
-            # each resumed run.
             continue
 
         rng, dropout_rng = jax.random.split(rng, 2)
 
-        seq_len = step_to_seq(resume_step + new_steps)
-
-        gradient_accumulation_steps = accum_steps(resume_step + new_steps)
+        gradient_accumulation_steps = accum_steps
 
         if seq_len < cfg.data.max_context:
             text = text.reshape(-1, seq_len)
@@ -535,7 +526,7 @@ def main():
             for val_it, val_text in enumerate(
                 tqdm(vl, disable=not jax.process_index() == 0)
             ):
-                val_text = val_text[:, : cfg.training.warmup_train_context]
+                val_text = val_text[:, : cfg.training.train_context]
                 val_text = shard(val_text)
 
                 if val_it < cfg.training.maximum_evaluation_steps:
