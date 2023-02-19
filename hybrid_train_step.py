@@ -125,6 +125,12 @@ if __name__ == '__main__':
                 out_axis_resources = grad_param_spec
             )(params)
 
+        grads = pjit(
+                lambda x:x, 
+                in_axis_resources=None, 
+                out_axis_resources = grad_param_spec
+            )(grads)
+
         params, opt_state = update_opt_state_pjit(grads, opt_state, params, tx)
 
 
