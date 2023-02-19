@@ -128,7 +128,8 @@ if __name__ == '__main__':
         grads = pjit(
                 lambda x:x, 
                 in_axis_resources=None, 
-                out_axis_resources = grad_param_spec
+                out_axis_resources = grad_param_spec,
+                donate_argnums=0
             )(grads)
 
         params, opt_state = update_opt_state_pjit(grads, opt_state, params, tx)
@@ -138,7 +139,8 @@ if __name__ == '__main__':
         params = pjit(
                 lambda x:x, 
                 in_axis_resources=(grad_param_spec,), 
-                out_axis_resources = None
+                out_axis_resources = None,
+                donate_argnums=0
             )(params)
 
 
@@ -167,13 +169,15 @@ if __name__ == '__main__':
             grads = pjit(
                 lambda x:x, 
                 in_axis_resources=None, 
-                out_axis_resources = grad_param_spec
+                out_axis_resources = grad_param_spec,
+                donate_argnums=0
             )(grads)
 
             params = pjit(
                 lambda x:x, 
                 in_axis_resources=None, 
-                out_axis_resources = grad_param_spec
+                out_axis_resources = grad_param_spec,
+                donate_argnums=0
             )(params)
 
             times_grads.append(time() - t0)
@@ -187,7 +191,8 @@ if __name__ == '__main__':
             params = pjit(
                 lambda x:x, 
                 in_axis_resources=(grad_param_spec,), 
-                out_axis_resources = None
+                out_axis_resources = None,
+                donate_argnums=0
             )(params)
 
             print(metrics["Train LM Loss"][0])
