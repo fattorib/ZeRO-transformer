@@ -30,11 +30,17 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 if __name__ == '__main__':
 
-    GRAD_ACCUM_STEPS = 8
-    BATCH_SIZE = 128
-    CTX_LEN = 32
-    NUM_PASSES = 100
-    MODEL_SIZE = 'test' 
+    # GRAD_ACCUM_STEPS = 8
+    # BATCH_SIZE = 128
+    # CTX_LEN = 32
+    # NUM_PASSES = 100
+    # MODEL_SIZE = 'test' 
+
+    GRAD_ACCUM_STEPS = 32
+    BATCH_SIZE = 512
+    CTX_LEN = 512
+    NUM_PASSES = 20
+    MODEL_SIZE = 'base' 
 
     # Setting up device mesh
     devices = np.asarray(jax.devices())
