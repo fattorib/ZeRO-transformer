@@ -23,10 +23,10 @@ import jax
 jax.config.update('jax_array', False)
 
 
-# Emulating 8 TPU cores
-import os 
-os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=8"
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# # Emulating 8 TPU cores
+# import os 
+# os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=8"
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 if __name__ == '__main__':
 
