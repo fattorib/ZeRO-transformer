@@ -89,7 +89,7 @@ if __name__ == '__main__':
         update_opt_state_pjit = pjit(
             functools.partial(update_opt_state),
             in_axis_resources=(grad_param_spec, opt_state_spec, grad_param_spec),
-            out_axis_resources=(None,opt_state_spec),
+            out_axis_resources=(grad_param_spec,opt_state_spec),
             static_argnums=(3,)
         )
 
@@ -132,6 +132,14 @@ if __name__ == '__main__':
             )(grads)
 
         params, opt_state = update_opt_state_pjit(grads, opt_state, params, tx)
+        
+        del grads 
+
+        params = pjit(
+                lambda x:x, 
+                in_axis_resources=grad_param_spec, 
+                out_axis_resources = None
+            )(params)
 
 
         times_grads = []
@@ -175,6 +183,12 @@ if __name__ == '__main__':
             times_update_opt.append(time() - t0)
 
             del grads 
+
+            params = pjit(
+                lambda x:x, 
+                in_axis_resources=grad_param_spec, 
+                out_axis_resources = None
+            )(params)
 
             print(metrics["Train LM Loss"][0])
 
