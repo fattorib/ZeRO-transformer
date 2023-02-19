@@ -24,23 +24,23 @@ jax.config.update('jax_array', False)
 
 
 # # Emulating 8 TPU cores
-import os 
-os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=8"
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# import os 
+# os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=8"
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 if __name__ == '__main__':
 
-    GRAD_ACCUM_STEPS = 8
-    BATCH_SIZE = 128
-    CTX_LEN = 32
-    NUM_PASSES = 100
-    MODEL_SIZE = 'test' 
+    # GRAD_ACCUM_STEPS = 8
+    # BATCH_SIZE = 128
+    # CTX_LEN = 32
+    # NUM_PASSES = 100
+    # MODEL_SIZE = 'test' 
 
-    # GRAD_ACCUM_STEPS = 32
-    # BATCH_SIZE = 512
-    # CTX_LEN = 512
-    # NUM_PASSES = 20
-    # MODEL_SIZE = 'base' 
+    GRAD_ACCUM_STEPS = 32
+    BATCH_SIZE = 512
+    CTX_LEN = 512
+    NUM_PASSES = 20
+    MODEL_SIZE = 'base' 
 
     # Setting up device mesh
     devices = np.asarray(jax.devices())
