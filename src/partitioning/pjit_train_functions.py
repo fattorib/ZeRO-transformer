@@ -7,6 +7,7 @@ import jax.numpy as jnp
 from typing import Any
 import optax
 
+# we shmap this
 def train_step(
     params: Any,
     batch: jnp.array,
@@ -65,8 +66,8 @@ def train_step(
 
     loss, grads = jax.tree_util.tree_map(lambda x: x / accum_steps, (loss, grads))
 
-    loss = jax.lax.pmean(loss, axis_name="batch")
-    grads = jax.lax.pmean(grads, axis_name="batch")
+    loss = jax.lax.pmean(loss, axis_name="dp")
+    grads = jax.lax.pmean(grads, axis_name="dp")
 
     metrics = {
         "Train LM Loss": loss,

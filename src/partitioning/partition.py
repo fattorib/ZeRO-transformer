@@ -12,8 +12,7 @@ import optax
 from flax.core import FrozenDict
 from flax.core.frozen_dict import freeze
 from flax.traverse_util import flatten_dict, unflatten_dict
-from jax.experimental import PartitionSpec
-from jax.experimental.maps import Mesh
+from jax.sharding import Mesh, PartitionSpec
 
 
 def setup_dp_mesh():
