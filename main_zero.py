@@ -19,6 +19,11 @@ from flax.training.common_utils import shard, shard_prng_key
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from src.partitioning.partition import set_partitions_zero, create_opt_spec
+from jax.sharding import Mesh
+from jax.experimental.maps import xmap
+from jax.experimental.pjit import pjit
+from src.partitioning.xmap_train_functions import update_opt_state, train_step, eval_step
 
 import wandb
 from src.models.GPT import model_getter
@@ -54,134 +59,91 @@ def save_checkpoint_params(params: Any, step: int, workdir: str) -> None:
 
     TODO: Add async manager to do this in a background process
     """
-    if jax.process_index() == 0:
-        params = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], params))
-        faux_state = train_state.TrainState(
-            step=step, apply_fn=None, params=params, tx=None, opt_state=None
-        )
-        checkpoints.save_checkpoint(
-            workdir, faux_state, step, keep=5, overwrite=True, prefix="params_"
-        )
+    # if jax.process_index() == 0:
+    #     params = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], params))
+    #     faux_state = train_state.TrainState(
+    #         step=step, apply_fn=None, params=params, tx=None, opt_state=None
+    #     )
+    #     checkpoints.save_checkpoint(
+    #         workdir, faux_state, step, keep=5, overwrite=True, prefix="params_"
+    #     )
 
+    pass
 
 def save_checkpoint_optimizer(opt_state: Any, step: int, workdir: str) -> None:
-    """
-    Function to gather and save the sharded optimizer state.
+    # """
+    # Function to gather and save the sharded optimizer state.
 
-    TODO: Add async manager to do this in a background process
-    """
-    if jax.process_index() == 0:
-        opt_state = jax.device_get(opt_state)
+    # TODO: Add async manager to do this in a background process
+    # """
+    # if jax.process_index() == 0:
+    #     opt_state = jax.device_get(opt_state)
 
-        # unshard buffers
-        opt_state = jax.tree_util.tree_map(
-            lambda x: x.reshape(-1, x.shape[-1])
-            if x.ndim > 2
-            else x.reshape(
-                -1,
-            ),
-            opt_state,
-        )
+    #     # unshard buffers
+    #     opt_state = jax.tree_util.tree_map(
+    #         lambda x: x.reshape(-1, x.shape[-1])
+    #         if x.ndim > 2
+    #         else x.reshape(
+    #             -1,
+    #         ),
+    #         opt_state,
+    #     )
 
-        faux_state = train_state.TrainState(
-            step=step, apply_fn=None, params=None, tx=None, opt_state=opt_state
-        )
-        checkpoints.save_checkpoint(
-            workdir, faux_state, step, keep=5, overwrite=True, prefix="optimizer_"
-        )
+    #     faux_state = train_state.TrainState(
+    #         step=step, apply_fn=None, params=None, tx=None, opt_state=opt_state
+    #     )
+    #     checkpoints.save_checkpoint(
+    #         workdir, faux_state, step, keep=5, overwrite=True, prefix="optimizer_"
+    #     )
+    pass 
 
 
 def restore_param_checkpoint(workdir: str) -> Any:
-    """
-    Restores the most recent parameter dict
-    """
-    params = checkpoints.restore_checkpoint(workdir, target=None, prefix="params_")
-
-    return flax.core.freeze(params["params"])
-
+    # """
+    # Restores the most recent parameter dict
+    # """
+    # params = checkpoints.restore_checkpoint(workdir, target=None, prefix="params_")
+    # 
+    # return flax.core.freeze(params["params"])
+    pass 
 
 def restore_opt_checkpoint(workdir: str) -> Tuple[Any, int]:
-    """
-    Function to restore optimizer state from a sequence of serialized Flax
-    state dicts. By default, restoring a flax state dict to an optax state
-    doesn't work so we manually recreate the optimizer state and return it.
-    """
-    opt_state_restored = checkpoints.restore_checkpoint(
-        workdir, target=None, prefix="optimizer_"
-    )
+    # """
+    # Function to restore optimizer state from a sequence of serialized Flax
+    # state dicts. By default, restoring a flax state dict to an optax state
+    # doesn't work so we manually recreate the optimizer state and return it.
+    # """
+    # opt_state_restored = checkpoints.restore_checkpoint(
+    #     workdir, target=None, prefix="optimizer_"
+    # )
 
-    mu_pytree = jax.tree_util.tree_map(
-        lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["mu"]
-    )
+    # mu_pytree = jax.tree_util.tree_map(
+    #     lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["mu"]
+    # )
 
-    nu_pytree = jax.tree_util.tree_map(
-        lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["nu"]
-    )
+    # nu_pytree = jax.tree_util.tree_map(
+    #     lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["nu"]
+    # )
 
-    count_pytree = jax.tree_util.tree_map(
-        lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["count"]
-    )
+    # count_pytree = jax.tree_util.tree_map(
+    #     lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["count"]
+    # )
 
-    restoredadamstate = optax.ScaleByAdamState(
-        count_pytree, flax.core.FrozenDict(mu_pytree), flax.core.FrozenDict(nu_pytree)
-    )
-    restored_state = (
-        optax.EmptyState(),
-        (
-            restoredadamstate,
-            optax.MaskedState(inner_state=optax.EmptyState()),
-            optax.ScaleByScheduleState(count=jnp.array(opt_state_restored["step"])),
-        ),
-    )
+    # restoredadamstate = optax.ScaleByAdamState(
+    #     count_pytree, flax.core.FrozenDict(mu_pytree), flax.core.FrozenDict(nu_pytree)
+    # )
+    # restored_state = (
+    #     optax.EmptyState(),
+    #     (
+    #         restoredadamstate,
+    #         optax.MaskedState(inner_state=optax.EmptyState()),
+    #         optax.ScaleByScheduleState(count=jnp.array(opt_state_restored["step"])),
+    #     ),
+    # )
 
-    return restored_state, opt_state_restored["step"]
+    # return restored_state, opt_state_restored["step"]
 
-
-def partition_shard(xs: Any, local_device_count: int, devices: jnp.array) -> Any:
-    """
-    Partitions optimizer state by splitting the first dimension of all buffers across local devices
-    """
-    return jax.tree_util.tree_map(
-        lambda x: x.reshape((local_device_count, -1) + x.shape[1:])
-        if x.ndim > 0
-        else jax.device_put_replicated(x, devices),
-        xs,
-    )
-
-
-@partial(jax.pmap, devices=jax.local_devices())
-def split_sharded_device_array(arr: Any, device_index: int) -> Any:
-    """
-    Function to access different shards of param/grad pytrees. Used to access
-    pytree shards matching the devices of the sharded opt_state.
-
-    By default, anything that is not a pmapped function applied to a ShardedDeviceArray will
-    force a gather to the 0'th device and return a DeviceArray.
-
-    See: https://github.com/google/jax/issues/2535
-    """
-    local_device_count = 8
-    return jax.tree_util.tree_map(
-        lambda x: x.reshape(local_device_count, -1, x.shape[-1])[device_index, ...]
-        if x.ndim >= 2
-        else x.reshape(local_device_count, -1)[device_index, ...],
-        arr,
-    )
-
-
-@partial(jax.pmap, devices=jax.local_devices())
-def deshard(xs: Any) -> Any:
-    """
-    Pmappable way to get reshape a sharded device array containing param replicas
-
-    By default, anything that is not a pmapped function applied to a ShardedDeviceArray will
-    force a gather to the 0'th device and return a DeviceArray.
-
-    See: https://github.com/google/jax/issues/2535
-    """
-    return jax.tree_util.tree_map(
-        lambda x: x.reshape((-1, x.shape[-1])) if x.ndim > 2 else x.reshape(-1), xs
-    )
+    pass 
 
 
 def create_zero_train_state(
@@ -212,12 +174,13 @@ def create_zero_train_state(
         ),
     )
 
-    opt_state = tx.init(params)
-    state = train_state.TrainState(
-        apply_fn=model.apply, params=params, step=0, opt_state=None, tx=None
-    )
-    return state, tx, opt_state
+    init_batch = jnp.ones((1, model.block_size), dtype=jnp.int32)
+    param_shape = jax.eval_shape(model.init, rng, init_batch)
 
+    
+
+
+    return params, param_shape, tx
 
 def main():
     args = parse()
@@ -263,65 +226,89 @@ def main():
 
     resume_step = 0
 
-    state, optimizer, opt_state = create_zero_train_state(
+    params, param_shape, tx = create_zero_train_state(
         init_rng,
         learning_rate_fn,
         weight_decay=cfg.training.weight_decay,
         model=model,
     )
-    params = state.params
-    del state
 
-    if cfg.model.warm_start and not args.resume:
-        if jax.process_index() == 0:
-            logger.debug(
-                f"Warm starting model training from checkpoint {cfg.model.model_path}"
-            )
+    devices = np.asarray(jax.devices())
+    mesh = Mesh(devices, ["dp"])
 
-        del params
+    axis_list_params = jax.tree_map(lambda x: [...], params)
 
-        bucket = client.bucket(cfg.data.bucket_path)
-        blob = bucket.blob(cfg.model.model_path)
-        param_bytes = msgpack_restore(blob.download_as_bytes())
+    in_axes =(
+        axis_list_params, 
+        ['batch', ...], 
+        [...], 
+    )
+    out_axes = (
+        axis_list_params,
+        [...]
+    )
 
-        params = flax.core.freeze(param_bytes)
+    # standard data parallel training step with xmap!
+    train_step_xmap = xmap(
+            partial(train_step, model = model, accum_steps = cfg.training.gradient_accumulation_steps),
+            in_axes=in_axes,
+            out_axes=out_axes,
+            axis_resources={"batch": "dp"}
+        )
+    
+    eval_step_xmap = xmap(
+        partial(eval, model = model), 
+        in_axes=(axis_list_params, 
+        ['batch', ...], ),
+        out_axes=[...],
+        axis_resources={"batch": "dp"}
+    )
 
-    if args.resume:
-        del params
-        del opt_state
+    opt_state_shapes = jax.eval_shape(tx.init, params)
 
-        if save_to_bucket:
-            opt_state, step = restore_opt_checkpoint(
-                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/optimizer"
-            )
-            opt_state = jax.device_get(opt_state)  # copy to CPU
+    grad_param_spec = set_partitions_zero(param_shape)
+    opt_state_spec = create_opt_spec(grad_param_spec, opt_state_shapes)
 
-            params = restore_param_checkpoint(
-                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params"
-            )
-            params = jax.device_get(params)  # copy to CPU
+    # if cfg.model.warm_start and not args.resume:
+    #     if jax.process_index() == 0:
+    #         logger.debug(
+    #             f"Warm starting model training from checkpoint {cfg.model.model_path}"
+    #         )
 
-            resume_step = int(step)
+    #     del params
 
-        else:
-            raise NotImplementedError(
-                "Checkpointing not currently implemented for GPU."
-            )
+    #     bucket = client.bucket(cfg.data.bucket_path)
+    #     blob = bucket.blob(cfg.model.model_path)
+    #     param_bytes = msgpack_restore(blob.download_as_bytes())
 
-        if jax.process_index() == 0:
-            logger.debug(f"Resuming training from step {resume_step}")
+    #     params = flax.core.freeze(param_bytes)
+
+    # if args.resume:
+    #     del params
+    #     del opt_state
+
+    #     if save_to_bucket:
+    #         opt_state, step = restore_opt_checkpoint(
+    #             workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/optimizer"
+    #         )
+    #         opt_state = jax.device_get(opt_state)  # copy to CPU
+
+    #         params = restore_param_checkpoint(
+    #             workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params"
+    #         )
+    #         params = jax.device_get(params)  # copy to CPU
+
+    #         resume_step = int(step)
+
+    #     else:
+    #         raise NotImplementedError(
+    #             "Checkpointing not currently implemented for GPU."
+    #         )
+
+    #     if jax.process_index() == 0:
+    #         logger.debug(f"Resuming training from step {resume_step}")
 
     params = jax.device_get(params)  # copy params to VM CPU
-
-    opt_state = jax.device_get(opt_state)  # copy opt_state to VM CPU
-    opt_state = partition_shard(
-        opt_state,
-        jax.local_device_count(),
-        jax.local_devices(),
-    )
-    opt_state = jax.pmap(lambda x: x, devices=jax.local_devices())(
-        opt_state
-    )  # shard opt state to free up memory
 
     if jax.process_index() == 0:
         logger.debug(f"VM setup with {num_devices} devices.")
@@ -436,244 +423,134 @@ def main():
 
     accum_steps = cfg.training.gradient_accumulation_steps
 
-    params = flax.jax_utils.replicate(params, devices=jax.local_devices())
-
     rng = jax.random.fold_in(rng, resume_step)  # fold in resume step to create new rng
 
     # quick way to track global step count when resuming a run
     new_steps = 0
 
-    for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
+    with mesh:
 
-        if (resume_step + new_steps) > cfg.training.total_steps:
-            if jax.process_index() == 0:
-                logger.debug(f"Training has completed.")
+        params = jax.device_get(params)
 
-            return True
+        opt_state = pjit(
+            tx.init,
+            in_axis_resources=None,
+            out_axis_resources=opt_state_spec
+        )(params)
 
-        if i < int(cfg.data.resume_step):
-            continue
-
-        rng, dropout_rng = jax.random.split(rng, 2)
-
-        gradient_accumulation_steps = accum_steps
-
-        if seq_len < cfg.data.max_context:
-            text = text.reshape(-1, seq_len)
-
-        # we add a 'grad_accum' batch dimension which we then iterate through in train_step
-        text = text.reshape(
-            gradient_accumulation_steps,
-            text.shape[0] // gradient_accumulation_steps,
-            seq_len,
-        ).transpose(1, 0, 2)
-
-        text = shard(text)
-
-        rng_sharded = shard_prng_key(dropout_rng)
-
-        grads, metrics = train_step(
-            params, text, rng_sharded, gradient_accumulation_steps, model
+        update_opt_state_pjit = pjit(
+            partial(update_opt_state, optimizer = tx, grad_spec = grad_param_spec),
+            in_axis_resources=(grad_param_spec, opt_state_spec, grad_param_spec),
+            out_axis_resources=(None,opt_state_spec),
         )
 
-        grads = split_sharded_device_array(
-            grads, jax.numpy.arange(jax.local_device_count())
-        )
-        params = split_sharded_device_array(
-            params, jax.numpy.arange(jax.local_device_count())
-        )
+        grad_shard = pjit(lambda x:x, in_axis_resources=None, out_axis_resources=grad_param_spec)
 
-        params, opt_state = update_sharded_state(
-            grads,
-            opt_state,
-            params,
-            optimizer,
-        )
+        for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
-        del grads  # manually free grad mem
+            if (resume_step + new_steps) > cfg.training.total_steps:
+                if jax.process_index() == 0:
+                    logger.debug(f"Training has completed.")
 
-        params = deshard(params)  # reshape params
-        metrics["Train Sequence Length"] = seq_len
-        metrics["Learning Rate"] = learning_rate_fn(resume_step + new_steps)
+                return True
 
-        running_metrics.append(metrics)
+            if i < int(cfg.data.resume_step):
+                continue
 
-        train_metrics_np = {
-            k: np.mean([metrics[k] for metrics in running_metrics])
-            for k in running_metrics[0]
-        }
+            rng, dropout_rng = jax.random.split(rng, 2)
 
-        running_metrics = []
-        validation_metrics = []
+            gradient_accumulation_steps = accum_steps
 
-        absolute_step = resume_step + new_steps
+            if seq_len < cfg.data.max_context:
+                text = text.reshape(-1, seq_len)
 
-        train_metrics_np["Tokens Seen (B)"] = (
-            num_host
-            * (
-                cfg.training.batch_size
-                * compute_tokens_seen(
-                    absolute_step,
-                    max_context=cfg.data.max_context,
-                )
-            )
-            / 1e9
-        )
+            # we add a 'grad_accum' batch dimension which we then iterate through in train_step
+            text = text.reshape(
+                gradient_accumulation_steps,
+                text.shape[0] // gradient_accumulation_steps,
+                seq_len,
+            ).transpose(1, 0, 2)
+            
+            grads, metrics = train_step_xmap(params, text, dropout_rng)
 
-        new_steps += 1
+            grads = grad_shard(grads)
+            params = grad_shard(params)
 
-        if (i) % (cfg.training.evaluation_frequency) == 0:
-            for val_it, val_text in enumerate(
-                tqdm(vl, disable=not jax.process_index() == 0)
-            ):
-                val_text = val_text[:, : cfg.training.train_context]
-                val_text = shard(val_text)
+            params,opt_state = update_opt_state_pjit(grads, opt_state, params)
 
-                if val_it < cfg.training.maximum_evaluation_steps:
-                    metrics = eval_step(params, model, val_text)
-                    validation_metrics.append(metrics)
-                else:
-                    break
 
-            validation_metrics_np = {
-                k: np.mean([metrics[k] for metrics in validation_metrics])
-                for k in validation_metrics[0]
+            del grads  # manually free grad mem
+
+            metrics["Train Sequence Length"] = seq_len
+            metrics["Learning Rate"] = learning_rate_fn(resume_step + new_steps)
+
+            running_metrics.append(metrics)
+
+            train_metrics_np = {
+                k: np.mean([metrics[k] for metrics in running_metrics])
+                for k in running_metrics[0]
             }
 
-            if jax.process_index() == 0:
-                train_metrics_np.update(validation_metrics_np)
-                wandb.log(train_metrics_np)
+            running_metrics = []
+            validation_metrics = []
 
-                if save_to_bucket:
-                    save_checkpoint_params(
-                        params,
+            absolute_step = resume_step + new_steps
+
+            train_metrics_np["Tokens Seen (B)"] = (
+                num_host
+                * (
+                    cfg.training.batch_size
+                    * compute_tokens_seen(
                         absolute_step,
-                        workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
+                        max_context=cfg.data.max_context,
                     )
-                    save_checkpoint_optimizer(
-                        opt_state,
-                        absolute_step,
-                        workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/optimizer",
-                    )
+                )
+                / 1e9
+            )
 
-                else:
-                    raise NotImplementedError(
-                        "Checkpointing not currently implemented for GPU/CPU"
-                    )
+            new_steps += 1
 
-        else:
-            if jax.process_index() == 0:
-                wandb.log(train_metrics_np)
+            if (i) % (cfg.training.evaluation_frequency) == 0:
+                for val_it, val_text in enumerate(
+                    tqdm(vl, disable=not jax.process_index() == 0)
+                ):
+                    val_text = val_text[:, : cfg.training.train_context]
 
+                    if val_it < cfg.training.maximum_evaluation_steps:
+                        metrics = eval_step_xmap(params, val_text)
+                        validation_metrics.append(metrics)
+                    else:
+                        break
 
-@partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=(3, 4))
-def train_step(
-    params: Any,
-    batch: jnp.array,
-    rng_key: jax.random.PRNGKey = None,
-    accum_steps: int = 8,
-    model: Any = None,
-):
-    """
-    Computes loss/grads for a single batch of data, pmeans across all devices/hosts to sync grads
-    and returns loss/grads
-    """
+                validation_metrics_np = {
+                    k: np.mean([metrics[k] for metrics in validation_metrics])
+                    for k in validation_metrics[0]
+                }
 
-    def get_minibatch(batch, grad_idx):
-        return jax.tree_util.tree_map(
-            lambda x: jax.lax.dynamic_index_in_dim(x, grad_idx, keepdims=False, axis=1),
-            batch,
-        )
+                if jax.process_index() == 0:
+                    train_metrics_np.update(validation_metrics_np)
+                    wandb.log(train_metrics_np)
 
-    def loss_fn(params, batch):
-        _, loss = model.apply(
-            {"params": params["params"]},
-            x=batch,
-            labels=batch,
-            train=True,
-            rngs={"dropout": rng_key},
-        )
-        return loss
+                    if save_to_bucket:
+                        save_checkpoint_params(
+                            params,
+                            absolute_step,
+                            workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
+                        )
+                        save_checkpoint_optimizer(
+                            opt_state,
+                            absolute_step,
+                            workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/optimizer",
+                        )
 
-    grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
+                    else:
+                        raise NotImplementedError(
+                            "Checkpointing not currently implemented for GPU/CPU"
+                        )
 
-    def loss_and_grad(grad_idx):
-        minibatch = get_minibatch(batch, grad_idx) if grad_idx is not None else batch
-
-        loss, grads = grad_fn(params, minibatch)
-
-        return loss, grads
-
-    init_minibatch = (0.0, jax.tree_util.tree_map(jnp.zeros_like, params))
-
-    # accumulate gradients
-    def cumul_minibatch_step(grad_idx, cumul_loss_grad):
-        cumul_loss, cumul_grads = cumul_loss_grad
-        loss, grads = loss_and_grad(grad_idx)
-        cumul_loss, cumul_grads = jax.tree_util.tree_map(
-            jnp.add, (cumul_loss, cumul_grads), (loss, grads)
-        )
-
-        return cumul_loss, cumul_grads
-
-    loss, grads = jax.lax.fori_loop(
-        0,
-        accum_steps,
-        cumul_minibatch_step,
-        init_minibatch,
-    )
-
-    loss, grads = jax.tree_util.tree_map(lambda x: x / accum_steps, (loss, grads))
-
-    loss = jax.lax.pmean(loss, axis_name="batch")
-    grads = jax.lax.pmean(grads, axis_name="batch")
-
-    metrics = {
-        "Train LM Loss": loss,
-        "Train LM PPL": jnp.exp(loss),
-    }
-
-    return grads, metrics
-
-
-
-@partial(
-    jax.pmap,
-    axis_name="shard",
-    devices=jax.local_devices(),
-    static_broadcasted_argnums=(3,),
-)
-def update_sharded_state(
-    grads: Any,
-    optimizer_state: Any,
-    params: Any,
-    optimizer: Any,
-):
-    """
-    Updates the sharded optimizer state
-    """
-
-    # These two lines update the specific shard of state/parameters sitting on device 'i'
-    updates, new_opt_state = optimizer.update(grads, optimizer_state, params)
-    new_params = optax.apply_updates(params, updates)
-
-    new_params = jax.lax.all_gather(new_params, axis_name="shard")
-    return new_params, new_opt_state
-
-
-@partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=(1,))
-def eval_step(params: Any, model: Any, batch: jnp.array):
-    """Evaluate on a single batch"""
-
-    _, loss = model.apply(
-        {"params": params["params"]}, x=batch, labels=batch, train=False
-    )
-
-    loss = jax.lax.pmean(loss, axis_name="batch")
-
-    metrics = {"Validation LM Loss": loss, "Validation LM PPL": jnp.exp(loss)}
-
-    return metrics
+            else:
+                if jax.process_index() == 0:
+                    wandb.log(train_metrics_np)
 
 
 if __name__ == "__main__":
