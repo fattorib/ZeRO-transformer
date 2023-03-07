@@ -75,7 +75,7 @@ def train_step(
 
     return grads, metrics
 
-def eval_step(params: Any, model: Any, batch: jnp.array):
+def eval_step(params: Any, batch: jnp.array, model: Any, ):
     _, loss = model.apply(
         {"params": params["params"]}, x=batch, labels=batch, train=False
     )

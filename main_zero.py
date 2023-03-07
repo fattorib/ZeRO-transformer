@@ -256,10 +256,13 @@ def main():
             axis_resources={"batch": "dp"}
         )
     
+    eval_axes = (
+        axis_list_params, 
+        ['batch', ...], 
+    )
     eval_step_xmap = xmap(
-        partial(eval, model = model), 
-        in_axes=(axis_list_params, 
-        ['batch', ...], ),
+        partial(eval_step, model = model), 
+        in_axes=eval_axes,
         out_axes=[...],
         axis_resources={"batch": "dp"}
     )
