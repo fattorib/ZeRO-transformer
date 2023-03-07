@@ -83,7 +83,7 @@ if __name__ == '__main__':
     in_axes =(
         axis_list_params, 
         ['batch', ...], 
-        ['batch'], 
+        [...], 
     )
     out_axes = (
         axis_list_params,
