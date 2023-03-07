@@ -99,7 +99,6 @@ if __name__ == '__main__':
         )
 
     # optimizer state update with pjit
-    opt_state =jax.jit(tx.init, backend='cpu')(params)
     opt_state_shapes = jax.eval_shape(tx.init, params) # length 2 tuple
 
     grad_param_spec = set_partitions_zero(param_shape)

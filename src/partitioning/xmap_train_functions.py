@@ -75,6 +75,18 @@ def train_step(
 
     return grads, metrics
 
+def eval_step(params: Any, model: Any, batch: jnp.array):
+    _, loss = model.apply(
+        {"params": params["params"]}, x=batch, labels=batch, train=False
+    )
+
+    loss = jax.lax.pmean(loss, axis_name="batch")
+
+    metrics = {"Validation LM Loss": loss, "Validation LM PPL": jnp.exp(loss)}
+
+    return metrics
+
+
 def update_opt_state(
     grads: Any,
     optimizer_state: Any,
