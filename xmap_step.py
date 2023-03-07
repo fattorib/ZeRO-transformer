@@ -5,7 +5,7 @@ import jax
 from src.models.GPT import model_getter
 from src.training.training_utils import initialized
 import optax 
-from src.partitioning.xmap_train_functions import train_step
+from src.partitioning.xmap_train_functions import train_step, eval_step
 from src.partitioning.xmap_train_functions import update_opt_state
 from src.partitioning.partition import set_partitions_zero, create_opt_spec
 import functools
@@ -51,7 +51,7 @@ if __name__ == '__main__':
    
     # Setting up device mesh
     devices = np.asarray(jax.devices())
-    mesh = Mesh(devices, ["dp"])
+    mesh = Mesh(devices, ("dp",))
 
     # Setting up model + param spec
     model = model_getter(MODEL_SIZE, return_cfg=False)
@@ -83,7 +83,7 @@ if __name__ == '__main__':
     in_axes =(
         axis_list_params, 
         ['batch', ...], 
-        [...], 
+        ['batch'], 
     )
     out_axes = (
         axis_list_params,
@@ -97,6 +97,17 @@ if __name__ == '__main__':
             out_axes=out_axes,
             axis_resources={"batch": "dp"}
         )
+    
+    eval_axes = (
+        axis_list_params, 
+        ['batch', ...], 
+    )
+    eval_step_xmap = xmap(
+        functools.partial(eval_step, model = model), 
+        in_axes=eval_axes,
+        out_axes=[...],
+        axis_resources={"batch": "dp"}
+    )
 
     # optimizer state update with pjit
     opt_state_shapes = jax.eval_shape(tx.init, params) # length 2 tuple
@@ -165,6 +176,8 @@ if __name__ == '__main__':
 
             params,opt_state = update_opt_state_pjit(grads, opt_state, params)
             times_update_opt.append(time() - t0)
+
+            # metrics = eval_step_xmap(params, batch)
 
         print(
             f"ZeRO Step - Global BS {BATCH_SIZE} - accum steps {GRAD_ACCUM_STEPS} - Num Executions {NUM_PASSES}"
