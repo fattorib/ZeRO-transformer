@@ -25,9 +25,9 @@ def parse():
     args = parser.parse_args()
     return args
 # # Emulating 8 TPU cores
-import os 
-os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=8"
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# import os 
+# os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=8"
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 #First step is to get regular dp working in xmap
 if __name__ == '__main__':
