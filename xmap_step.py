@@ -46,7 +46,7 @@ if __name__ == '__main__':
         GRAD_ACCUM_STEPS = 32
         BATCH_SIZE = 512
         CTX_LEN = 1024
-        NUM_PASSES = 10
+        NUM_PASSES = 50
         MODEL_SIZE = 'base' 
    
     # Setting up device mesh
