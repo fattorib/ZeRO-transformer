@@ -474,7 +474,7 @@ def main():
                 seq_len,
             ).transpose(1, 0, 2)
             text = text.reshape(jax.local_device_count(), 
-                              text.shape[0] // (jax.local_device_count()* gradient_accumulation_steps), 
+                              cfg.training.batch_size // (jax.local_device_count()* gradient_accumulation_steps), 
                               gradient_accumulation_steps, seq_len)
 
             grads, metrics = train_step_xmap(params, text, dropout_rng)
