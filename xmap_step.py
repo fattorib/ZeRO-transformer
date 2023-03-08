@@ -39,7 +39,7 @@ if __name__ == '__main__':
         GRAD_ACCUM_STEPS = 8
         BATCH_SIZE = 128
         CTX_LEN = 32
-        NUM_PASSES = 20
+        NUM_PASSES = 50
         MODEL_SIZE = 'smol' 
 
     else:
@@ -83,7 +83,7 @@ if __name__ == '__main__':
     in_axes =(
         [...], 
         ['batch', ...], 
-        [...], #TODO: Investigate why this can't be split
+        [...], 
     )
     out_axes = (
         axis_list_params,
@@ -163,7 +163,8 @@ if __name__ == '__main__':
 
             dropout_rng, rng = jax.random.split(dropout_rng)
 
-            batch = jax.random.randint(key = dropout_rng, shape=(BATCH_SIZE, CTX_LEN), maxval=256, minval=0)
+            # batch = jax.random.randint(key = dropout_rng, shape=(BATCH_SIZE, CTX_LEN), maxval=256, minval=0)
+            batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype = jax.numpy.int32)
 
             batch = batch.reshape(
                 GRAD_ACCUM_STEPS,
@@ -185,6 +186,10 @@ if __name__ == '__main__':
             params,opt_state = update_opt_state_pjit(grads, opt_state, params)
             times_update_opt.append(time() - t0)
 
+            del grads 
+
+            print(metrics)
+
             # metrics = eval_step_xmap(params, batch)
 
         print(
@@ -194,4 +199,10 @@ if __name__ == '__main__':
         print(f"Model Size: {MODEL_SIZE}")
         print(f"Mean Grad Time {np.mean(times_grads):.4f} Seconds")
         print(f"Mean Opt Time {np.mean(times_update_opt):.4f} Seconds")
-        print()
+
+        param_count = sum(p.size for p in jax.tree_leaves(param_shape))
+
+        total_flops = BATCH_SIZE * CTX_LEN * NUM_PASSES * param_count * 6
+
+        # from https://github.com/kingoflolz/mesh-transformer-jax/blob/4c15ee74a8ce5d4bf2aee2462638c1b33c8288a8/tpuv38_example.py
+        print(f"Effective TFLOPS (not including attn): {total_flops / (np.sum(times_grads) + np.sum(times_update_opt))/1e12:.06}")
