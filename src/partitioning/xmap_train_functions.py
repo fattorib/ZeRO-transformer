@@ -19,7 +19,6 @@ def train_step(
     Computes loss/grads for a single batch of data, pmeans across all devices/hosts to sync grads
     and returns loss/grads
     """
-
     def get_minibatch(batch, grad_idx):
         return jax.tree_util.tree_map(
             lambda x: jax.lax.dynamic_index_in_dim(x, grad_idx, keepdims=False, axis=1),
@@ -100,7 +99,7 @@ def update_opt_state(
     to have the same partition specs
     """
     
-    grads = with_sharding_constraint(params, grad_spec)
+    params = with_sharding_constraint(params, grad_spec)
     grads = with_sharding_constraint(grads, grad_spec)
     updates, new_opt_state = optimizer.update(grads, optimizer_state, params)
     new_params = optax.apply_updates(params, updates)
