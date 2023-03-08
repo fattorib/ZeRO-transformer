@@ -23,6 +23,8 @@ def parse():
     parser.add_argument("--emulation",default=False,
         action="store_true")
     
+    parser.add_argument("--iter",default=10)
+    
     args = parser.parse_args()
     return args
 # Emulating 8 TPU cores
@@ -40,14 +42,14 @@ if __name__ == '__main__':
         GRAD_ACCUM_STEPS = 8
         BATCH_SIZE = 128
         CTX_LEN = 32
-        NUM_PASSES = 50
+        NUM_PASSES = args.iter
         MODEL_SIZE = 'smol' 
 
     else:
         GRAD_ACCUM_STEPS = 8
         BATCH_SIZE = 512
         CTX_LEN = 1024
-        NUM_PASSES = 50
+        NUM_PASSES = args.iter
         MODEL_SIZE = 'base' 
    
     # Setting up device mesh
