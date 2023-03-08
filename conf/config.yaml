@@ -12,7 +12,7 @@ training:
   train_context: 1024
 
 model:
-  size: "base"
+  size: "distill"
   warm_start: False
   model_path: "warmstart_params/warmstart_params_XXL.msgpack"
 
