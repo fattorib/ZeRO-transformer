@@ -188,9 +188,7 @@ if __name__ == '__main__':
 
             del grads 
 
-            print(metrics)
-
-            # metrics = eval_step_xmap(params, batch)
+            # print(metrics)
 
         print(
             f"ZeRO Step - Global BS {BATCH_SIZE} - accum steps {GRAD_ACCUM_STEPS} - Num Executions {NUM_PASSES}"
