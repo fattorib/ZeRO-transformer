@@ -57,7 +57,7 @@ if __name__ == '__main__':
     mesh = Mesh(devices, ("dp",))
 
     # Setting up model + param spec
-    model = model_getter(MODEL_SIZE, return_cfg=False)
+    model = model_getter(MODEL_SIZE, return_cfg=False, dtype = jax.numpy.bfloat16)
     rng = jax.random.PRNGKey(23)
 
 
