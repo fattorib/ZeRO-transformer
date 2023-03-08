@@ -521,7 +521,9 @@ def main():
                     tqdm(vl, disable=not jax.process_index() == 0)
                 ):
                     val_text = val_text[:, : cfg.training.train_context] #TODO: Requires an extra batch dimension
-
+                    val_text = val_text.reshape(jax.local_device_count(), 
+                              val_text.shape[0] // (jax.local_device_count()), 
+                              seq_len)
                     if val_it < cfg.training.maximum_evaluation_steps:
                         metrics = eval_step_xmap(params, val_text)
                         validation_metrics.append(metrics)
