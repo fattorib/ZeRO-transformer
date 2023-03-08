@@ -473,7 +473,10 @@ def main():
                 text.shape[0] // gradient_accumulation_steps,
                 seq_len,
             ).transpose(1, 0, 2)
-            
+            text = text.reshape(jax.local_device_count(), 
+                              text.shape[0] // (jax.local_device_count()* gradient_accumulation_steps), 
+                              gradient_accumulation_steps, seq_len)
+
             grads, metrics = train_step_xmap(params, text, dropout_rng)
 
             grads = grad_shard(grads)
@@ -517,7 +520,7 @@ def main():
                 for val_it, val_text in enumerate(
                     tqdm(vl, disable=not jax.process_index() == 0)
                 ):
-                    val_text = val_text[:, : cfg.training.train_context]
+                    val_text = val_text[:, : cfg.training.train_context] #TODO: Requires an extra batch dimension
 
                     if val_it < cfg.training.maximum_evaluation_steps:
                         metrics = eval_step_xmap(params, val_text)
