@@ -26,8 +26,8 @@ def parse():
     return args
 # Emulating 8 TPU cores
 import os 
-os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=8"
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=8"
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 #First step is to get regular dp working in xmap
 if __name__ == '__main__':
@@ -46,7 +46,7 @@ if __name__ == '__main__':
         GRAD_ACCUM_STEPS = 32
         BATCH_SIZE = 512
         CTX_LEN = 1024
-        NUM_PASSES = 100
+        NUM_PASSES = 10
         MODEL_SIZE = 'base' 
    
     # Setting up device mesh
@@ -197,7 +197,7 @@ if __name__ == '__main__':
         print(f"Model Size: {MODEL_SIZE}")
         print(f"Mean Grad Time {np.mean(times_grads):.4f} Seconds")
         print(f"Mean Opt Time {np.mean(times_update_opt):.4f} Seconds")
-
+        print(f"Total Time: {np.sum(times_grads) + np.sum(times_update_opt)}")
         param_count = sum(p.size for p in jax.tree_leaves(param_shape))
 
         total_flops = BATCH_SIZE * CTX_LEN * NUM_PASSES * param_count * 6
