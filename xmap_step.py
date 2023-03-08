@@ -24,10 +24,10 @@ def parse():
     
     args = parser.parse_args()
     return args
-# # Emulating 8 TPU cores
-# import os 
-# os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=8"
-# os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# Emulating 8 TPU cores
+import os 
+os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=8"
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 #First step is to get regular dp working in xmap
 if __name__ == '__main__':
@@ -81,9 +81,9 @@ if __name__ == '__main__':
     axis_list_params = jax.tree_map(lambda x: [...], params)
 
     in_axes =(
-        axis_list_params, 
-        ['batch', ...], 
         [...], 
+        ['batch', ...], 
+        [...], #TODO: Investigate why this can't be split
     )
     out_axes = (
         axis_list_params,
@@ -137,13 +137,23 @@ if __name__ == '__main__':
 
         init_batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
 
+        # batch = init_batch.reshape(
+        #     GRAD_ACCUM_STEPS,
+        #     init_batch.shape[0] // GRAD_ACCUM_STEPS,
+        #     CTX_LEN,
+        # ).transpose(1, 0, 2) # xmap takes the first axis - could just replace this with a device axis...
+        # (128,32) -> (bs, accum, ctx) = (16,8,32) -> (8,2,8,32)
         batch = init_batch.reshape(
             GRAD_ACCUM_STEPS,
             init_batch.shape[0] // GRAD_ACCUM_STEPS,
             CTX_LEN,
         ).transpose(1, 0, 2)
+        batch = batch.reshape(jax.local_device_count(), init_batch.shape[0] // (jax.local_device_count()* GRAD_ACCUM_STEPS), GRAD_ACCUM_STEPS, CTX_LEN)
 
-        print(f"Host batch shape (bs, accum, ctx): {batch.shape}")
+
+
+    
+        print(f"Host batch shape (device, bs, accum, ctx): {batch.shape}")
 
         grad_shard = pjit(lambda x:x, in_axis_resources=None, out_axis_resources=grad_param_spec)
 
@@ -163,6 +173,7 @@ if __name__ == '__main__':
                 init_batch.shape[0] // GRAD_ACCUM_STEPS,
                 CTX_LEN,
             ).transpose(1, 0, 2)
+            batch = batch.reshape(jax.local_device_count(), init_batch.shape[0] // (jax.local_device_count()* GRAD_ACCUM_STEPS), GRAD_ACCUM_STEPS, CTX_LEN)
 
             t0 = time() 
             grads, metrics = train_step_xmap(params, batch, dropout_rng)
