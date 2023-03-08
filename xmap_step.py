@@ -190,8 +190,8 @@ if __name__ == '__main__':
         )
         print(f"Mesh Layout (dp): (8)")
         print(f"Model Size: {MODEL_SIZE}")
-        print(f"Total Time: {total_time}")
-        param_count = sum(p.size for p in jax.tree_leaves(param_shape))
+        print(f"Total Time: {total_time:.4f}s")
+        param_count = sum(p.size for p in jax.tree_util.tree_leaves(param_shape))
 
         total_flops = BATCH_SIZE * CTX_LEN * NUM_PASSES * param_count * 6
         print(f"Param Count: {param_count}")
