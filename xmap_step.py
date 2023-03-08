@@ -209,8 +209,11 @@ if __name__ == '__main__':
         flops_per_iter = flops_per_fwdbwd * BATCH_SIZE
         
         total_flops = flops_per_iter*NUM_PASSES
-        
+        v2_flops = 45e12
+
+        mfu = total_flops/v2_flops
 
         print(f"Param Count: {param_count}")
         # from https://github.com/kingoflolz/mesh-transformer-jax/blob/4c15ee74a8ce5d4bf2aee2462638c1b33c8288a8/tpuv38_example.py
         print(f"Effective TFLOPS: {total_flops / (total_time)/1e12:.06}")
+        print(f"MFU: {mfu:.06}")
