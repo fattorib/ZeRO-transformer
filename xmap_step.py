@@ -211,7 +211,9 @@ if __name__ == '__main__':
         total_flops = flops_per_iter*NUM_PASSES
         v2_flops = 45e12
 
-        mfu = total_flops/v2_flops
+        effective_tflops = total_flops / (total_time)
+
+        mfu = effective_tflops/v2_flops
 
         print(f"Param Count: {param_count}")
         # from https://github.com/kingoflolz/mesh-transformer-jax/blob/4c15ee74a8ce5d4bf2aee2462638c1b33c8288a8/tpuv38_example.py
