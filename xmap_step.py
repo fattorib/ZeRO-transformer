@@ -14,6 +14,7 @@ from time import time
 from jax.experimental.maps import xmap
 import argparse
 from jax.experimental.pjit import pjit
+from omegaconf import OmegaConf
 
 
 def parse():
@@ -56,6 +57,16 @@ if __name__ == '__main__':
     # Setting up model + param spec
     model = model_getter(MODEL_SIZE, return_cfg=False)
     rng = jax.random.PRNGKey(23)
+
+
+    configs = OmegaConf.load("conf/model_config.yaml")
+
+    model_info = configs[MODEL_SIZE]
+
+    L, H, Q, T = model_info.N, model_info.num_head, model_info.embedding_dim//model_info.num_head, CTX_LEN
+
+    
+
 
     batch_tok = jax.random.randint(rng, shape=(1, CTX_LEN), maxval=50257, minval=0)
     params = initialized(rng, model, input_shape=(1, model.block_size))
@@ -193,7 +204,13 @@ if __name__ == '__main__':
         print(f"Total Time: {total_time:.4f}s")
         param_count = sum(p.size for p in jax.tree_util.tree_leaves(param_shape))
 
-        total_flops = BATCH_SIZE * CTX_LEN * NUM_PASSES * param_count * 6
+        flops_per_token = 6*param_count + 12*L*H*Q*T
+        flops_per_fwdbwd = flops_per_token * T
+        flops_per_iter = flops_per_fwdbwd * BATCH_SIZE
+        
+        total_flops = flops_per_iter*NUM_PASSES
+        
+
         print(f"Param Count: {param_count}")
         # from https://github.com/kingoflolz/mesh-transformer-jax/blob/4c15ee74a8ce5d4bf2aee2462638c1b33c8288a8/tpuv38_example.py
         print(f"Effective TFLOPS: {total_flops / (total_time)/1e12:.06}")
