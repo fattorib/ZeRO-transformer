@@ -203,6 +203,6 @@ if __name__ == '__main__':
         param_count = sum(p.size for p in jax.tree_leaves(param_shape))
 
         total_flops = BATCH_SIZE * CTX_LEN * NUM_PASSES * param_count * 6
-
+        print(f"Param Count: {param_count}")
         # from https://github.com/kingoflolz/mesh-transformer-jax/blob/4c15ee74a8ce5d4bf2aee2462638c1b33c8288a8/tpuv38_example.py
         print(f"Effective TFLOPS (not including attn): {total_flops / (np.sum(times_grads) + np.sum(times_update_opt))/1e12:.06}")
