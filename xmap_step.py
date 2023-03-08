@@ -43,7 +43,7 @@ if __name__ == '__main__':
         MODEL_SIZE = 'smol' 
 
     else:
-        GRAD_ACCUM_STEPS = 32
+        GRAD_ACCUM_STEPS = 8
         BATCH_SIZE = 512
         CTX_LEN = 1024
         NUM_PASSES = 50
