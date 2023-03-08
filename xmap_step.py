@@ -23,7 +23,7 @@ def parse():
     parser.add_argument("--emulation",default=False,
         action="store_true")
     
-    parser.add_argument("--iter",default=10)
+    parser.add_argument("--iter",default=10, type = int)
     
     args = parser.parse_args()
     return args
@@ -211,7 +211,7 @@ if __name__ == '__main__':
         flops_per_iter = flops_per_fwdbwd * BATCH_SIZE
         
         total_flops = flops_per_iter*NUM_PASSES
-        v2_flops = 45e12
+        v2_flops = 180e12 # from https://paperswithcode.com/paper/performance-and-power-evaluation-of-ai/review/
 
         effective_tflops = total_flops / (total_time)
 
@@ -220,4 +220,4 @@ if __name__ == '__main__':
         print(f"Param Count: {param_count}")
         # from https://github.com/kingoflolz/mesh-transformer-jax/blob/4c15ee74a8ce5d4bf2aee2462638c1b33c8288a8/tpuv38_example.py
         print(f"Effective TFLOPS: {total_flops / (total_time)/1e12:.06}")
-        print(f"MFU: {mfu:.06}")
+        print(f"MFU: {100*mfu:.06}")
