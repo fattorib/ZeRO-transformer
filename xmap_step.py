@@ -57,9 +57,13 @@ if __name__ == '__main__':
     mesh = Mesh(devices, ("dp",))
 
     # Setting up model + param spec
-    model = model_getter(MODEL_SIZE, return_cfg=False, dtype = jax.numpy.bfloat16)
+    model = model_getter(MODEL_SIZE, return_cfg=False)
     rng = jax.random.PRNGKey(23)
 
+    def to_bf16(t):
+        return jax.tree_map(lambda x: x.astype(jax.numpy.bfloat16) if x.dtype == jax.numpy.bfloat16.float32 else x, t)
+
+    model = to_bf16(model)
 
     configs = OmegaConf.load("conf/model_config.yaml")
 
