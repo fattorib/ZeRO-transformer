@@ -63,7 +63,7 @@ if __name__ == '__main__':
     def to_bf16(t):
         return jax.tree_map(lambda x: x.astype(jax.numpy.bfloat16) if x.dtype == jax.numpy.float32 else x, t)
 
-    model = to_bf16(model)
+    
 
     configs = OmegaConf.load("conf/model_config.yaml")
 
@@ -76,6 +76,8 @@ if __name__ == '__main__':
 
     batch_tok = jax.random.randint(rng, shape=(1, CTX_LEN), maxval=50257, minval=0)
     params = initialized(rng, model, input_shape=(1, model.block_size))
+
+    params = to_bf16(params)
 
     param_shape = jax.eval_shape(model.init, rng, batch_tok)
 
