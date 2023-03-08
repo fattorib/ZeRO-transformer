@@ -157,8 +157,7 @@ if __name__ == '__main__':
         # 1 step to compile
         grads, metrics = train_step_xmap(params, batch, dropout_rng)
 
-        times_grads = []
-        times_update_opt = []
+        start = time()
         for i in tqdm(range(NUM_PASSES)):
 
             dropout_rng, rng = jax.random.split(dropout_rng)
@@ -173,10 +172,7 @@ if __name__ == '__main__':
             ).transpose(1, 0, 2)
             batch = batch.reshape(jax.local_device_count(), init_batch.shape[0] // (jax.local_device_count()* GRAD_ACCUM_STEPS), GRAD_ACCUM_STEPS, CTX_LEN)
 
-            t0 = time() 
             grads, metrics = train_step_xmap(params, batch, dropout_rng)
-            times_grads.append(time() - t0)
-            t0 = time()
 
             # shard to respective devices
             grads = grad_shard(grads)
@@ -184,23 +180,20 @@ if __name__ == '__main__':
 
 
             params,opt_state = update_opt_state_pjit(grads, opt_state, params)
-            times_update_opt.append(time() - t0)
 
             del grads 
 
-            # print(metrics)
+        total_time = time() - start
 
         print(
             f"ZeRO Step - Global BS {BATCH_SIZE} - accum steps {GRAD_ACCUM_STEPS} - Num Executions {NUM_PASSES}"
         )
         print(f"Mesh Layout (dp): (8)")
         print(f"Model Size: {MODEL_SIZE}")
-        print(f"Mean Grad Time {np.mean(times_grads):.4f} Seconds")
-        print(f"Mean Opt Time {np.mean(times_update_opt):.4f} Seconds")
-        print(f"Total Time: {np.sum(times_grads) + np.sum(times_update_opt)}")
+        print(f"Total Time: {total_time}")
         param_count = sum(p.size for p in jax.tree_leaves(param_shape))
 
         total_flops = BATCH_SIZE * CTX_LEN * NUM_PASSES * param_count * 6
         print(f"Param Count: {param_count}")
         # from https://github.com/kingoflolz/mesh-transformer-jax/blob/4c15ee74a8ce5d4bf2aee2462638c1b33c8288a8/tpuv38_example.py
-        print(f"Effective TFLOPS (not including attn): {total_flops / (np.sum(times_grads) + np.sum(times_update_opt))/1e12:.06}")
+        print(f"Effective TFLOPS (not including attn): {total_flops / (total_time)/1e12:.06}")
