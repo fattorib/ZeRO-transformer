@@ -137,18 +137,15 @@ if __name__ == '__main__':
 
         init_batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
 
-        # batch = init_batch.reshape(
-        #     GRAD_ACCUM_STEPS,
-        #     init_batch.shape[0] // GRAD_ACCUM_STEPS,
-        #     CTX_LEN,
-        # ).transpose(1, 0, 2) # xmap takes the first axis - could just replace this with a device axis...
-        # (128,32) -> (bs, accum, ctx) = (16,8,32) -> (8,2,8,32)
+
         batch = init_batch.reshape(
             GRAD_ACCUM_STEPS,
             init_batch.shape[0] // GRAD_ACCUM_STEPS,
             CTX_LEN,
         ).transpose(1, 0, 2)
-        batch = batch.reshape(jax.local_device_count(), init_batch.shape[0] // (jax.local_device_count()* GRAD_ACCUM_STEPS), GRAD_ACCUM_STEPS, CTX_LEN)
+        batch = batch.reshape(jax.local_device_count(), 
+                              init_batch.shape[0] // (jax.local_device_count()* GRAD_ACCUM_STEPS), 
+                              GRAD_ACCUM_STEPS, CTX_LEN)
 
 
 
