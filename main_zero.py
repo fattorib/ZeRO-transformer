@@ -218,7 +218,7 @@ def main():
     )
 
     devices = np.asarray(jax.devices())
-    mesh = Mesh(devices, ["dp"])
+    mesh = Mesh(devices, ("dp",))
 
     # axis_list_params = jax.tree_map(lambda x: [...], params)
     axis_list_params = [...]
