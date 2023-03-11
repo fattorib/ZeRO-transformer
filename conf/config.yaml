@@ -1,6 +1,6 @@
 training:
   max_epochs: 20
-  batch_size: 128
+  batch_size: 64
   peak_learning_rate: 8.0e-4
   warmup_steps: 2000
   total_steps: 100000
