@@ -461,6 +461,9 @@ def main():
                               cfg.training.batch_size // (jax.local_device_count()* gradient_accumulation_steps),
                               gradient_accumulation_steps, seq_len)
 
+            if jax.process_index() == 0:
+                print(text.shape)
+                
             grads, metrics = train_step_xmap(params, text, dropout_rng)
 
             grads = grad_shard(grads)
