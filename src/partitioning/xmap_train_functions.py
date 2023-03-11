@@ -9,10 +9,12 @@ import optax
 from jax.lax import with_sharding_constraint
 
 def to_bf16(x):
-    return jax.tree_map(lambda x: x.astype(jnp.bfloat16) if x.dtype == jnp.float32 else x, x)
+    # return jax.tree_map(lambda x: x.astype(jnp.bfloat16) if x.dtype == jnp.float32 else x, x)
+    return x 
 
 def to_f32(x):
-    return jax.tree_map(lambda x: x.astype(jnp.float32) if x.dtype == jnp.bfloat16 else x, x)
+    # return jax.tree_map(lambda x: x.astype(jnp.float32) if x.dtype == jnp.bfloat16 else x, x)
+    return x
 
 
 # we xmap this
@@ -51,7 +53,7 @@ def train_step(
 
         return loss, grads
 
-    init_minibatch = (0.0, jax.tree_util.tree_map(jnp.zeros_like, to_bf16(params)))
+    init_minibatch = (0.0, to_bf16(jax.tree_util.tree_map(jnp.zeros_like, params)))
 
     # accumulate gradients
     def cumul_minibatch_step(grad_idx, cumul_loss_grad):
