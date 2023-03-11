@@ -501,49 +501,51 @@ def main():
 
             new_steps += 1
 
-            if (i) % (cfg.training.evaluation_frequency) == 0:
-                for val_it, val_text in enumerate(
-                    tqdm(vl, disable=not jax.process_index() == 0)
-                ):
-                    val_text = val_text[:, : cfg.training.train_context] #TODO: Requires an extra batch dimension
-                    val_text = val_text.reshape(jax.device_count(), 
-                              val_text.shape[0] // (jax.device_count()), 
-                              seq_len)
-                    if val_it < cfg.training.maximum_evaluation_steps:
-                        metrics = eval_step_xmap(params, val_text)
-                        validation_metrics.append(metrics)
-                    else:
-                        break
+            wandb.log(train_metrics_np)
 
-                validation_metrics_np = {
-                    k: np.mean([metrics[k] for metrics in validation_metrics])
-                    for k in validation_metrics[0]
-                }
+            # if (i) % (cfg.training.evaluation_frequency) == 0:
+            #     for val_it, val_text in enumerate(
+            #         tqdm(vl, disable=not jax.process_index() == 0)
+            #     ):
+            #         val_text = val_text[:, : cfg.training.train_context] #TODO: Requires an extra batch dimension
+            #         val_text = val_text.reshape(jax.device_count(), 
+            #                   val_text.shape[0] // (jax.device_count()), 
+            #                   seq_len)
+            #         if val_it < cfg.training.maximum_evaluation_steps:
+            #             metrics = eval_step_xmap(params, val_text)
+            #             validation_metrics.append(metrics)
+            #         else:
+            #             break
 
-                if jax.process_index() == 0:
-                    train_metrics_np.update(validation_metrics_np)
-                    wandb.log(train_metrics_np)
+            #     validation_metrics_np = {
+            #         k: np.mean([metrics[k] for metrics in validation_metrics])
+            #         for k in validation_metrics[0]
+            #     }
 
-                    if save_to_bucket:
-                        save_checkpoint_params(
-                            params,
-                            absolute_step,
-                            workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
-                        )
-                        save_checkpoint_optimizer(
-                            opt_state,
-                            absolute_step,
-                            workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/optimizer",
-                        )
+            #     if jax.process_index() == 0:
+            #         train_metrics_np.update(validation_metrics_np)
+            #         wandb.log(train_metrics_np)
 
-                    else:
-                        raise NotImplementedError(
-                            "Checkpointing not currently implemented for GPU/CPU"
-                        )
+            #         if save_to_bucket:
+            #             save_checkpoint_params(
+            #                 params,
+            #                 absolute_step,
+            #                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
+            #             )
+            #             save_checkpoint_optimizer(
+            #                 opt_state,
+            #                 absolute_step,
+            #                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/optimizer",
+            #             )
 
-            else:
-                if jax.process_index() == 0:
-                    wandb.log(train_metrics_np)
+            #         else:
+            #             raise NotImplementedError(
+            #                 "Checkpointing not currently implemented for GPU/CPU"
+            #             )
+
+            # else:
+            #     if jax.process_index() == 0:
+            #         wandb.log(train_metrics_np)
 
 
 if __name__ == "__main__":
