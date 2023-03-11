@@ -458,8 +458,8 @@ def main():
                 text.shape[0] // gradient_accumulation_steps,
                 seq_len,
             ).transpose(1, 0, 2)
-            text = text.reshape(jax.local_device_count(), 
-                              cfg.training.batch_size // (jax.local_device_count() * gradient_accumulation_steps),
+            text = text.reshape(jax.device_count(), 
+                              cfg.training.batch_size // (jax.device_count() * gradient_accumulation_steps),
                               gradient_accumulation_steps, seq_len) # (8, 4, 2, 2048)
                 
             grads, metrics = train_step_xmap(params, text, dropout_rng)
