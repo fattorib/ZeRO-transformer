@@ -427,8 +427,8 @@ def main():
 
         update_opt_state_pjit = pjit(
             partial(update_opt_state, optimizer = tx, grad_spec = grad_param_spec),
-            in_axis_resources=(grad_param_spec, opt_state_spec, grad_param_spec),
-            out_axis_resources=(None,opt_state_spec),
+            in_shardings=(grad_param_spec, opt_state_spec, grad_param_spec),
+            out_shardings=(None,opt_state_spec),
         )
 
         grad_shard = pjit(lambda x:x, in_axis_resources=None, out_axis_resources=grad_param_spec)
@@ -458,11 +458,8 @@ def main():
                 seq_len,
             ).transpose(1, 0, 2)
             text = text.reshape(jax.local_device_count(), 
-                              cfg.training.batch_size // (jax.local_device_count()* gradient_accumulation_steps),
-                              gradient_accumulation_steps, seq_len)
-
-            if jax.process_index() == 0:
-                print(text.shape)
+                              cfg.training.batch_size // (jax.local_device_count() * gradient_accumulation_steps),
+                              gradient_accumulation_steps, seq_len) # (8, 4, 2, 2048)
                 
             grads, metrics = train_step_xmap(params, text, dropout_rng)
 
