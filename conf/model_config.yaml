@@ -38,7 +38,7 @@ distill:
   embedding_dim: 768
   vocab_size: 50432
   num_head: 12
-  block_size: 1024
+  block_size: 2048
   dropout: 0.1
   N: 6
   alibi_attn: True
