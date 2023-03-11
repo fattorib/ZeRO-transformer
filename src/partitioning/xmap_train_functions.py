@@ -68,8 +68,8 @@ def train_step(
     grads = jax.lax.pmean(grads, axis_name="batch")
 
     metrics = {
-        "Train LM Loss": loss,
-        "Train LM PPL": jnp.exp(loss),
+        "train/loss": loss,
+        "train/ppl": jnp.exp(loss),
     }
 
     return grads, metrics
@@ -81,7 +81,7 @@ def eval_step(params: Any, batch: jnp.array, model: Any, ):
 
     loss = jax.lax.pmean(loss, axis_name="batch")
 
-    metrics = {"Validation LM Loss": loss, "Validation LM PPL": jnp.exp(loss)}
+    metrics = {"validation/loss": loss, "validation/ppl": jnp.exp(loss)}
 
     return metrics
 
