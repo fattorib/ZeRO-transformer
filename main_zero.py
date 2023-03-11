@@ -397,7 +397,7 @@ def main():
 
     vl = DataLoader(
         dataset=validation_dataset,
-        batch_size=cfg.training.batch_size//4,
+        batch_size=cfg.training.batch_size,
         collate_fn=numpy_collate,
         drop_last=True,
     )
@@ -460,7 +460,7 @@ def main():
             ).transpose(1, 0, 2)
             text = text.reshape(jax.device_count(), 
                               cfg.training.batch_size // (jax.device_count() * gradient_accumulation_steps),
-                              gradient_accumulation_steps, seq_len) # (8, 4, 2, 2048)
+                              gradient_accumulation_steps, seq_len) # (8, 4, 2, 2048) -> (32, 1, 2, 2048)
                 
             grads, metrics = train_step_xmap(params, text, dropout_rng)
 
@@ -506,8 +506,8 @@ def main():
                     tqdm(vl, disable=not jax.process_index() == 0)
                 ):
                     val_text = val_text[:, : cfg.training.train_context] #TODO: Requires an extra batch dimension
-                    val_text = val_text.reshape(jax.local_device_count(), 
-                              val_text.shape[0] // (jax.local_device_count()), 
+                    val_text = val_text.reshape(jax.device_count(), 
+                              val_text.shape[0] // (jax.device_count()), 
                               seq_len)
                     if val_it < cfg.training.maximum_evaluation_steps:
                         metrics = eval_step_xmap(params, val_text)
