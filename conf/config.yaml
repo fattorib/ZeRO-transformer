@@ -1,15 +1,15 @@
 training:
   max_epochs: 20
-  batch_size: 256
-  peak_learning_rate: 6.0e-4
+  batch_size: 128
+  peak_learning_rate: 8.0e-4
   warmup_steps: 2000
   total_steps: 25000
-  end_learning_rate: 6.0e-4
+  end_learning_rate: 8.0e-5
   weight_decay: 0.1
-  gradient_accumulation_steps: 8
+  gradient_accumulation_steps: 2
   evaluation_frequency: 500
   maximum_evaluation_steps: 500
-  train_context: 1024
+  train_context: 2048
 
 model:
   size: "distill"
@@ -17,12 +17,12 @@ model:
   model_path: "warmstart_params/warmstart_params_XXL.msgpack"
 
 data:
-  corpus: "openwebtext"
+  corpus: "pile_00"
   max_context: 2048
   train_samples: 14809244
   checkpoint_directory: "checkpoints"
-  bucket_path: "bfattoribooks2"
-  index_path_train: "data/index/openwebtext_uscentral.train.index"
-  index_path_validation: "data/index/openwebtext_uscentral.val.index"
-  wandb_project: "jax-transformer"
+  bucket_path: "bfattoripile_euwest "
+  index_path_train: "data/index/pileeu_train.index"
+  index_path_validation: "data/index/pileeu_validation.index"
+  wandb_project: "jax-transformer-xmap"
   resume_step: 0
