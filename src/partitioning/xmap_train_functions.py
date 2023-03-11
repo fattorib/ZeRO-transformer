@@ -7,6 +7,14 @@ import jax.numpy as jnp
 from typing import Any
 import optax
 from jax.lax import with_sharding_constraint
+
+def to_bf16(x):
+    return jax.tree_map(lambda x: x.astype(jnp.bfloat16) if x.dtype == jnp.float32 else x, x)
+
+def to_f32(x):
+    return jax.tree_map(lambda x: x.astype(jnp.float32) if x.dtype == jnp.bfloat16 else x, x)
+
+
 # we xmap this
 def train_step(
     params: Any,
@@ -27,7 +35,7 @@ def train_step(
 
     def loss_fn(params, batch):
         _, loss = model.apply(
-            {"params": params["params"]},
+            {"params": to_bf16(params["params"])},
             x=batch,
             labels=batch,
             train=True,
@@ -43,7 +51,7 @@ def train_step(
 
         return loss, grads
 
-    init_minibatch = (0.0, jax.tree_util.tree_map(jnp.zeros_like, params))
+    init_minibatch = (0.0, jax.tree_util.tree_map(jnp.zeros_like, to_bf16(params)))
 
     # accumulate gradients
     def cumul_minibatch_step(grad_idx, cumul_loss_grad):
@@ -76,7 +84,7 @@ def train_step(
 
 def eval_step(params: Any, batch: jnp.array, model: Any, ):
     _, loss = model.apply(
-        {"params": params["params"]}, x=batch, labels=batch, train=False
+        {"params": to_bf16(params["params"])}, x=batch, labels=batch, train=False
     )
 
     loss = jax.lax.pmean(loss, axis_name="batch")
