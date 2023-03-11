@@ -501,7 +501,8 @@ def main():
 
             new_steps += 1
 
-            wandb.log(train_metrics_np)
+            if jax.process_index() == 0:
+                wandb.log(train_metrics_np)
 
             # if (i) % (cfg.training.evaluation_frequency) == 0:
             #     for val_it, val_text in enumerate(
