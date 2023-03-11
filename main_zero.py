@@ -435,70 +435,70 @@ def main():
 
         for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
-            if (resume_step + new_steps) > cfg.training.total_steps:
-                if jax.process_index() == 0:
-                    logger.debug(f"Training has completed.")
+            # if (resume_step + new_steps) > cfg.training.total_steps:
+            #     if jax.process_index() == 0:
+            #         logger.debug(f"Training has completed.")
 
-                return True
+            #     return True
 
-            if i < int(cfg.data.resume_step):
-                continue
+            # if i < int(cfg.data.resume_step):
+            #     continue
 
-            rng, dropout_rng = jax.random.split(rng, 2)
+            # rng, dropout_rng = jax.random.split(rng, 2)
 
-            gradient_accumulation_steps = accum_steps
+            # gradient_accumulation_steps = accum_steps
 
-            if seq_len < cfg.data.max_context:
-                text = text.reshape(-1, seq_len)
+            # if seq_len < cfg.data.max_context:
+            #     text = text.reshape(-1, seq_len)
 
-            # we add a 'grad_accum' batch dimension which we then iterate through in train_step
-            text = text.reshape(
-                gradient_accumulation_steps,
-                text.shape[0] // gradient_accumulation_steps,
-                seq_len,
-            ).transpose(1, 0, 2)
-            text = text.reshape(jax.local_device_count(), 
-                              cfg.training.batch_size // (jax.local_device_count() * gradient_accumulation_steps),
-                              gradient_accumulation_steps, seq_len) # (8, 4, 2, 2048)
+            # # we add a 'grad_accum' batch dimension which we then iterate through in train_step
+            # text = text.reshape(
+            #     gradient_accumulation_steps,
+            #     text.shape[0] // gradient_accumulation_steps,
+            #     seq_len,
+            # ).transpose(1, 0, 2)
+            # text = text.reshape(jax.local_device_count(), 
+            #                   cfg.training.batch_size // (jax.local_device_count() * gradient_accumulation_steps),
+            #                   gradient_accumulation_steps, seq_len) # (8, 4, 2, 2048)
                 
-            grads, metrics = train_step_xmap(params, text, dropout_rng)
+            # grads, metrics = train_step_xmap(params, text, dropout_rng)
 
-            grads = grad_shard(grads)
-            params = grad_shard(params)
+            # grads = grad_shard(grads)
+            # params = grad_shard(params)
 
-            params,opt_state = update_opt_state_pjit(grads, opt_state, params)
+            # params,opt_state = update_opt_state_pjit(grads, opt_state, params)
 
 
-            del grads  # manually free grad mem
+            # del grads  # manually free grad mem
 
-            metrics["Train Sequence Length"] = seq_len
-            metrics["Learning Rate"] = learning_rate_fn(resume_step + new_steps)
+            # metrics["Train Sequence Length"] = seq_len
+            # metrics["Learning Rate"] = learning_rate_fn(resume_step + new_steps)
 
-            running_metrics.append(metrics)
+            # running_metrics.append(metrics)
 
-            train_metrics_np = {
-                k: np.mean([metrics[k] for metrics in running_metrics])
-                for k in running_metrics[0]
-            }
+            # train_metrics_np = {
+            #     k: np.mean([metrics[k] for metrics in running_metrics])
+            #     for k in running_metrics[0]
+            # }
 
-            running_metrics = []
-            validation_metrics = []
+            # running_metrics = []
+            # validation_metrics = []
 
-            absolute_step = resume_step + new_steps
+            # absolute_step = resume_step + new_steps
 
-            train_metrics_np["Tokens Seen (B)"] = (
-                num_host
-                * (
-                    cfg.training.batch_size
-                    * compute_tokens_seen(
-                        absolute_step,
-                        max_context=cfg.data.max_context,
-                    )
-                )
-                / 1e9
-            )
+            # train_metrics_np["Tokens Seen (B)"] = (
+            #     num_host
+            #     * (
+            #         cfg.training.batch_size
+            #         * compute_tokens_seen(
+            #             absolute_step,
+            #             max_context=cfg.data.max_context,
+            #         )
+            #     )
+            #     / 1e9
+            # )
 
-            new_steps += 1
+            # new_steps += 1
 
             if (i) % (cfg.training.evaluation_frequency) == 0:
                 for val_it, val_text in enumerate(
