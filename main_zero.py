@@ -481,8 +481,8 @@ def main():
             #     for k in running_metrics[0]
             # }
 
-            # running_metrics = []
-            # validation_metrics = []
+            running_metrics = []
+            validation_metrics = []
 
             # absolute_step = resume_step + new_steps
 
