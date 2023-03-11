@@ -1,7 +1,6 @@
 import argparse
 import logging
 import random as pyrandom
-import time
 from functools import partial
 from typing import Any, Callable, Tuple, Union
 
@@ -15,7 +14,6 @@ import torch
 import webdataset as wds
 from flax.serialization import msgpack_restore
 from flax.training import checkpoints, train_state
-from flax.training.common_utils import shard, shard_prng_key
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -59,91 +57,77 @@ def save_checkpoint_params(params: Any, step: int, workdir: str) -> None:
 
     TODO: Add async manager to do this in a background process
     """
-    # if jax.process_index() == 0:
-    #     params = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], params))
-    #     faux_state = train_state.TrainState(
-    #         step=step, apply_fn=None, params=params, tx=None, opt_state=None
-    #     )
-    #     checkpoints.save_checkpoint(
-    #         workdir, faux_state, step, keep=5, overwrite=True, prefix="params_"
-    #     )
+    if jax.process_index() == 0:
+        params = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], params))
+        faux_state = train_state.TrainState(
+            step=step, apply_fn=None, params=params, tx=None, opt_state=None
+        )
+        checkpoints.save_checkpoint(
+            workdir, faux_state, step, keep=5, overwrite=True, prefix="params_"
+        )
 
-    pass
 
 def save_checkpoint_optimizer(opt_state: Any, step: int, workdir: str) -> None:
-    # """
-    # Function to gather and save the sharded optimizer state.
+    """
+    Function to gather and save the sharded optimizer state.
 
-    # TODO: Add async manager to do this in a background process
-    # """
-    # if jax.process_index() == 0:
-    #     opt_state = jax.device_get(opt_state)
+    TODO: Add async manager to do this in a background process
+    """
+    if jax.process_index() == 0:
+        opt_state = jax.device_get(opt_state)
 
-    #     # unshard buffers
-    #     opt_state = jax.tree_util.tree_map(
-    #         lambda x: x.reshape(-1, x.shape[-1])
-    #         if x.ndim > 2
-    #         else x.reshape(
-    #             -1,
-    #         ),
-    #         opt_state,
-    #     )
-
-    #     faux_state = train_state.TrainState(
-    #         step=step, apply_fn=None, params=None, tx=None, opt_state=opt_state
-    #     )
-    #     checkpoints.save_checkpoint(
-    #         workdir, faux_state, step, keep=5, overwrite=True, prefix="optimizer_"
-    #     )
-    pass 
+        faux_state = train_state.TrainState(
+            step=step, apply_fn=None, params=None, tx=None, opt_state=opt_state
+        )
+        checkpoints.save_checkpoint(
+            workdir, faux_state, step, keep=5, overwrite=True, prefix="optimizer_"
+        )
 
 
 def restore_param_checkpoint(workdir: str) -> Any:
-    # """
-    # Restores the most recent parameter dict
-    # """
-    # params = checkpoints.restore_checkpoint(workdir, target=None, prefix="params_")
-    # 
-    # return flax.core.freeze(params["params"])
-    pass 
+    """
+    Restores the most recent parameter dict
+    """
+    params = checkpoints.restore_checkpoint(workdir, target=None, prefix="params_")
+    
+    return flax.core.freeze(params["params"])
 
 def restore_opt_checkpoint(workdir: str) -> Tuple[Any, int]:
-    # """
-    # Function to restore optimizer state from a sequence of serialized Flax
-    # state dicts. By default, restoring a flax state dict to an optax state
-    # doesn't work so we manually recreate the optimizer state and return it.
-    # """
-    # opt_state_restored = checkpoints.restore_checkpoint(
-    #     workdir, target=None, prefix="optimizer_"
-    # )
+    """
+    Function to restore optimizer state from a sequence of serialized Flax
+    state dicts. By default, restoring a flax state dict to an optax state
+    doesn't work so we manually recreate the optimizer state and return it.
+    """
+    opt_state_restored = checkpoints.restore_checkpoint(
+        workdir, target=None, prefix="optimizer_"
+    )
 
-    # mu_pytree = jax.tree_util.tree_map(
-    #     lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["mu"]
-    # )
+    mu_pytree = jax.tree_util.tree_map(
+        lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["mu"]
+    )
 
-    # nu_pytree = jax.tree_util.tree_map(
-    #     lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["nu"]
-    # )
+    nu_pytree = jax.tree_util.tree_map(
+        lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["nu"]
+    )
 
-    # count_pytree = jax.tree_util.tree_map(
-    #     lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["count"]
-    # )
+    count_pytree = jax.tree_util.tree_map(
+        lambda x: jnp.array(x), opt_state_restored["opt_state"]["1"]["0"]["count"]
+    )
 
-    # restoredadamstate = optax.ScaleByAdamState(
-    #     count_pytree, flax.core.FrozenDict(mu_pytree), flax.core.FrozenDict(nu_pytree)
-    # )
-    # restored_state = (
-    #     optax.EmptyState(),
-    #     (
-    #         restoredadamstate,
-    #         optax.MaskedState(inner_state=optax.EmptyState()),
-    #         optax.ScaleByScheduleState(count=jnp.array(opt_state_restored["step"])),
-    #     ),
-    # )
+    restoredadamstate = optax.ScaleByAdamState(
+        count_pytree, flax.core.FrozenDict(mu_pytree), flax.core.FrozenDict(nu_pytree)
+    )
+    restored_state = (
+        optax.EmptyState(),
+        (
+            restoredadamstate,
+            optax.MaskedState(inner_state=optax.EmptyState()),
+            optax.ScaleByScheduleState(count=jnp.array(opt_state_restored["step"])),
+        ),
+    )
 
-    # return restored_state, opt_state_restored["step"]
+    return restored_state, opt_state_restored["step"]
 
-    pass 
 
 
 def create_zero_train_state(
