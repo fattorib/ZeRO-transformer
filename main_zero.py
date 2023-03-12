@@ -450,7 +450,7 @@ def main():
             ).transpose(1, 0, 2)
             text = text.reshape(
                 jax.device_count(),
-                cfg.training.batch_size
+                cfg.training.batch_size*(cfg.data.max_context//cfg.training.train_context)
                 // (jax.device_count() * gradient_accumulation_steps),
                 gradient_accumulation_steps,
                 seq_len,
