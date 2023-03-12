@@ -495,22 +495,22 @@ def main():
             new_steps += 1
 
             if (i) % (cfg.training.evaluation_frequency) == 0:
-                # for val_it, val_text in enumerate(
-                #     tqdm(vl, disable=not jax.process_index() == 0)
-                # ):
-                #     val_text = val_text.reshape(jax.device_count(),
-                #               val_text.shape[0] // (jax.device_count()),
-                #               seq_len)
-                #     if val_it < cfg.training.maximum_evaluation_steps:
-                #         metrics = eval_step_xmap(params, val_text)
-                #         validation_metrics.append(metrics)
-                #     else:
-                #         break
+                for val_it, val_text in enumerate(
+                    tqdm(vl, disable=not jax.process_index() == 0)
+                ):
+                    val_text = val_text.reshape(jax.device_count(),
+                              val_text.shape[0] // (jax.device_count()),
+                              seq_len)
+                    if val_it < cfg.training.maximum_evaluation_steps:
+                        metrics = eval_step_xmap(params, val_text)
+                        validation_metrics.append(metrics)
+                    else:
+                        break
 
-                # validation_metrics_np = {
-                #     k: np.mean([metrics[k] for metrics in validation_metrics])
-                #     for k in validation_metrics[0]
-                # }
+                validation_metrics_np = {
+                    k: np.mean([metrics[k] for metrics in validation_metrics])
+                    for k in validation_metrics[0]
+                }
 
                 #TODO: Try grabbing jax opt_state here?
 
@@ -520,9 +520,11 @@ def main():
                 opt_state_cpu = grab_shards(opt_state)
 
                 if jax.process_index() == 0:
+
+                    train_metrics_np.update(validation_metrics_np)
                     wandb.log(train_metrics_np)
 
-                    print(type(opt_state_cpu[0]),type(opt_state_cpu[1]))
+                    print(type(opt_state_cpu[0]),type(opt_state_cpu[1][0])) # TODO: confirm this is actually on CPU
 
                     if save_to_bucket:
                         save_checkpoint_params(
