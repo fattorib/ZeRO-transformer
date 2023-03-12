@@ -58,7 +58,7 @@ def save_checkpoint_params(params: Any, step: int, workdir: str) -> None:
     TODO: Add async manager to do this in a background process
     """
     if jax.process_index() == 0:
-        params = jax.device_get(jax.tree_util.tree_map(lambda x: x, params))
+        params = jax.device_get(params)
         faux_state = train_state.TrainState(
             step=step, apply_fn=None, params=params, tx=None, opt_state=None
         )
