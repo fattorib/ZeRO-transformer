@@ -61,16 +61,6 @@ medium:
   N: 24
   alibi_attn: True
 
-bytelevelbase:
-  embedding_dim: 1024
-  vocab_size: 384
-  num_head: 16
-  block_size: 4096
-  dropout: 0.1
-  N: 10
-  alibi_attn: True
-
-
 large:
   embedding_dim: 1536
   vocab_size: 50304
