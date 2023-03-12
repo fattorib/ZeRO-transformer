@@ -516,13 +516,15 @@ def main():
                     # train_metrics_np.update(validation_metrics_np)
                     wandb.log(train_metrics_np)
 
-                    # to save mem, we could grab params to CPU temporarily 
                     if save_to_bucket:
                         save_checkpoint_params(
                             params,
                             absolute_step,
                             workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
                         )
+                        if jax.process_index() == 0:
+                            print(type(opt_state))
+                            
                         save_checkpoint_optimizer(
                             opt_state,
                             absolute_step,
