@@ -58,7 +58,7 @@ def save_checkpoint_params(params: Any, step: int, workdir: str) -> None:
     TODO: Add async manager to do this in a background process
     """
     if jax.process_index() == 0:
-        params = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], params))
+        params = jax.device_get(jax.tree_util.tree_map(lambda x: x, params))
         faux_state = train_state.TrainState(
             step=step, apply_fn=None, params=params, tx=None, opt_state=None
         )
@@ -523,22 +523,22 @@ def main():
                     # train_metrics_np.update(validation_metrics_np)
                     wandb.log(train_metrics_np)
 
-                    if save_to_bucket:
-                        save_checkpoint_params(
-                            params,
-                            absolute_step,
-                            workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
-                        )
-                        save_checkpoint_optimizer(
-                            opt_state,
-                            absolute_step,
-                            workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/optimizer",
-                        )
+                    # if save_to_bucket:
+                    #     save_checkpoint_params(
+                    #         params,
+                    #         absolute_step,
+                    #         workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
+                    #     )
+                    #     save_checkpoint_optimizer(
+                    #         opt_state,
+                    #         absolute_step,
+                    #         workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/optimizer",
+                    #     )
 
-                    else:
-                        raise NotImplementedError(
-                            "Checkpointing not currently implemented for GPU/CPU"
-                        )
+                    # else:
+                    #     raise NotImplementedError(
+                    #         "Checkpointing not currently implemented for GPU/CPU"
+                    #     )
 
             else:
                 if jax.process_index() == 0:
