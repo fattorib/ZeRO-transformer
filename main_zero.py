@@ -34,8 +34,6 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-jax.config.update('jax_array', False)
-
 def parse():
     parser = argparse.ArgumentParser(description="Transformer Training")
 
@@ -75,15 +73,12 @@ def save_checkpoint_optimizer(opt_state: Any, step: int, workdir: str) -> None:
 
     TODO: Add async manager to do this in a background process
     """
-    if jax.process_index() == 0:
-        opt_state = jax.device_get(opt_state)
-
-        faux_state = train_state.TrainState(
-            step=step, apply_fn=None, params=None, tx=None, opt_state=opt_state
-        )
-        checkpoints.save_checkpoint(
-            workdir, faux_state, step, keep=5, overwrite=True, prefix="optimizer_"
-        )
+    faux_state = train_state.TrainState(
+        step=step, apply_fn=None, params=None, tx=None, opt_state=opt_state
+    )
+    checkpoints.save_checkpoint_multiprocess(
+        workdir, faux_state, step, keep=5, overwrite=True, prefix="optimizer_"
+    )
 
 
 def restore_param_checkpoint(workdir: str) -> Any:
