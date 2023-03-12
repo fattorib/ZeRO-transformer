@@ -73,12 +73,21 @@ def save_checkpoint_optimizer(opt_state: Any, step: int, workdir: str) -> None:
 
     TODO: Add async manager to do this in a background process
     """
-    faux_state = train_state.TrainState(
-        step=step, apply_fn=None, params=None, tx=None, opt_state=opt_state
-    )
-    checkpoints.save_checkpoint_multiprocess(
-        workdir, faux_state, step, keep=5, overwrite=True, prefix="optimizer_"
-    )
+    if jax.process_index() == 0:
+
+        @partial(jax.jit, backend="cpu")
+        def grab_shards(tree):
+            return jax.experimental.multihost_utils.process_allgather(tree)
+        
+        opt_state = grab_shards(opt_state)
+        opt_state = jax.device_get(opt_state)
+
+        faux_state = train_state.TrainState(
+            step=step, apply_fn=None, params=None, tx=None, opt_state=opt_state
+        )
+        checkpoints.save_checkpoint(
+            workdir, faux_state, step, keep=5, overwrite=True, prefix="optimizer_"
+        )
 
 
 def restore_param_checkpoint(workdir: str) -> Any:
