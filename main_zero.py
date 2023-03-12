@@ -74,11 +74,11 @@ def save_checkpoint_optimizer(opt_state: Any, step: int, workdir: str) -> None:
     TODO: Add async manager to do this in a background process
     """
     if jax.process_index() == 0:
-        print(type(opt_state))
-        def grab_shards(tree):
-            return jax.experimental.multihost_utils.process_allgather(tree)
+        # print(type(opt_state))
+        # def grab_shards(tree):
+        #     return jax.experimental.multihost_utils.process_allgather(tree)
         
-        opt_state = grab_shards(opt_state)
+        # opt_state = grab_shards(opt_state)
         opt_state = jax.device_get(opt_state)
 
         faux_state = train_state.TrainState(
@@ -520,14 +520,11 @@ def main():
                 opt_state_cpu = grab_shards(opt_state)
 
                 if jax.process_index() == 0:
-                    print(type(opt_state_cpu))
-                    # train_metrics_np.update(validation_metrics_np)
                     wandb.log(train_metrics_np)
 
                     
 
                     if save_to_bucket:
-                        print(type(opt_state))
                         save_checkpoint_params(
                             params,
                             absolute_step,
@@ -536,7 +533,7 @@ def main():
                         
 
                         save_checkpoint_optimizer(
-                            opt_state,
+                            opt_state_cpu,
                             absolute_step,
                             workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/optimizer",
                         )
