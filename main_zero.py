@@ -545,6 +545,10 @@ def main():
                         raise NotImplementedError(
                             "Checkpointing not currently implemented for GPU/CPU"
                         )
+                    
+                    #TODO: Call gc.collect here?
+                    # del opt_state_cpu
+                    # gc.collect()
 
             else:
                 if jax.process_index() == 0:
