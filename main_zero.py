@@ -512,19 +512,29 @@ def main():
                 #     for k in validation_metrics[0]
                 # }
 
+                #TODO: Try grabbing jax opt_state here?
+
+                def grab_shards(tree):
+                    return jax.experimental.multihost_utils.process_allgather(tree)
+                
+                opt_state_cpu = grab_shards(opt_state)
+
                 if jax.process_index() == 0:
+                    print(type(opt_state_cpu))
                     # train_metrics_np.update(validation_metrics_np)
                     wandb.log(train_metrics_np)
 
+                    
+
                     if save_to_bucket:
+                        print(type(opt_state))
                         save_checkpoint_params(
                             params,
                             absolute_step,
                             workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
                         )
-                        if jax.process_index() == 0:
-                            print(type(opt_state))
-                            
+                        
+
                         save_checkpoint_optimizer(
                             opt_state,
                             absolute_step,
