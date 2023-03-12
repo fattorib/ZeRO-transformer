@@ -85,8 +85,7 @@ class Transformer(nn.Module):
         out = wte
 
         for _ in range(self.N):
-            remat_transformer = nn.remat(TransformerBlock)
-            out = remat_transformer(
+            out = TransformerBlock(
                 self.embedding_dim,
                 self.num_head,
                 self.block_size,
