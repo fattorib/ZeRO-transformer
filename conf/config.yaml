@@ -13,8 +13,6 @@ training:
 
 model:
   size: "base"
-  warm_start: False
-  model_path: "warmstart_params/warmstart_params_XXL.msgpack"
 
 data:
   corpus: "pile_00"

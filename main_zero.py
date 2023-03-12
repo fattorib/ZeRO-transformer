@@ -257,20 +257,6 @@ def main():
     grad_param_spec = set_partitions_zero(param_shape)
     opt_state_spec = create_opt_spec(grad_param_spec, opt_state_shapes)
 
-    # if cfg.model.warm_start and not args.resume:
-    #     if jax.process_index() == 0:
-    #         logger.debug(
-    #             f"Warm starting model training from checkpoint {cfg.model.model_path}"
-    #         )
-
-    #     del params
-
-    #     bucket = client.bucket(cfg.data.bucket_path)
-    #     blob = bucket.blob(cfg.model.model_path)
-    #     param_bytes = msgpack_restore(blob.download_as_bytes())
-
-    #     params = flax.core.freeze(param_bytes)
-
     # if args.resume:
     #     del params
     #     del opt_state
