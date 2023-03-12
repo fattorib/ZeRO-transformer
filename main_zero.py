@@ -498,6 +498,7 @@ def main():
                 for val_it, val_text in enumerate(
                     tqdm(vl, disable=not jax.process_index() == 0)
                 ):
+                    val_text = val_text.reshape(-1,seq_len)
                     val_text = val_text.reshape(jax.device_count(),
                               val_text.shape[0] // (jax.device_count()),
                               seq_len)
