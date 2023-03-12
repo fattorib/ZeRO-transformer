@@ -9,12 +9,11 @@ import optax
 from jax.lax import with_sharding_constraint
 
 def to_bf16(t):
-    # return jax.tree_map(lambda x: x.astype(jnp.bfloat16) if x.dtype == jnp.float32 else x,t)
-    return t
+    return jax.tree_map(lambda x: x.astype(jnp.bfloat16) if x.dtype == jnp.float32 else x,t)
 
 def to_f32(t):
-    # return jax.tree_map(lambda x: x.astype(jnp.float32) if x.dtype == jnp.bfloat16 else x, t)
-    return t 
+    return jax.tree_map(lambda x: x.astype(jnp.float32) if x.dtype == jnp.bfloat16 else x, t)
+ 
 
 
 # we xmap this
@@ -37,7 +36,7 @@ def train_step(
 
     def loss_fn(params, batch):
         _, loss = model.apply(
-            {"params": to_bf16(params["params"])},
+            {"params": params["params"]},
             x=batch,
             labels=batch,
             train=True,
@@ -49,7 +48,7 @@ def train_step(
 
     def loss_and_grad(grad_idx):
         minibatch = get_minibatch(batch, grad_idx) if grad_idx is not None else batch
-        loss, grads = grad_fn(params, minibatch)
+        loss, grads = grad_fn(to_bf16(params), minibatch)
 
         return loss, grads
 
@@ -86,7 +85,7 @@ def train_step(
 
 def eval_step(params: Any, batch: jnp.array, model: Any, ):
     _, loss = model.apply(
-        {"params": to_bf16(params["params"])}, x=batch, labels=batch, train=False
+        {"params": params["params"]}, x=batch, labels=batch, train=False
     )
 
     loss = jax.lax.pmean(loss, axis_name="batch")

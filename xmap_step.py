@@ -5,9 +5,10 @@ import jax
 from src.models.GPT import model_getter
 from src.training.training_utils import initialized
 import optax 
-from src.partitioning.xmap_train_functions import train_step, eval_step
+from src.partitioning.xmap_train_functions import train_step, eval_step, to_bf16
 from src.partitioning.xmap_train_functions import update_opt_state
 from src.partitioning.partition import set_partitions_zero, create_opt_spec
+from functools import partial
 import functools
 from tqdm import tqdm 
 from time import time 
@@ -29,8 +30,8 @@ def parse():
     return args
 # Emulating 8 TPU cores
 import os 
-# os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=8"
-# os.environ["CUDA_VISIBLE_DEVICES"] = ""
+os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=8"
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 #First step is to get regular dp working in xmap
 if __name__ == '__main__':
@@ -54,30 +55,22 @@ if __name__ == '__main__':
    
     # Setting up device mesh
     devices = np.asarray(jax.devices())
-    mesh = Mesh(devices, ("dp",))
+    mesh = Mesh(devices, ["dp"])
 
     # Setting up model + param spec
     model = model_getter(MODEL_SIZE, return_cfg=False)
     rng = jax.random.PRNGKey(23)
-
-    def to_bf16(t):
-        return jax.tree_map(lambda x: x.astype(jax.numpy.bfloat16) if x.dtype == jax.numpy.float32 else x, t)
-
     
-
     configs = OmegaConf.load("conf/model_config.yaml")
 
     model_info = configs[MODEL_SIZE]
 
     L, H, Q, T = model_info.N, model_info.num_head, model_info.embedding_dim//model_info.num_head, CTX_LEN
 
-    
-
 
     batch_tok = jax.random.randint(rng, shape=(1, CTX_LEN), maxval=50257, minval=0)
     params = initialized(rng, model, input_shape=(1, model.block_size))
 
-    params = to_bf16(params)
 
     param_shape = jax.eval_shape(model.init, rng, batch_tok)
 
@@ -97,7 +90,7 @@ if __name__ == '__main__':
         ),
     )
 
-    axis_list_params = jax.tree_map(lambda x: [...], params)
+    # axis_list_params = jax.tree_map(lambda x: [...], params)
 
     in_axes =(
         [...], 
@@ -105,24 +98,24 @@ if __name__ == '__main__':
         [...], 
     )
     out_axes = (
-        axis_list_params,
+        [...],
         [...]
     )
 
     # standard data parallel training step with xmap!
     train_step_xmap = xmap(
-            functools.partial(train_step, model = model, accum_steps = GRAD_ACCUM_STEPS),
+            partial(train_step, model = model, accum_steps = GRAD_ACCUM_STEPS),
             in_axes=in_axes,
             out_axes=out_axes,
             axis_resources={"batch": "dp"}
         )
     
     eval_axes = (
-        axis_list_params, 
+        [...], 
         ['batch', ...], 
     )
     eval_step_xmap = xmap(
-        functools.partial(eval_step, model = model), 
+        partial(eval_step, model = model), 
         in_axes=eval_axes,
         out_axes=[...],
         axis_resources={"batch": "dp"}
@@ -167,8 +160,6 @@ if __name__ == '__main__':
                               GRAD_ACCUM_STEPS, CTX_LEN)
 
 
-
-    
         print(f"Host batch shape (device, bs, accum, ctx): {batch.shape}")
 
         grad_shard = pjit(lambda x:x, in_axis_resources=None, out_axis_resources=grad_param_spec)
