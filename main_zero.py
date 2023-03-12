@@ -20,7 +20,7 @@ from jax.sharding import Mesh
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-
+import gc 
 import wandb
 from src.models.GPT import model_getter
 from src.partitioning.partition import create_opt_spec, set_partitions_zero
@@ -526,22 +526,22 @@ def main():
                     # train_metrics_np.update(validation_metrics_np)
                     wandb.log(train_metrics_np)
 
-                    # if save_to_bucket:
-                    #     save_checkpoint_params(
-                    #         params,
-                    #         absolute_step,
-                    #         workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
-                    #     )
-                    #     save_checkpoint_optimizer(
-                    #         opt_state,
-                    #         absolute_step,
-                    #         workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/optimizer",
-                    #     )
+                    if save_to_bucket:
+                        save_checkpoint_params(
+                            params,
+                            absolute_step,
+                            workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
+                        )
+                        save_checkpoint_optimizer(
+                            opt_state,
+                            absolute_step,
+                            workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/optimizer",
+                        )
 
-                    # else:
-                    #     raise NotImplementedError(
-                    #         "Checkpointing not currently implemented for GPU/CPU"
-                    #     )
+                    else:
+                        raise NotImplementedError(
+                            "Checkpointing not currently implemented for GPU/CPU"
+                        )
 
             else:
                 if jax.process_index() == 0:
