@@ -47,13 +47,13 @@ base:
   embedding_dim: 768
   vocab_size: 50432
   num_head: 12
-  block_size: 1024
+  block_size: 2048
   dropout: 0.1
   N: 12
   alibi_attn: True
 
 medium:
-  embedding_dim: 7681024
+  embedding_dim: 1024
   vocab_size: 50432
   num_head: 16
   block_size: 1024
@@ -96,4 +96,13 @@ XXL:
   block_size: 1024
   dropout: 0.1
   N: 36
+  alibi_attn: True
+
+gopher:
+  embedding_dim: 2048
+  vocab_size: 50304
+  num_head: 16
+  block_size: 1024
+  dropout: 0.1
+  N: 24
   alibi_attn: True
