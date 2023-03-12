@@ -63,7 +63,7 @@ def save_checkpoint_params(params: Any, step: int, workdir: str) -> None:
             step=step, apply_fn=None, params=params, tx=None, opt_state=None
         )
         checkpoints.save_checkpoint(
-            workdir, faux_state, step, keep=5, overwrite=True, prefix="params_"
+            workdir, faux_state, step, keep=3, overwrite=True, prefix="params_"
         )
 
 
@@ -74,8 +74,7 @@ def save_checkpoint_optimizer(opt_state: Any, step: int, workdir: str) -> None:
     TODO: Add async manager to do this in a background process
     """
     if jax.process_index() == 0:
-
-        @partial(jax.jit, backend="cpu")
+        print(type(opt_state))
         def grab_shards(tree):
             return jax.experimental.multihost_utils.process_allgather(tree)
         
@@ -86,7 +85,7 @@ def save_checkpoint_optimizer(opt_state: Any, step: int, workdir: str) -> None:
             step=step, apply_fn=None, params=None, tx=None, opt_state=opt_state
         )
         checkpoints.save_checkpoint(
-            workdir, faux_state, step, keep=5, overwrite=True, prefix="optimizer_"
+            workdir, faux_state, step, keep=3, overwrite=True, prefix="optimizer_"
         )
 
 
@@ -517,6 +516,7 @@ def main():
                     # train_metrics_np.update(validation_metrics_np)
                     wandb.log(train_metrics_np)
 
+                    # to save mem, we could grab params to CPU temporarily 
                     if save_to_bucket:
                         save_checkpoint_params(
                             params,
