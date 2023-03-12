@@ -34,6 +34,7 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+jax.config.update('jax_array', False)
 
 def parse():
     parser = argparse.ArgumentParser(description="Transformer Training")
