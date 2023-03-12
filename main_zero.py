@@ -522,7 +522,7 @@ def main():
                 if jax.process_index() == 0:
                     wandb.log(train_metrics_np)
 
-                    
+                    print(type(opt_state_cpu[0]),type(opt_state_cpu[1]))
 
                     if save_to_bucket:
                         save_checkpoint_params(
