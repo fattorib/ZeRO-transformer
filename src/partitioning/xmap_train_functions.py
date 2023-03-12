@@ -9,12 +9,10 @@ import optax
 from jax.lax import with_sharding_constraint
 
 def to_bf16(x):
-    # return jax.tree_map(lambda x: x.astype(jnp.bfloat16) if x.dtype == jnp.float32 else x, x)
-    return x 
+    return jax.tree_map(lambda x: x.astype(jnp.bfloat16) if x.dtype == jnp.float32 else x, x)
 
 def to_f32(x):
-    # return jax.tree_map(lambda x: x.astype(jnp.float32) if x.dtype == jnp.bfloat16 else x, x)
-    return x
+    return jax.tree_map(lambda x: x.astype(jnp.float32) if x.dtype == jnp.bfloat16 else x, x)
 
 
 # we xmap this
