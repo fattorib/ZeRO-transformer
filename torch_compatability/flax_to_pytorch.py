@@ -16,7 +16,7 @@ def create_transformer_block_mapping(block_idx: int, use_bias: bool = False):
         "MLPBlock_0.fc_residual.kernel": f"blocks.{block_idx}.mlp.fc_resid.weight",
         "LayerNorm_0.scale": f"blocks.{block_idx}.ln1.weight",
         "LayerNorm_1.scale": f"blocks.{block_idx}.ln2.weight",
-        "MLPBlock_0.fc_in.bias": f"blocks.{block_idx}.mlp.fc1.bias",
+        
     }
 
     if use_bias:
@@ -28,6 +28,7 @@ def create_transformer_block_mapping(block_idx: int, use_bias: bool = False):
             "CausalAttention_0.query_proj.bias": f"blocks.{block_idx}.attn.query.bias",
             "LayerNorm_0.bias": f"blocks.{block_idx}.ln1.bias",
             "LayerNorm_1.bias": f"blocks.{block_idx}.ln2.bias",
+            "MLPBlock_0.fc_in.bias": f"blocks.{block_idx}.mlp.fc1.bias",
         }
 
         dict_params.update(bias_dict)
