@@ -2,18 +2,24 @@
 Move these to a separate function temporarily
 """
 
+from typing import Any
+
 import jax
 import jax.numpy as jnp
-from typing import Any
 import optax
 from jax.lax import with_sharding_constraint
 
+
 def to_bf16(t):
-    return jax.tree_map(lambda x: x.astype(jnp.bfloat16) if x.dtype == jnp.float32 else x,t)
+    return jax.tree_map(
+        lambda x: x.astype(jnp.bfloat16) if x.dtype == jnp.float32 else x, t
+    )
+
 
 def to_f32(t):
-    return jax.tree_map(lambda x: x.astype(jnp.float32) if x.dtype == jnp.bfloat16 else x, t)
- 
+    return jax.tree_map(
+        lambda x: x.astype(jnp.float32) if x.dtype == jnp.bfloat16 else x, t
+    )
 
 
 # we xmap this
@@ -28,6 +34,7 @@ def train_step(
     Computes loss/grads for a single batch of data, pmeans across all devices/hosts to sync grads
     and returns loss/grads
     """
+
     def get_minibatch(batch, grad_idx):
         return jax.tree_util.tree_map(
             lambda x: jax.lax.dynamic_index_in_dim(x, grad_idx, keepdims=False, axis=1),
@@ -83,7 +90,12 @@ def train_step(
 
     return grads, metrics
 
-def eval_step(params: Any, batch: jnp.array, model: Any, ):
+
+def eval_step(
+    params: Any,
+    batch: jnp.array,
+    model: Any,
+):
     _, loss = model.apply(
         {"params": params["params"]}, x=batch, labels=batch, train=False
     )
@@ -96,18 +108,13 @@ def eval_step(params: Any, batch: jnp.array, model: Any, ):
 
 
 def update_opt_state(
-    grads: Any,
-    optimizer_state: Any,
-    params: Any,
-    optimizer: Any,
-    grad_spec: Any
-
+    grads: Any, optimizer_state: Any, params: Any, optimizer: Any, grad_spec: Any
 ):
     """
-    Updates the sharded optimizer state and parameters. Expects grads, optimizer_state, and params 
+    Updates the sharded optimizer state and parameters. Expects grads, optimizer_state, and params
     to have the same partition specs
     """
-    
+
     params = with_sharding_constraint(params, grad_spec)
     grads = with_sharding_constraint(grads, grad_spec)
     updates, new_opt_state = optimizer.update(grads, optimizer_state, params)

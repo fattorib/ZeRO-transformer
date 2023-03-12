@@ -21,18 +21,19 @@ def create_transformer_block_mapping(block_idx: int, use_bias: bool = False):
 
     if use_bias:
         bias_dict = {
-        "CausalAttention_0.residual_out.bias": f"blocks.{block_idx}.attn.fc_resid.bias",
-        "MLPBlock_0.fc_residual.bias": f"blocks.{block_idx}.mlp.fc_resid.bias",
-        "CausalAttention_0.key_proj.bias": f"blocks.{block_idx}.attn.key.bias",
-        "CausalAttention_0.value_proj.bias": f"blocks.{block_idx}.attn.value.bias",
-        "CausalAttention_0.query_proj.bias": f"blocks.{block_idx}.attn.query.bias",
-        "LayerNorm_0.bias": f"blocks.{block_idx}.ln1.bias",
-        "LayerNorm_1.bias": f"blocks.{block_idx}.ln2.bias",
+            "CausalAttention_0.residual_out.bias": f"blocks.{block_idx}.attn.fc_resid.bias",
+            "MLPBlock_0.fc_residual.bias": f"blocks.{block_idx}.mlp.fc_resid.bias",
+            "CausalAttention_0.key_proj.bias": f"blocks.{block_idx}.attn.key.bias",
+            "CausalAttention_0.value_proj.bias": f"blocks.{block_idx}.attn.value.bias",
+            "CausalAttention_0.query_proj.bias": f"blocks.{block_idx}.attn.query.bias",
+            "LayerNorm_0.bias": f"blocks.{block_idx}.ln1.bias",
+            "LayerNorm_1.bias": f"blocks.{block_idx}.ln2.bias",
         }
 
         dict_params.update(bias_dict)
 
     return dict_params
+
 
 def flatten(p, label=None):
     if isinstance(p, dict):
@@ -66,7 +67,12 @@ def match_transformer_block(pytree, state_dict, block_idx, use_bias):
     return state_dict
 
 
-def match_and_save(model: torch.nn.Module, flax_save_path: str, out_save_path: str, use_bias: bool = False):
+def match_and_save(
+    model: torch.nn.Module,
+    flax_save_path: str,
+    out_save_path: str,
+    use_bias: bool = False,
+):
     """
     Top-level function which performs matching for all blocks, including wte/LN
 
@@ -92,7 +98,7 @@ def match_and_save(model: torch.nn.Module, flax_save_path: str, out_save_path: s
         np.array(pytree["params"]["LayerNorm_0"]["scale"])
     )
 
-    if use_bias: 
+    if use_bias:
         state_dict["norm.bias"] = torch.from_numpy(
             np.array(pytree["params"]["LayerNorm_0"]["bias"])
         )

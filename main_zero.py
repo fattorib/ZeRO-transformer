@@ -14,17 +14,18 @@ import torch
 import webdataset as wds
 from flax.serialization import msgpack_restore
 from flax.training import checkpoints, train_state
+from jax.experimental.maps import xmap
+from jax.experimental.pjit import pjit
+from jax.sharding import Mesh
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from src.partitioning.partition import set_partitions_zero, create_opt_spec
-from jax.sharding import Mesh
-from jax.experimental.maps import xmap
-from jax.experimental.pjit import pjit
-from src.partitioning.xmap_train_functions import update_opt_state, train_step, eval_step
 
 import wandb
 from src.models.GPT import model_getter
+from src.partitioning.partition import create_opt_spec, set_partitions_zero
+from src.partitioning.xmap_train_functions import (eval_step, train_step,
+                                                   update_opt_state)
 from src.training.training_utils import compute_tokens_seen, initialized
 from src.utils.configs import flatten_dict
 from src.utils.dataloader import numpy_collate
@@ -89,8 +90,9 @@ def restore_param_checkpoint(workdir: str) -> Any:
     Restores the most recent parameter dict
     """
     params = checkpoints.restore_checkpoint(workdir, target=None, prefix="params_")
-    
+
     return flax.core.freeze(params["params"])
+
 
 def restore_opt_checkpoint(workdir: str) -> Tuple[Any, int]:
     """
@@ -129,7 +131,6 @@ def restore_opt_checkpoint(workdir: str) -> Tuple[Any, int]:
     return restored_state, opt_state_restored["step"]
 
 
-
 def create_zero_train_state(
     rng: jax.random.PRNGKey,
     learning_rate_fn: Union[float, Callable],
@@ -161,10 +162,8 @@ def create_zero_train_state(
     init_batch = jnp.ones((1, model.block_size), dtype=jnp.int32)
     param_shape = jax.eval_shape(model.init, rng, init_batch)
 
-    
-
-
     return params, param_shape, tx
+
 
 def main():
     args = parse()
@@ -223,33 +222,34 @@ def main():
     # axis_list_params = jax.tree_map(lambda x: [...], params)
     axis_list_params = [...]
 
-    in_axes =(
-        axis_list_params, 
-        ['batch', ...], 
-        [...], 
-    )
-    out_axes = (
+    in_axes = (
         axis_list_params,
-        [...]
+        ["batch", ...],
+        [...],
     )
+    out_axes = (axis_list_params, [...])
 
     # standard data parallel training step with xmap!
     train_step_xmap = xmap(
-            partial(train_step, model = model, accum_steps = cfg.training.gradient_accumulation_steps),
-            in_axes=in_axes,
-            out_axes=out_axes,
-            axis_resources={"batch": "dp"}
-        )
-    
+        partial(
+            train_step,
+            model=model,
+            accum_steps=cfg.training.gradient_accumulation_steps,
+        ),
+        in_axes=in_axes,
+        out_axes=out_axes,
+        axis_resources={"batch": "dp"},
+    )
+
     eval_axes = (
-        axis_list_params, 
-        ['batch', ...], 
+        axis_list_params,
+        ["batch", ...],
     )
     eval_step_xmap = xmap(
-        partial(eval_step, model = model), 
+        partial(eval_step, model=model),
         in_axes=eval_axes,
         out_axes=[...],
-        axis_resources={"batch": "dp"}
+        axis_resources={"batch": "dp"},
     )
 
     opt_state_shapes = jax.eval_shape(tx.init, params)
@@ -421,18 +421,18 @@ def main():
         params = jax.device_get(params)
 
         opt_state = pjit(
-            tx.init,
-            in_axis_resources=None,
-            out_axis_resources=opt_state_spec
+            tx.init, in_axis_resources=None, out_axis_resources=opt_state_spec
         )(params)
 
         update_opt_state_pjit = pjit(
-            partial(update_opt_state, optimizer = tx, grad_spec = grad_param_spec),
+            partial(update_opt_state, optimizer=tx, grad_spec=grad_param_spec),
             in_shardings=(grad_param_spec, opt_state_spec, grad_param_spec),
-            out_shardings=(None,opt_state_spec),
+            out_shardings=(None, opt_state_spec),
         )
 
-        grad_shard = pjit(lambda x:x, in_axis_resources=None, out_axis_resources=grad_param_spec)
+        grad_shard = pjit(
+            lambda x: x, in_axis_resources=None, out_axis_resources=grad_param_spec
+        )
 
         for i, text in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
@@ -458,17 +458,20 @@ def main():
                 text.shape[0] // gradient_accumulation_steps,
                 seq_len,
             ).transpose(1, 0, 2)
-            text = text.reshape(jax.device_count(), 
-                              cfg.training.batch_size // (jax.device_count() * gradient_accumulation_steps),
-                              gradient_accumulation_steps, seq_len) # (8, 4, 2, 2048) -> (32, 1, 2, 2048)
-                
+            text = text.reshape(
+                jax.device_count(),
+                cfg.training.batch_size
+                // (jax.device_count() * gradient_accumulation_steps),
+                gradient_accumulation_steps,
+                seq_len,
+            )  # (8, 4, 2, 2048) -> (32, 1, 2, 2048)
+
             grads, metrics = train_step_xmap(params, text, dropout_rng)
 
             grads = grad_shard(grads)
             params = grad_shard(params)
 
-            params,opt_state = update_opt_state_pjit(grads, opt_state, params)
-
+            params, opt_state = update_opt_state_pjit(grads, opt_state, params)
 
             del grads  # manually free grad mem
 
@@ -505,8 +508,8 @@ def main():
                 # for val_it, val_text in enumerate(
                 #     tqdm(vl, disable=not jax.process_index() == 0)
                 # ):
-                #     val_text = val_text.reshape(jax.device_count(), 
-                #               val_text.shape[0] // (jax.device_count()), 
+                #     val_text = val_text.reshape(jax.device_count(),
+                #               val_text.shape[0] // (jax.device_count()),
                 #               seq_len)
                 #     if val_it < cfg.training.maximum_evaluation_steps:
                 #         metrics = eval_step_xmap(params, val_text)

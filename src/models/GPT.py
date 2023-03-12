@@ -95,7 +95,7 @@ class Transformer(nn.Module):
                 self.alibi_attn,
             )(out, train)
 
-        out = nn.LayerNorm(dtype=self.dtype,use_bias=False)(out)
+        out = nn.LayerNorm(dtype=self.dtype, use_bias=False)(out)
 
         logits = embed.attend(out)
 
