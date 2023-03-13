@@ -261,30 +261,30 @@ def main():
     grad_param_spec = set_partitions_zero(param_shape)
     opt_state_spec = create_opt_spec(grad_param_spec, opt_state_shapes)
 
-    # if args.resume:
-    #     del params
-    #     del opt_state
+    if args.resume:
+        del params
+        del opt_state
 
-    #     if save_to_bucket:
-    #         opt_state, step = restore_opt_checkpoint(
-    #             workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/optimizer"
-    #         )
-    #         opt_state = jax.device_get(opt_state)  # copy to CPU
+        if save_to_bucket:
+            opt_state, step = restore_opt_checkpoint(
+                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/optimizer"
+            )
+            opt_state = jax.device_get(opt_state)  # copy to CPU
 
-    #         params = restore_param_checkpoint(
-    #             workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params"
-    #         )
-    #         params = jax.device_get(params)  # copy to CPU
+            params = restore_param_checkpoint(
+                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params"
+            )
+            params = jax.device_get(params)  # copy to CPU
 
-    #         resume_step = int(step)
+            resume_step = int(step)
 
-    #     else:
-    #         raise NotImplementedError(
-    #             "Checkpointing not currently implemented for GPU."
-    #         )
+        else:
+            raise NotImplementedError(
+                "Checkpointing not currently implemented for GPU."
+            )
 
-    #     if jax.process_index() == 0:
-    #         logger.debug(f"Resuming training from step {resume_step}")
+        if jax.process_index() == 0:
+            logger.debug(f"Resuming training from step {resume_step}")
 
     params = jax.device_get(params)  # copy params to VM CPU
 
