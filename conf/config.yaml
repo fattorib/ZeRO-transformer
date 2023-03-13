@@ -3,7 +3,7 @@ training:
   batch_size: 64
   peak_learning_rate: 2.0e-4
   warmup_steps: 2000
-  total_steps: 100000
+  total_steps: 381000
   end_learning_rate: 2.0e-5
   weight_decay: 0.1
   gradient_accumulation_steps: 2
@@ -12,10 +12,10 @@ training:
   train_context: 1024
 
 model:
-  size: "gopher"
+  size: "1_3b"
 
 data:
-  corpus: "pile_00"
+  corpus: "pile_00_01_02"
   max_context: 2048
   train_samples: 14809244
   checkpoint_directory: "checkpoints"

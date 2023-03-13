@@ -88,7 +88,7 @@ XXL:
   N: 36
   alibi_attn: True
 
-gopher:
+1_3b:
   embedding_dim: 2048
   vocab_size: 50304
   num_head: 16
