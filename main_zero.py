@@ -263,7 +263,6 @@ def main():
 
     if args.resume:
         del params
-        del opt_state
 
         if save_to_bucket:
             opt_state, step = restore_opt_checkpoint(
@@ -409,10 +408,16 @@ def main():
     with mesh:
 
         params = jax.device_get(params)
+        
+        if args.resume:
+            opt_state = pjit(
+                lambda x: x, in_axis_resources=None, out_axis_resources=opt_state_spec
+            )(opt_state)
 
-        opt_state = pjit(
-            tx.init, in_axis_resources=None, out_axis_resources=opt_state_spec
-        )(params)
+        else:
+            opt_state = pjit(
+                tx.init, in_axis_resources=None, out_axis_resources=opt_state_spec
+            )(params)
 
         update_opt_state_pjit = pjit(
             partial(update_opt_state, optimizer=tx, grad_spec=grad_param_spec),
