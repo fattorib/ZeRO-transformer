@@ -518,8 +518,6 @@ def main():
                     for k in validation_metrics[0]
                 }
 
-                #TODO: Try grabbing jax opt_state here?
-
                 def grab_shards(tree):
                     return jax.experimental.multihost_utils.process_allgather(tree)
                 
@@ -529,8 +527,6 @@ def main():
 
                     train_metrics_np.update(validation_metrics_np)
                     wandb.log(train_metrics_np)
-
-                    print(type(opt_state_cpu[0]),type(opt_state_cpu[1][0])) # TODO: confirm this is actually on CPU
 
                     if save_to_bucket:
                         save_checkpoint_params(
