@@ -1,18 +1,18 @@
 training:
   max_epochs: 20
-  batch_size: 64
-  peak_learning_rate: 1.5e-4
+  batch_size: 256
+  peak_learning_rate: 3e-4
   warmup_steps: 2000
-  total_steps: 381000
-  end_learning_rate: 2.0e-5
+  total_steps: 143000
+  end_learning_rate: 3e-5
   weight_decay: 0.1
-  gradient_accumulation_steps: 2
+  gradient_accumulation_steps: 4
   evaluation_frequency: 1000 
   maximum_evaluation_steps: 250
   train_context: 1024
 
 model:
-  size: "1_3b"
+  size: "417m"
 
 data:
   corpus: "pile_00_01_02"
@@ -23,4 +23,4 @@ data:
   index_path_train: "data/index/pileeu_train.index"
   index_path_validation: "data/index/pileeu_validation.index"
   wandb_project: "jax-transformer"
-  resume_step: 54000
+  resume_step: 0
