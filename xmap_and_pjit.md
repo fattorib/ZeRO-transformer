@@ -8,6 +8,8 @@ For the past 4 or 5 months, I have been spending time learning more about jax an
 
 While this project was successful, using ```pmap``` requires a lot of manual array handling to ensure that everything passed into a pmapped function can be distributed across the local devices. In my code, this resulted in multiple helper functions solely for sharding/unsharding arrays. In retrospect, these functions somewhat of a performance bottleneck and were (XYZ). In addition, without some complicated, and error-prone, communication code, extending the optimizer sharding across hosts would be very difficult. (Add footnote exclaiming that Gopher was trained solely using pmap)
 
+## ZeRO Optimizer Sharding Overview 
+
 ## Going forward - pjit everything? 
 
 I recently got access to some more TPU compute and wanted to extend my previous code to address some of the pain points mentioned above. Originally, I had planned to only use pjit to accomplish this. In theory, this is quite easy to do, we specify the ```PartitionSpec``` for the optimizer pytree, duplicate that for the gradient pytree, ensure the batches are split across the same axis and then we're good to go!
