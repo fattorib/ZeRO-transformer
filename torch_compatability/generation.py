@@ -77,9 +77,6 @@ def typical_sampling_logits(
     mass: float = 0.2,
     min_tokens_to_keep: int = 1,
     filter_value: float = -float("Inf"),
-    running_ent: float = 0,
-    beta: float = 0.5,
-    t: int = 0,
 ) -> torch.Tensor:
     """
     From `Locally Typical Sampling` by Meister et al.
@@ -92,15 +89,7 @@ def typical_sampling_logits(
     p = torch.exp(normalized)
     ent = -(normalized * p).nansum(-1, keepdim=True)
 
-    # NOTE: Instead of just using conditional entropy at the current token, try keeping a running average of past H(|x)
-    # Decay is controlled by beta
-
-    # Update the running moment + correct it
-    if beta > 0:
-        running_ent = beta * running_ent + (1 - beta) * ent
-        running_ent = running_ent / (1 - (beta ** (t + 1)))
-    else:
-        running_ent = ent
+    running_ent = ent
 
     shifted_scores = torch.abs((-normalized) - running_ent)
     sorted_scores, sorted_indices = torch.sort(shifted_scores, descending=False)
@@ -120,34 +109,7 @@ def typical_sampling_logits(
     )
 
     logits = logits.masked_fill(indices_to_remove, filter_value)
-    return logits, running_ent
-
-
-def eta_sampling_logits(
-    logits: torch.Tensor,
-    epsilon: float = 1.0,
-    filter_value: float = -float("Inf"),
-) -> torch.Tensor:
-    """
-    From `Truncation Sampling as Language Model Desmoothing` by Hewitt et al.
-        <https://arxiv.org/abs/2210.15191>
-    """
-
-    # Entropy calculation
-    normalized = torch.nn.functional.log_softmax(logits, dim=-1)
-    p = torch.exp(normalized)
-    ent = -(normalized * p).nansum(-1, keepdim=True)
-
-    entropy_exp_thresh = math.sqrt(epsilon) * torch.exp(ent)
-
-    eta_thresh = min(epsilon, entropy_exp_thresh.item())
-
-    indices_to_remove = logits <= eta_thresh
-
-    logits = logits.masked_fill(indices_to_remove, filter_value)
-
     return logits
-
 
 class TextGenerator:
     """
@@ -176,9 +138,7 @@ class TextGenerator:
         tau: float = None,
         repetition_penalty: float = 1.0,
         sampling_method: str = None,
-        epsilon: float = 1.0,
         device: str = "cpu",
-        beta: float = 0.9,
     ) -> Tuple[str, str, List[float]]:
 
         output, step, logprobs = self.generate_tokens(
@@ -190,10 +150,8 @@ class TextGenerator:
             top_p=top_p,
             tau=tau,
             repetition_penalty=repetition_penalty,
-            epsilon=epsilon,
             sampling_method=sampling_method,
             device=device,
-            beta=beta,
         )
         full_gen, new_gen = self.token_to_text(prompt, output, step)
         return full_gen, new_gen, logprobs
@@ -221,10 +179,8 @@ class TextGenerator:
         top_p: float = 0.0,
         tau: float = 0.2,
         repetition_penalty: float = 1.0,
-        epsilon: float = 0.0001,
         sampling_method: List[str] = None,
         device: str = "cpu",
-        beta: float = 0.5,
     ) -> Tuple[torch.Tensor, int, List[float]]:
 
         model.eval()
@@ -238,16 +194,14 @@ class TextGenerator:
 
         x = tokens.view(1, -1)
 
-        num_token = self.seq_len
-        if x.shape[1] > num_token:
-            x_cond = x[:, -num_token:]
+        if x.shape[1] > self.seq_len:
+            x_cond = x[:, -self.seq_len:]
         else:
             x_cond = x
 
         layer_past = None
 
         generated_tokens = []
-        running_ent = 0
 
         for step in tqdm(range(steps)):
             if device != "cpu":
@@ -273,15 +227,12 @@ class TextGenerator:
                 logits = top_p_logits(logits, top_p=top_p)
 
             elif sampling_method == "typical":
-                logits, running_ent = typical_sampling_logits(
-                    logits, mass=tau, running_ent=running_ent, beta=beta, t=step
+                logits = typical_sampling_logits(
+                    logits, mass=tau
                 )
 
             elif sampling_method == "topk":
                 logits = top_k_logits(logits, k=top_k)
-
-            elif sampling_method == "eta":
-                logits = eta_sampling_logits(logits, epsilon=epsilon)
 
             probs = F.softmax(logits, dim=-1)
 
