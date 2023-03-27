@@ -49,9 +49,7 @@ def generate_text(
     top_p,
     tau,
     repetition_penalty,
-    epsilon,
     sampling_choice,
-    beta,
 ):
     if sampling_choice == "Top-k":
         sampling_method = "topk"
@@ -65,9 +63,6 @@ def generate_text(
     elif sampling_choice == "Greedy":
         sampling_method = "greedy"
 
-    elif sampling_choice == "$\eta$":
-        sampling_method = "eta"
-
     generated_text, new_gen, logprobs = generator.generate_text_from_prompt(
         model=model,
         prompt=prompt,
@@ -77,10 +72,8 @@ def generate_text(
         top_p=top_p,
         tau=tau,
         repetition_penalty=repetition_penalty,
-        epsilon=epsilon,
         sampling_method=sampling_method,
         device=DEVICE,
-        beta=beta,
     )
 
     original_gen_length = len(generated_text) - len(new_gen)
@@ -94,13 +87,7 @@ def generate_text(
 if __name__ == "__main__":
     args = parse()
 
-    assert args.model_size in [
-        "flax-distill",
-        "flax-large",
-        "flax-xlarge",
-        "flax-xxlarge",
-    ], f"Invalid model name provided, expected one of {['flax-distill', 'flax-large', 'flax-xlarge']}"
-    assert len(args.model_path) > 0, "Must provide a valid model checkpoint"
+    # assert len(args.model_path) > 0, "Must provide a valid model checkpoint"
 
     model = model_creator(args.model_size, args.model_path)
 
@@ -138,22 +125,10 @@ if __name__ == "__main__":
                 default=1.2,
                 label="Repetition Penalty",
             ),
-            gr.inputs.Slider(
-                0.0,
-                0.001,
-                default=0.0006,
-                label="$\epsilon$",
-            ),
             gr.inputs.Radio(
-                choices=["Top-k", "Nucleus", "Typical", "Greedy", "$\eta$"],
+                choices=["Top-k", "Nucleus", "Typical", "Greedy"],
                 label="Sampling Method",
                 default="Nucleus",
-            ),
-            gr.inputs.Slider(
-                0.0,
-                1.0,
-                default=0.5,
-                label=r"$\beta$",
             ),
         ],
         outputs=gr.HighlightedText(
