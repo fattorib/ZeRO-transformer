@@ -23,4 +23,4 @@ data:
   index_path_train: "data/index/pileeu_train.index"
   index_path_validation: "data/index/pileeu_validation.index"
   wandb_project: "jax-transformer"
-  resume_step: 2000
+  resume_step: 20000
