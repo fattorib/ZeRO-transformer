@@ -405,6 +405,7 @@ def main():
     # quick way to track global step count when resuming a run
     new_steps = 0
 
+    iterator_resume_step = int(resume_step % cfg.data.steps_per_epoch) 
     with mesh:
 
         params = jax.device_get(params)
@@ -437,7 +438,7 @@ def main():
 
                 return True
 
-            if i < int(cfg.data.resume_step):
+            if i < iterator_resume_step:
                 continue
 
             rng, dropout_rng = jax.random.split(rng, 2)
