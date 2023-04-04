@@ -111,6 +111,7 @@ def typical_sampling_logits(
     logits = logits.masked_fill(indices_to_remove, filter_value)
     return logits
 
+
 class TextGenerator:
     """
     This class stores all the text generation methods and functions.
@@ -195,7 +196,7 @@ class TextGenerator:
         x = tokens.view(1, -1)
 
         if x.shape[1] > self.seq_len:
-            x_cond = x[:, -self.seq_len:]
+            x_cond = x[:, -self.seq_len :]
         else:
             x_cond = x
 
@@ -227,9 +228,7 @@ class TextGenerator:
                 logits = top_p_logits(logits, top_p=top_p)
 
             elif sampling_method == "typical":
-                logits = typical_sampling_logits(
-                    logits, mass=tau
-                )
+                logits = typical_sampling_logits(logits, mass=tau)
 
             elif sampling_method == "topk":
                 logits = top_k_logits(logits, k=top_k)

@@ -16,7 +16,6 @@ def create_transformer_block_mapping(block_idx: int, use_bias: bool = False):
         "MLPBlock_0.fc_residual.kernel": f"blocks.{block_idx}.mlp.fc_resid.weight",
         "LayerNorm_0.scale": f"blocks.{block_idx}.ln1.weight",
         "LayerNorm_1.scale": f"blocks.{block_idx}.ln2.weight",
-        
     }
 
     if use_bias:

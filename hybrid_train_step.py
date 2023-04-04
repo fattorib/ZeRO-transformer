@@ -2,45 +2,45 @@
 Hybrid train step with pmapped train step and pjitted optimizer step
 """
 
-import numpy as np 
-import jax
-from jax.experimental.maps import Mesh
-from jax.experimental.pjit import pjit
-from src.models.GPT import model_getter
-from src.partitioning.partition import set_partitions_zero, create_opt_spec
-from src.training.training_utils import initialized
-import optax 
-from src.partitioning.pjit_train_functions import update_opt_state, train_step
 import functools
-from tqdm import tqdm 
-from time import time 
-from flax.training.common_utils import shard, shard_prng_key
+from time import time
+
 import flax
-
-
 # Explicitly disable new jax array API
 import jax
-jax.config.update('jax_array', False)
+import numpy as np
+import optax
+from flax.training.common_utils import shard, shard_prng_key
+from jax.experimental.maps import Mesh
+from jax.experimental.pjit import pjit
+from tqdm import tqdm
+
+from src.models.GPT import model_getter
+from src.partitioning.partition import create_opt_spec, set_partitions_zero
+from src.partitioning.pjit_train_functions import train_step, update_opt_state
+from src.training.training_utils import initialized
+
+jax.config.update("jax_array", False)
 
 
 # # Emulating 8 TPU cores
-# import os 
+# import os
 # os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=8"
 # os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     # GRAD_ACCUM_STEPS = 8
     # BATCH_SIZE = 128
     # CTX_LEN = 32
     # NUM_PASSES = 100
-    # MODEL_SIZE = 'test' 
+    # MODEL_SIZE = 'test'
 
     GRAD_ACCUM_STEPS = 32
     BATCH_SIZE = 512
     CTX_LEN = 512
     NUM_PASSES = 20
-    MODEL_SIZE = 'base' 
+    MODEL_SIZE = "base"
 
     # Setting up device mesh
     devices = np.asarray(jax.devices())
@@ -52,13 +52,13 @@ if __name__ == '__main__':
     batch_tok = jax.random.randint(rng, shape=(1, CTX_LEN), maxval=256, minval=0)
 
     param_shape = jax.eval_shape(model.init, rng, batch_tok)
-    param_spec = None # model params are replicated along DP axis
+    param_spec = None  # model params are replicated along DP axis
     params = initialized(rng, model, input_shape=(1, model.block_size))
 
     mask = jax.tree_map(
-            lambda x: x.ndim != 1 and x.shape != (model.block_size, model.embedding_dim),
-            params,
-        )
+        lambda x: x.ndim != 1 and x.shape != (model.block_size, model.embedding_dim),
+        params,
+    )
 
     tx = optax.chain(
         optax.clip(1.0),
@@ -81,26 +81,21 @@ if __name__ == '__main__':
         rng, dropout_rng = jax.random.split(rng, 2)
 
         train_step_pmap = jax.pmap(
-            train_step,
-            axis_name="batch",
-            static_broadcasted_argnums=(3, 4)
+            train_step, axis_name="batch", static_broadcasted_argnums=(3, 4)
         )
 
         update_opt_state_pjit = pjit(
             functools.partial(update_opt_state),
             in_axis_resources=(grad_param_spec, opt_state_spec, grad_param_spec),
-            out_axis_resources=(grad_param_spec,opt_state_spec),
-            static_argnums=(3,)
+            out_axis_resources=(grad_param_spec, opt_state_spec),
+            static_argnums=(3,),
         )
 
-
-        # Create actual optimizer state 
+        # Create actual optimizer state
         params = jax.device_get(params)
 
         opt_state = pjit(
-            tx.init,
-            in_axis_resources=param_spec,
-            out_axis_resources=opt_state_spec
+            tx.init, in_axis_resources=param_spec, out_axis_resources=opt_state_spec
         )(params)
 
         print("Optimizer State Sharded Sucessfully")
@@ -112,37 +107,36 @@ if __name__ == '__main__':
             init_batch.shape[0] // GRAD_ACCUM_STEPS,
             CTX_LEN,
         ).transpose(1, 0, 2)
-        
+
         batch = shard(batch)
 
         rng_sharded = shard_prng_key(dropout_rng)
 
-        grads, metrics = train_step_pmap(params, batch, rng_sharded,GRAD_ACCUM_STEPS, model)
+        grads, metrics = train_step_pmap(
+            params, batch, rng_sharded, GRAD_ACCUM_STEPS, model
+        )
 
         params = pjit(
-                lambda x:x, 
-                in_axis_resources=None, 
-                out_axis_resources = grad_param_spec
-            )(params)
+            lambda x: x, in_axis_resources=None, out_axis_resources=grad_param_spec
+        )(params)
 
         grads = pjit(
-                lambda x:x, 
-                in_axis_resources=None, 
-                out_axis_resources = grad_param_spec,
-                donate_argnums=0
-            )(grads)
+            lambda x: x,
+            in_axis_resources=None,
+            out_axis_resources=grad_param_spec,
+            donate_argnums=0,
+        )(grads)
 
         params, opt_state = update_opt_state_pjit(grads, opt_state, params, tx)
-        
-        del grads 
+
+        del grads
 
         params = pjit(
-                lambda x:x, 
-                in_axis_resources=(grad_param_spec,), 
-                out_axis_resources = None,
-                donate_argnums=0
-            )(params)
-
+            lambda x: x,
+            in_axis_resources=(grad_param_spec,),
+            out_axis_resources=None,
+            donate_argnums=0,
+        )(params)
 
         times_grads = []
         times_update_opt = []
@@ -157,27 +151,29 @@ if __name__ == '__main__':
                 init_batch.shape[0] // GRAD_ACCUM_STEPS,
                 CTX_LEN,
             ).transpose(1, 0, 2)
-            
+
             batch = shard(batch)
             rng_sharded = shard_prng_key(dropout_rng)
 
-            t0 = time() 
-            grads, metrics = train_step_pmap(params, batch, rng_sharded,GRAD_ACCUM_STEPS, model)
-            
+            t0 = time()
+            grads, metrics = train_step_pmap(
+                params, batch, rng_sharded, GRAD_ACCUM_STEPS, model
+            )
+
             # shard params and grads
 
             grads = pjit(
-                lambda x:x, 
-                in_axis_resources=None, 
-                out_axis_resources = grad_param_spec,
-                donate_argnums=0
+                lambda x: x,
+                in_axis_resources=None,
+                out_axis_resources=grad_param_spec,
+                donate_argnums=0,
             )(grads)
 
             params = pjit(
-                lambda x:x, 
-                in_axis_resources=None, 
-                out_axis_resources = grad_param_spec,
-                donate_argnums=0
+                lambda x: x,
+                in_axis_resources=None,
+                out_axis_resources=grad_param_spec,
+                donate_argnums=0,
             )(params)
 
             times_grads.append(time() - t0)
@@ -186,18 +182,17 @@ if __name__ == '__main__':
             params, opt_state = update_opt_state_pjit(grads, opt_state, params, tx)
             times_update_opt.append(time() - t0)
 
-            del grads 
+            del grads
 
             params = pjit(
-                lambda x:x, 
-                in_axis_resources=(grad_param_spec,), 
-                out_axis_resources = None,
-                donate_argnums=0
+                lambda x: x,
+                in_axis_resources=(grad_param_spec,),
+                out_axis_resources=None,
+                donate_argnums=0,
             )(params)
 
             print(metrics["Train LM Loss"][0])
 
-        
         print(
             f"ZeRO Step - Global BS {BATCH_SIZE} - accum steps {GRAD_ACCUM_STEPS} - Num Executions {NUM_PASSES}"
         )

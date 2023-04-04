@@ -1,4 +1,5 @@
 import argparse
+import gc
 import logging
 import random as pyrandom
 from functools import partial
@@ -20,7 +21,7 @@ from jax.sharding import Mesh
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import gc 
+
 import wandb
 from src.models.GPT import model_getter
 from src.partitioning.partition import create_opt_spec, set_partitions_zero
@@ -33,6 +34,7 @@ from src.utils.dataloader import numpy_collate
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
 
 def parse():
     parser = argparse.ArgumentParser(description="Transformer Training")
@@ -77,7 +79,7 @@ def save_checkpoint_optimizer(opt_state: Any, step: int, workdir: str) -> None:
         # print(type(opt_state))
         # def grab_shards(tree):
         #     return jax.experimental.multihost_utils.process_allgather(tree)
-        
+
         # opt_state = grab_shards(opt_state)
         opt_state = jax.device_get(opt_state)
 
@@ -405,11 +407,11 @@ def main():
     # quick way to track global step count when resuming a run
     new_steps = 0
 
-    iterator_resume_step = int(resume_step % cfg.data.steps_per_epoch) 
+    iterator_resume_step = int(resume_step % cfg.data.steps_per_epoch)
     with mesh:
 
         params = jax.device_get(params)
-        
+
         if args.resume:
             opt_state = pjit(
                 lambda x: x, in_axis_resources=None, out_axis_resources=opt_state_spec
@@ -456,7 +458,8 @@ def main():
             ).transpose(1, 0, 2)
             text = text.reshape(
                 jax.device_count(),
-                cfg.training.batch_size*(cfg.data.max_context//cfg.training.train_context)
+                cfg.training.batch_size
+                * (cfg.data.max_context // cfg.training.train_context)
                 // (jax.device_count() * gradient_accumulation_steps),
                 gradient_accumulation_steps,
                 seq_len,
@@ -504,10 +507,12 @@ def main():
                 for val_it, val_text in enumerate(
                     tqdm(vl, disable=not jax.process_index() == 0)
                 ):
-                    val_text = val_text.reshape(-1,seq_len)
-                    val_text = val_text.reshape(jax.device_count(),
-                              val_text.shape[0] // (jax.device_count()),
-                              seq_len)
+                    val_text = val_text.reshape(-1, seq_len)
+                    val_text = val_text.reshape(
+                        jax.device_count(),
+                        val_text.shape[0] // (jax.device_count()),
+                        seq_len,
+                    )
                     if val_it < cfg.training.maximum_evaluation_steps:
                         metrics = eval_step_xmap(params, val_text)
                         validation_metrics.append(metrics)
@@ -521,7 +526,7 @@ def main():
 
                 def grab_shards(tree):
                     return jax.experimental.multihost_utils.process_allgather(tree)
-                
+
                 opt_state_cpu = grab_shards(opt_state)
 
                 if jax.process_index() == 0:
@@ -535,7 +540,6 @@ def main():
                             absolute_step,
                             workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
                         )
-                        
 
                         save_checkpoint_optimizer(
                             opt_state_cpu,
@@ -547,8 +551,8 @@ def main():
                         raise NotImplementedError(
                             "Checkpointing not currently implemented for GPU/CPU"
                         )
-                    
-                    #TODO: Call gc.collect here?
+
+                    # TODO: Call gc.collect here?
                     # del opt_state_cpu
                     # gc.collect()
 
