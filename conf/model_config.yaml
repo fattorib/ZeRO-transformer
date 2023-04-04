@@ -1,8 +1,8 @@
-small:
+test:
   embedding_dim: 64
-  vocab_size: 50258
-  num_head: 8
-  block_size: 512
+  vocab_size: 256
+  num_head: 4
+  block_size: 32
   dropout: 0.1
   N: 2
   alibi_attn: True
