@@ -250,15 +250,12 @@ class GPT2Block(nn.Module):
         block_size: int,
         resid_dropout: float,
         num_layers: int,
-        fused_residuals: bool = False,
         use_alibi: bool = True,
     ) -> None:
         super().__init__()
         self.ln1 = nn.LayerNorm(embedding_dim)
-        self.fused_residuals = fused_residuals
 
-        if not self.fused_residuals:
-            self.ln2 = nn.LayerNorm(embedding_dim)
+        self.ln2 = nn.LayerNorm(embedding_dim)
 
         if use_alibi:
             self.attn = ALiBi(
@@ -285,14 +282,10 @@ class GPT2Block(nn.Module):
         use_cache: bool = False,
         layer_past: Tuple[torch.Tensor, torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        if self.fused_residuals:
-            mlp_out = self.mlp(self.ln1(x))
-            attn_out = self.attn(self.ln1(x), use_cache, layer_past)
-            x = x + mlp_out + attn_out[0]
-        else:
-            attn_out = self.attn(self.ln1(x), use_cache, layer_past)
-            x = x + attn_out[0]
-            x = x + self.mlp(self.ln2(x))
+
+        attn_out = self.attn(self.ln1(x), use_cache, layer_past)
+        x = x + attn_out[0]
+        x = x + self.mlp(self.ln2(x))
 
         return x, attn_out[1]
 
@@ -305,7 +298,6 @@ class GPT2(nn.Module):
         N: int,
         vocab_size: int,
         num_head: int = 12,
-        fused_residuals: bool = False,
         mlp_dropout: float = 0.0,
         resid_dropout: float = 0.0,
         embedding_dropout: float = 0.0,
@@ -321,7 +313,6 @@ class GPT2(nn.Module):
         self.embedding_dropout = embedding_dropout
         self.num_head = num_head
         self.use_alibi = use_alibi
-        self.fused_residuals = fused_residuals
 
         """
         Basic GPT2 transformer module
@@ -343,7 +334,6 @@ class GPT2(nn.Module):
                         block_size=self.num_ctx,
                         resid_dropout=resid_dropout,
                         num_layers=N,
-                        fused_residuals=fused_residuals,
                         use_alibi=self.use_alibi,
                     )
                 )
@@ -491,7 +481,6 @@ def create_GPT2_test(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
         N=2,
         vocab_size=vocab_size,
         num_head=4,
-        fused_residuals=False,
         use_alibi=True,
         **kwargs,
     )
@@ -517,7 +506,6 @@ def create_GPT2_bytelevel(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
         N=10,
         vocab_size=257,
         num_head=16,
-        fused_residuals=False,
         use_alibi=True,
         **kwargs,
     )
@@ -543,7 +531,6 @@ def create_GPT2_flax(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
         N=6,
         vocab_size=vocab_size,
         num_head=12,
-        fused_residuals=False,
         use_alibi=True,
         **kwargs,
     )
@@ -569,7 +556,6 @@ def create_GPT2_flax_large(vocab_size, num_ctx, model_checkpoint=None, **kwargs)
         N=18,
         vocab_size=vocab_size,
         num_head=12,
-        fused_residuals=False,
         use_alibi=True,
         **kwargs,
     )
@@ -595,7 +581,6 @@ def create_GPT2_flax_xlarge(vocab_size, num_ctx, model_checkpoint=None, **kwargs
         N=24,
         vocab_size=vocab_size,
         num_head=12,
-        fused_residuals=False,
         use_alibi=True,
         **kwargs,
     )
@@ -621,7 +606,7 @@ def create_GPT2_flax_xxlarge(vocab_size, num_ctx, model_checkpoint=None, **kwarg
         N=36,
         vocab_size=vocab_size,
         num_head=12,
-        fused_residuals=False,
+        
         use_alibi=True,
         **kwargs,
     )
@@ -636,7 +621,7 @@ def create_GPT2_flax_xxlarge(vocab_size, num_ctx, model_checkpoint=None, **kwarg
 
     return model
 
-def create_GPT2_flax_gopher(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
+def create_GPT2_1_3B(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
     """
     TODO: Fill this in
     """
@@ -646,7 +631,7 @@ def create_GPT2_flax_gopher(vocab_size, num_ctx, model_checkpoint=None, **kwargs
         N=24,
         vocab_size=vocab_size,
         num_head=16,
-        fused_residuals=False,
+        
         use_alibi=True,
         **kwargs,
     )
@@ -661,7 +646,7 @@ def create_GPT2_flax_gopher(vocab_size, num_ctx, model_checkpoint=None, **kwargs
 
     return model
 
-def create_GPT2_flax_med(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
+def create_GPT2_417m(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
     """
     TODO: Fill this in
     """
@@ -671,7 +656,7 @@ def create_GPT2_flax_med(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
         N=12,
         vocab_size=vocab_size,
         num_head=12,
-        fused_residuals=False,
+        
         use_alibi=True,
         **kwargs,
     )
@@ -685,6 +670,7 @@ def create_GPT2_flax_med(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
         model.load_state_dict(state_dict)
 
     return model
+
 
 def model_getter(model_name, vocab_size, num_ctx, model_checkpoint=None, **kwargs):
     assert vocab_size > 0, "Vocab size must be positive"
@@ -696,7 +682,6 @@ def model_getter(model_name, vocab_size, num_ctx, model_checkpoint=None, **kwarg
         "flax-large": create_GPT2_flax_large,
         "flax-xlarge": create_GPT2_flax_xlarge,
         "flax-xxlarge": create_GPT2_flax_xxlarge,
-        "flax-bytelevel": create_GPT2_bytelevel,
         "flax-gopher": create_GPT2_flax_gopher,
         "flax-417m": create_GPT2_flax_med,
     }
