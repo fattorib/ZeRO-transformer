@@ -1,8 +1,8 @@
 test:
   embedding_dim: 64
-  vocab_size: 50258
-  num_head: 8
-  num_ctx: 512
+  vocab_size: 256
+  num_head: 4
+  num_ctx: 32
   N: 2
   use_alibi: True
 
