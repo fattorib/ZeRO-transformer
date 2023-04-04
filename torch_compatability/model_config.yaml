@@ -1,0 +1,32 @@
+test:
+  embedding_dim: 64
+  vocab_size: 50258
+  num_head: 8
+  num_ctx: 512
+  N: 2
+  use_alibi: True
+
+distill:
+  embedding_dim: 768
+  vocab_size: 50304
+  num_head: 12
+  num_ctx: 2048
+  N: 6
+  use_alibi: True
+
+1_3b:
+  embedding_dim: 2048
+  vocab_size: 50304
+  num_head: 16
+  num_ctx: 1024
+  N: 24
+  use_alibi: True
+
+417m:
+  embedding_dim: 1536
+  vocab_size: 50304
+  num_head: 12
+  num_ctx: 1024
+  N: 12
+  use_alibi: True
+
