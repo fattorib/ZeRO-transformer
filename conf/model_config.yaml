@@ -1,12 +1,3 @@
-unittest:
-  embedding_dim: 768
-  vocab_size: 50257
-  num_head: 12
-  block_size: 1024
-  dropout: 0.0
-  N: 12
-  alibi_attn: True
-
 small:
   embedding_dim: 64
   vocab_size: 50258
@@ -14,78 +5,6 @@ small:
   block_size: 512
   dropout: 0.1
   N: 2
-  alibi_attn: True
-
-test:
-  embedding_dim: 64
-  vocab_size: 256
-  num_head: 4
-  block_size: 32
-  dropout: 0.1
-  N: 2
-  alibi_attn: True
-
-smol:
-  embedding_dim: 256
-  vocab_size: 512
-  num_head: 8
-  block_size: 2048
-  dropout: 0.1
-  N: 3
-  alibi_attn: True
-
-distill:
-  embedding_dim: 768
-  vocab_size: 50432
-  num_head: 12
-  block_size: 2048
-  dropout: 0.1
-  N: 6
-  alibi_attn: True
-
-base:
-  embedding_dim: 768
-  vocab_size: 50432
-  num_head: 12
-  block_size: 2048
-  dropout: 0.1
-  N: 12
-  alibi_attn: True
-
-medium:
-  embedding_dim: 1024
-  vocab_size: 50432
-  num_head: 16
-  block_size: 1024
-  dropout: 0.1
-  N: 24
-  alibi_attn: True
-
-large:
-  embedding_dim: 1536
-  vocab_size: 50304
-  num_head: 12
-  block_size: 1024
-  dropout: 0.1
-  N: 18
-  alibi_attn: True
-
-XL:
-  embedding_dim: 1536
-  vocab_size: 50304
-  num_head: 12
-  block_size: 1024
-  dropout: 0.1
-  N: 24
-  alibi_attn: True
-
-XXL:
-  embedding_dim: 1536
-  vocab_size: 50304
-  num_head: 12
-  block_size: 1024
-  dropout: 0.1
-  N: 36
   alibi_attn: True
 
 1_3b:
