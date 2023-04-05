@@ -27,7 +27,7 @@ def main():
 
     args = parse()
     model = model_getter(
-        model_name=args.model_name, vocab_size=args.vocab_size, num_ctx=args.seq_len
+        model_name=args.model_name
     )
 
     match_and_save(model, args.flax_path, args.torch_path)
