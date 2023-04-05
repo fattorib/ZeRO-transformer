@@ -284,7 +284,7 @@ def main():
             )
 
         if jax.process_index() == 0:
-            logger.debug(f"Resuming training from step {resume_step}")
+            logger.debug(f"Warm starting training for pretrained checkpoint.")
 
     if args.resume:
         del params
