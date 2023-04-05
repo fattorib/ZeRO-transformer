@@ -13,6 +13,9 @@ training:
 
 model:
   size: "417m"
+  warm_init: True
+  warm_init_dr: "warm_initialization"
+
 
 data:
   corpus: "pile_00_01_02"
