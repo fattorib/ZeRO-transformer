@@ -14,7 +14,7 @@ training:
 model:
   size: "417m"
   warm_init: True
-  warm_init_dr: "warm_initialization"
+  warm_init_dir: "warm_initialization"
 
 
 data:
