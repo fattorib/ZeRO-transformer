@@ -1,10 +1,10 @@
 training:
   max_epochs: 20
   batch_size: 256
-  peak_learning_rate: 3e-4
+  peak_learning_rate: 2e-4
   warmup_steps: 2000
-  total_steps: 143000
-  end_learning_rate: 3e-5
+  total_steps: 95000
+  end_learning_rate: 2e-5
   weight_decay: 0.1
   gradient_accumulation_steps: 4
   evaluation_frequency: 1000 
