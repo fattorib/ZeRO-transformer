@@ -1,31 +1,58 @@
-# Hybrid Sharding
+# Table of Contents
 
-This branch explores the use of different JAX APIs such as the new ```xmap```
+1. [ZeRO Optimizer Sharding with jax.pmap](#zero-optimizer-sharding-with-jax.pmap)
+2. [Configuration Setup](#configuration-setup)
+3. [Training](#training)
+4. [Trained Models](#trained-models)
+5. [Acknowledgements](#acknowledgements)
 
+# ZeRO Optimizer Sharding with jax.pmap
 
-# Benchmarks
-- Based off of https://github.com/kingoflolz/mesh-transformer-jax/blob/4c15ee74a8ce5d4bf2aee2462638c1b33c8288a8/tpuv38_example.py
+JAX codebase demonstrating an application of [ZeRO](https://arxiv.org/abs/1910.02054)-style optimizer sharding using a combination of ```xmap``` and ```pjit```. This codebase was used to train a 1.3B parameter transformer model on a TPU v3-32, something that would not be possible with standard data parallel training. I have a full post detailing my work which you can read [here](TODO) 
 
-BFLOAT16 benchmarks
-```bash
+# Configuration Setup
 
-    ZeRO Step - Global BS 512 - accum steps 8 - Num Executions 10
-    Mesh Layout (dp): (8)
-    Model Size: base
-    Total Time: 49.3145s
-    Param Count: 123787776
-    Effective TFLOPS: 91.003
-    MFU (%): 50.5572
+## Model Config
 
-    ZeRO Step - Global BS 512 - accum steps 32 - Num Executions 10
-    Mesh Layout (dp): (8)
-    Model Size: base
-    Total Time: 41.8388s
-    Param Count: 123787776
-    Effective TFLOPS: 107.263
-    MFU (%): 59.5907
+Add your model config to ```conf/model_config.yaml```:
 
+```yaml
+model_name:
+  embedding_dim: 
+  vocab_size: 
+  num_head: 
+  block_size: # maximum context length 
+  dropout: 
+  N: 
+  alibi_attn: # bool for using ALiBi attention 
 ```
 
-Reference Values:
-    TPU V2-8: 180 TFLOPS (Bfloat16)
+## Training Config
+
+All other configuration is handled in ```conf/config.yaml```.
+## Training
+
+This assumes you have your data setup on a GCP bucket and .index files created for your datasets. In addition, you must have a running TPU VM instance and be connected to it.
+
+```bash
+python main_zero.py
+```
+
+If resuming a run, pass the ```--resume``` flag to your script.
+
+## Trained Models
+
+TODO
+
+
+## TPU Setup
+
+```bash
+git clone https://github.com/fattorib/transformer.git
+cd transformer 
+bash prepareTPUVM.sh
+```
+
+# Acknowledgements
+
+TPU Development and training supported with Cloud TPUs from Google's [TPU Research Cloud (TRC)](https://sites.research.google/trc/about/). Thank you to the excellent TRC team for granting me access to upgraded TPU VMs and for the extensions I received while working on this project! 
