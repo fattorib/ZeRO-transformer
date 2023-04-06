@@ -13,7 +13,6 @@ import numpy as np
 import optax
 import torch
 import webdataset as wds
-from flax.serialization import msgpack_restore
 from flax.training import checkpoints, train_state
 from jax.experimental.maps import xmap
 from jax.experimental.pjit import pjit
@@ -264,7 +263,7 @@ def main():
     opt_state_spec = create_opt_spec(grad_param_spec, opt_state_shapes)
 
     if (cfg.model.warm_init) and not (args.resume):
-        # only start from warm init params @ beginning of training run 
+        # only start from warm init params @ beginning of training run
         del params
 
         if save_to_bucket:
