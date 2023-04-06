@@ -18,7 +18,7 @@ model:
 
 
 data:
-  corpus: "pile_00_01_02"
+  corpus: "pile_codeparrot_mix"
   max_context: 2048
   train_samples: 14809244
   checkpoint_directory: "checkpoints"
