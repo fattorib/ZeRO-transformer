@@ -44,6 +44,13 @@ If resuming a run, pass the ```--resume``` flag to your script.
 
 TODO
 
+## Tests
+
+Tests are written in a combination of ```unittest``` and ```pytest```. All tests can be run with:
+```bash
+pytest
+```
+from the base directory.
 
 ## TPU Setup
 
