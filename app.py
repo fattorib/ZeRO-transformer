@@ -20,9 +20,9 @@ def parse():
     return args
 
 
-DEVICE = "cpu"
-# if torch.cuda.is_available():
-#     DEVICE = "cuda"
+# DEVICE = "cpu"
+if torch.cuda.is_available():
+    DEVICE = "cuda"
 
 
 tokenizer = GPTNeoXTokenizerFast.from_pretrained("EleutherAI/gpt-neox-20b")
@@ -50,7 +50,8 @@ def generate_from_prompt(
         logit_processor: Callable,
         sample: bool,
         steps: int , 
-        device: Any
+        device: Any,
+        return_on_eos: bool
     ):
 
     tokens = torch.tensor(
@@ -79,13 +80,23 @@ def generate_from_prompt(
 
         if sample: 
             x_cond = torch.multinomial(probs, num_samples=1)
+            if return_on_eos:
+                if x_cond.item() == tokenizer.eos_token_id:
+                    return x
+            
             x = torch.cat((x[:, :], x_cond), axis=1)
 
             if x_cond.item() not in generated_tokens:
                 generated_tokens.append(x_cond.item())
         else:
             x_cond = torch.topk(probs, k=1).indices
+            if return_on_eos:
+                if x_cond.item() == tokenizer.eos_token_id:
+                    return x
             x = torch.cat((x[:, :], x_cond), axis=1)
+        
+        
+
 
         yield x_cond
 
@@ -139,9 +150,9 @@ def generate_text(
     temperature,
     top_k,
     top_p,
-    tau,
     repetition_penalty,
     sampling_choice,
+    eos_return
 ):
     if sampling_choice == "Top-k":
         sampling_func = partial(top_k_logits, k = top_k)
@@ -149,8 +160,6 @@ def generate_text(
     elif sampling_choice == "Nucleus":
         sampling_func = partial(top_p_logits, top_p = top_p)
 
-    elif sampling_choice == "Typical":
-        raise NotImplementedError("Typical Sampling processor not implemented.")
     elif sampling_choice == "Greedy":
         sampling_func = partial(top_k_logits, k = 1)
     
@@ -164,7 +173,8 @@ def generate_text(
         logit_processor= processer_partial,
         sample = True,
         steps = steps,
-        device = DEVICE
+        device = DEVICE,
+        return_on_eos=eos_return
     )
     
     text = []
@@ -210,23 +220,19 @@ if __name__ == "__main__":
                             value=0.96,
                             label="p (Nucleus Sampling)",
                         )
-                    tau_slider = gr.Slider(
-                            0,
-                            1,
-                            value=0.2,
-                            label="Tau (Typical Sampling)",
-                        )
                     rep_slider = gr.Slider(
                             0.0,
                             1.3,
                             value=1.2,
                             label="Repetition Penalty",
                         )
-                radio = gr.Dropdown(
-                        choices=["Top-k", "Nucleus", "Typical", "Greedy"],
-                        label="Sampling Method",
-                        value="Nucleus",
-                    )
+                    radio = gr.Dropdown(
+                            choices=["Top-k", "Nucleus", "Greedy"],
+                            label="Sampling Method",
+                            value="Nucleus",
+                        )
+                    eos_return = gr.Checkbox(value = True, label = 'Terminate generation on EOS token.')
+                
 
             with gr.Column():
                 output_txt = gr.HighlightedText(
@@ -237,6 +243,6 @@ if __name__ == "__main__":
 
                 generate_btn = gr.Button("Generate Text")
 
-        generate_btn.click(generate_text, [input_txt, token_slider,temp_slider, topk_slider, topp_slider, tau_slider, rep_slider, radio], [output_txt])
+        generate_btn.click(generate_text, [input_txt, token_slider,temp_slider, topk_slider, topp_slider, rep_slider, radio, eos_return], [output_txt])
     
     demo.launch()
