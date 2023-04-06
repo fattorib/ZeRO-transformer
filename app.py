@@ -1,10 +1,13 @@
 import argparse
+import torch
+import torch.nn.functional as F
+from tqdm import tqdm
+from typing import Any, Callable
+from functools import partial
 
 import gradio as gr
 import torch
 from transformers import GPTNeoXTokenizerFast
-
-from torch_compatability.generation import TextGenerator
 from torch_compatability.GPT2 import model_getter
 
 
@@ -18,21 +21,18 @@ def parse():
 
 
 DEVICE = "cpu"
-if torch.cuda.is_available():
-    DEVICE = "cuda"
+# if torch.cuda.is_available():
+#     DEVICE = "cuda"
 
 
 tokenizer = GPTNeoXTokenizerFast.from_pretrained("EleutherAI/gpt-neox-20b")
-generator = TextGenerator(seq_len=2048, tokenizer=tokenizer)
 
 
 def model_creator(size: str, path: str) -> torch.nn.Module:
 
     model = model_getter(
         size,
-        vocab_size=50304,
-        num_ctx=1024 if "distill" not in size else 2048,
-        model_checkpoint=path,
+        model_checkpoint=path
     )
 
     model.to(DEVICE)
@@ -40,6 +40,98 @@ def model_creator(size: str, path: str) -> torch.nn.Module:
 
     return model
 
+
+@torch.no_grad()
+def generate_from_prompt(
+        prompt: str, 
+        model: Any, 
+        tokenizer: Any,
+        sampling_func: Callable, 
+        logit_processor: Callable,
+        sample: bool,
+        steps: int , 
+        device: Any
+    ):
+
+    tokens = torch.tensor(
+            tokenizer.encode(prompt.strip()),
+            dtype=torch.long,
+        ) 
+
+    x = tokens.view(1, -1).to(device)
+    if x.shape[1] > model.num_ctx:
+            x_cond = x[:, -model.num_ctx:]
+    else:
+        x_cond = x
+
+    layer_past = None
+    generated_tokens = []
+
+    for _ in tqdm(range(steps), disable=True):
+        with torch.cuda.amp.autocast(cache_enabled=False):
+            logits, layer_past = model(
+                x_cond, use_cache=True, past_states=layer_past
+            )
+        
+        logits = logit_processor(logits, generated_tokens)
+        logits = sampling_func(logits)
+        probs = F.softmax(logits, dim=-1)
+
+        if sample: 
+            x_cond = torch.multinomial(probs, num_samples=1)
+            x = torch.cat((x[:, :], x_cond), axis=1)
+
+            if x_cond.item() not in generated_tokens:
+                generated_tokens.append(x_cond.item())
+        else:
+            x_cond = torch.topk(probs, k=1).indices
+            x = torch.cat((x[:, :], x_cond), axis=1)
+
+        yield x_cond
+
+def process_logits(logits: torch.tensor, generated_tokens: list, rep_pen: float, temperature: float) -> torch.tensor:
+    logits = logits[:, -1, :] / temperature
+
+    for prev_gen_token in generated_tokens:
+        if logits[:, prev_gen_token] < 0:
+            logits[:, prev_gen_token] *= rep_pen
+        else:
+            logits[:, prev_gen_token] /= rep_pen
+
+    return logits
+
+def top_k_logits(logits: torch.Tensor, k: int) -> torch.Tensor:
+    v, ix = torch.topk(logits, k)
+    out = logits.clone()
+    out[out < v[:, [-1]]] = -float("Inf")
+    return out
+
+
+def top_p_logits(
+    logits: torch.Tensor,
+    top_p: float = 0.0,
+    filter_value: float = -float("Inf"),
+) -> torch.Tensor:
+    """Filter a distribution of logits using nucleus (top-p) filtering
+    Args:
+        logits: logits distribution shape (vocabulary size)
+        top_p >0.0: keep the top tokens with cumulative probability >= top_p (nucleus filtering).
+            Nucleus filtering is described in Holtzman et al. (http://arxiv.org/abs/1904.09751)
+    """
+
+    if top_p > 0.0:
+        sorted_logits, sorted_indices = torch.sort(logits, descending=True)
+        cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+
+        # Remove tokens with cumulative probability above the threshold
+        sorted_indices_to_remove = cumulative_probs > top_p
+        # Shift the indices to the right to keep also the first token above the threshold
+        sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+        sorted_indices_to_remove[..., 0] = 0
+
+        indices_to_remove = sorted_indices[sorted_indices_to_remove]
+        logits[:, indices_to_remove] = filter_value
+    return logits
 
 def generate_text(
     prompt,
@@ -52,94 +144,99 @@ def generate_text(
     sampling_choice,
 ):
     if sampling_choice == "Top-k":
-        sampling_method = "topk"
+        sampling_func = partial(top_k_logits, k = top_k)
 
     elif sampling_choice == "Nucleus":
-        sampling_method = "nucleus"
+        sampling_func = partial(top_p_logits, top_p = top_p)
 
     elif sampling_choice == "Typical":
-        sampling_method = "typical"
-
+        raise NotImplementedError("Typical Sampling processor not implemented.")
     elif sampling_choice == "Greedy":
-        sampling_method = "greedy"
+        sampling_func = partial(top_k_logits, k = 1)
+    
+    processer_partial = partial(process_logits, rep_pen = repetition_penalty, temperature = temperature)
 
-    generated_text, new_gen, logprobs = generator.generate_text_from_prompt(
-        model=model,
-        prompt=prompt,
-        steps=int(steps),
-        temperature=temperature,
-        top_k=top_k,
-        top_p=top_p,
-        tau=tau,
-        repetition_penalty=repetition_penalty,
-        sampling_method=sampling_method,
-        device=DEVICE,
+    text_generator =  generate_from_prompt(
+        prompt, 
+        model, 
+        tokenizer,
+        sampling_func = sampling_func,
+        logit_processor= processer_partial,
+        sample = True,
+        steps = steps,
+        device = DEVICE
     )
+    
+    text = []
+    for token in text_generator:
+        text.append(tokenizer.decode(token.tolist()[0]))
 
-    original_gen_length = len(generated_text) - len(new_gen)
+    generated_text = "".join(text)
 
     return [
-        (generated_text[:original_gen_length], None),
-        (generated_text[original_gen_length:], "Generated Text"),
+        (prompt, None),
+        (generated_text, "Generated Text"),
     ]
+
 
 
 if __name__ == "__main__":
     args = parse()
 
-    # assert len(args.model_path) > 0, "Must provide a valid model checkpoint"
-
     model = model_creator(args.model_size, args.model_path)
 
     description = "WIP DESCRIPTION"
 
-    iface = gr.Interface(
-        fn=generate_text,
-        inputs=[
-            gr.inputs.Textbox(lines=10, label="Enter your text here"),
-            gr.inputs.Slider(
-                0, 1000, default=100, label="Number of tokens to generate"
-            ),
-            gr.inputs.Slider(0, 2, default=0.70, label="Temperature"),
-            gr.inputs.Slider(
-                0,
-                50,
-                default=40,
-                label="k (Top-k Sampling)",
-            ),
-            gr.inputs.Slider(
-                0,
-                1,
-                default=0.96,
-                label="p (Nucleus Sampling)",
-            ),
-            gr.inputs.Slider(
-                0,
-                1,
-                default=0.2,
-                label="Tau (Typical Sampling)",
-            ),
-            gr.inputs.Slider(
-                0.0,
-                1.3,
-                default=1.2,
-                label="Repetition Penalty",
-            ),
-            gr.inputs.Radio(
-                choices=["Top-k", "Nucleus", "Typical", "Greedy"],
-                label="Sampling Method",
-                default="Nucleus",
-            ),
-        ],
-        outputs=gr.HighlightedText(
-            label="Generated Text",
-            combine_adjacent=True,
-            color_map=["Generated Text", "blue"],
-        ),
-        live=False,
-        title="WIP Title",
-        description=None,
-        article="For more details check out the model repo [here](https://github.com/fattorib/transformer)",
-        allow_flagging="never",
-    )
-    iface.launch(share=args.share)
+    with gr.Blocks() as demo:
+        with gr.Row():
+            with gr.Column():
+                input_txt = gr.Textbox(lines=10, label="Enter your text here")
+                token_slider = gr.Slider(
+                        0, 1000, value=100, label="Number of tokens to generate"
+                    )
+                
+                with gr.Accordion("Generation Parameters", open = False):
+                    temp_slider = gr.Slider(0, 2, value=0.80, label="Temperature")
+
+                    topk_slider = gr.Slider(
+                            0,
+                            50,
+                            value=40,
+                            label="k (Top-k Sampling)",
+                        )
+                    topp_slider = gr.Slider(
+                            0,
+                            1,
+                            value=0.96,
+                            label="p (Nucleus Sampling)",
+                        )
+                    tau_slider = gr.Slider(
+                            0,
+                            1,
+                            value=0.2,
+                            label="Tau (Typical Sampling)",
+                        )
+                    rep_slider = gr.Slider(
+                            0.0,
+                            1.3,
+                            value=1.2,
+                            label="Repetition Penalty",
+                        )
+                radio = gr.Dropdown(
+                        choices=["Top-k", "Nucleus", "Typical", "Greedy"],
+                        label="Sampling Method",
+                        value="Nucleus",
+                    )
+
+            with gr.Column():
+                output_txt = gr.HighlightedText(
+                    label="Generated Text",
+                    combine_adjacent=True,
+                    color_map=["Generated Text", "blue"],
+                )
+
+                generate_btn = gr.Button("Generate Text")
+
+        generate_btn.click(generate_text, [input_txt, token_slider,temp_slider, topk_slider, topp_slider, tau_slider, rep_slider, radio], [output_txt])
+    
+    demo.launch()
