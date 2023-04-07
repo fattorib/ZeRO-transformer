@@ -1,19 +1,19 @@
 training:
   max_epochs: 20
   batch_size: 256
-  peak_learning_rate: 1e-4
-  warmup_steps: 1000
-  total_steps: 25000
-  end_learning_rate: 1e-5
+  peak_learning_rate: 2e-4
+  warmup_steps: 2000
+  total_steps: 143000
+  end_learning_rate: 2e-5
   weight_decay: 0.1
-  gradient_accumulation_steps: 4
+  gradient_accumulation_steps: 8
   evaluation_frequency: 1000 
   maximum_evaluation_steps: 250
-  train_context: 2048
+  train_context: 1024
 
 model:
-  size: "417m"
-  warm_init: True
+  size: "1_3b"
+  warm_init: False
   warm_init_dir: "warm_initialization"
 
 
@@ -23,7 +23,7 @@ data:
   train_samples: 14809244
   checkpoint_directory: "checkpoints"
   bucket_path: "bfattoripile_euwest"
-  index_path_train: "data/index/code_train.index"
+  index_path_train: "data/index/pileeu_train_code_mix.index"
   index_path_validation: "data/index/pileeu_validation.index"
   wandb_project: "jax-transformer"
-  steps_per_epoch: 3800 # approximation 
+  steps_per_epoch: 30800 # approximation 
