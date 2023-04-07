@@ -407,10 +407,10 @@ def main():
         collate_fn=numpy_collate,
         drop_last=True,
     )
-
-    vl = DataLoader(
+    
+    vl = DataLoader( 
         dataset=validation_dataset,
-        batch_size=cfg.training.batch_size,
+        batch_size=cfg.training.batch_size//4,
         collate_fn=numpy_collate,
         drop_last=True,
     )
