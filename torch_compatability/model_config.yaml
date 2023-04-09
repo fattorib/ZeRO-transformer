@@ -30,3 +30,11 @@ distill:
   N: 12
   use_alibi: True
 
+760m:
+  embedding_dim: 1536
+  vocab_size: 50304
+  num_head: 16
+  num_ctx: 1024
+  N: 24
+  use_alibi: True
+
