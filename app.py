@@ -20,7 +20,6 @@ def parse():
     return args
 
 
-# DEVICE = "cpu"
 if torch.cuda.is_available():
     DEVICE = "cuda"
 
@@ -192,8 +191,6 @@ if __name__ == "__main__":
     args = parse()
 
     model = model_creator(args.model_size, args.model_path)
-
-    description = "WIP DESCRIPTION"
 
     with gr.Blocks() as demo:
         with gr.Row():
