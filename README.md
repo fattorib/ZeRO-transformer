@@ -1,14 +1,14 @@
 # Table of Contents
 
-1. [ZeRO Optimizer Sharding with jax.pmap](#zero-optimizer-sharding-with-jax.pmap)
+1. [ZeRO Optimizer Sharding in Jax](#zero-optimizer-sharding-in-jax)
 2. [Configuration Setup](#configuration-setup)
 3. [Training](#training)
 4. [Trained Models](#trained-models)
 5. [Acknowledgements](#acknowledgements)
 
-# ZeRO Optimizer Sharding with jax.pmap
+# ZeRO Optimizer Sharding in Jax
 
-JAX codebase demonstrating an application of [ZeRO](https://arxiv.org/abs/1910.02054)-style optimizer sharding using a combination of ```xmap``` and ```pjit```. This codebase was used to train a 1.3B parameter transformer model on a TPU v3-32, something that would not be possible with standard data parallel training. I have a full post detailing my work which you can read [here](TODO) 
+JAX codebase demonstrating an application of [ZeRO](https://arxiv.org/abs/1910.02054)-style optimizer sharding using a combination of ```xmap``` and ```pjit```. This codebase was used to train a 1.3B parameter transformer model on a TPU v3-32, something that would not be possible with standard data parallel training. I have a full post detailing my work which you can read [here](TODO).
 
 # Configuration Setup
 
@@ -24,15 +24,16 @@ model_name:
   block_size: # maximum context length 
   dropout: 
   N: 
-  alibi_attn: # bool for using ALiBi attention 
+  alibi_attn: # boolean for using ALiBi attention 
 ```
 
 ## Training Config
 
 All other configuration is handled in ```conf/config.yaml```.
+
 ## Training
 
-This assumes you have your data setup on a GCP bucket and .index files created for your datasets. In addition, you must have a running TPU VM instance and be connected to it.
+This assumes you have your data setup on a GCP bucket and .index files created for your datasets:
 
 ```bash
 python main_zero.py
