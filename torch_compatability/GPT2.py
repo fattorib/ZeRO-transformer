@@ -251,24 +251,19 @@ class GPT2Block(nn.Module):
         block_size: int,
         resid_dropout: float,
         num_layers: int,
-        use_alibi: bool = True,
     ) -> None:
         super().__init__()
         self.ln1 = nn.LayerNorm(embedding_dim)
 
         self.ln2 = nn.LayerNorm(embedding_dim)
 
-        if use_alibi:
-            self.attn = ALiBi(
-                embedding_dim,
-                num_head,
-                block_size,
-                resid_dropout,
-                num_layers,
-            )
-
-        else:
-            raise NotImplementedError("Model conversion only support ALiBi")
+        self.attn = ALiBi(
+            embedding_dim,
+            num_head,
+            block_size,
+            resid_dropout,
+            num_layers,
+        )
 
         self.mlp = MLPBlock(
             embedding_dim,
@@ -302,7 +297,6 @@ class GPT2(nn.Module):
         mlp_dropout: float = 0.0,
         resid_dropout: float = 0.0,
         embedding_dropout: float = 0.0,
-        use_alibi: bool = False,
     ):
         super().__init__()
         self.num_ctx = num_ctx
@@ -313,16 +307,12 @@ class GPT2(nn.Module):
         self.resid_dropout = resid_dropout
         self.embedding_dropout = embedding_dropout
         self.num_head = num_head
-        self.use_alibi = use_alibi
 
         """
         Basic GPT2 transformer module
         """
 
         self.wte = nn.Embedding(self.vocab_size, self.embedding_dim)
-
-        if not self.use_alibi:
-            self.wpe = nn.Embedding(self.num_ctx, self.embedding_dim)
 
         self.dropout = nn.Dropout(p=self.embedding_dropout)
 
@@ -335,7 +325,6 @@ class GPT2(nn.Module):
                         block_size=self.num_ctx,
                         resid_dropout=resid_dropout,
                         num_layers=N,
-                        use_alibi=self.use_alibi,
                     )
                 )
                 for i in range(self.N)
@@ -410,32 +399,8 @@ class GPT2(nn.Module):
         past_states: Tuple[torch.Tensor, torch.Tensor] = None,
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
 
-        b, t = x.size()
-
-        if not self.use_alibi:
-            if past_states is None:
-                position_ids = torch.arange(0, t, dtype=torch.long, device=x.device)
-                position_ids = position_ids.unsqueeze(0).view(-1, t)
-                position_embeds = self.wpe(position_ids)
-            else:
-                past_length = past_states[0][0].size(-2)
-
-                position_ids = torch.arange(
-                    past_length,
-                    t + past_length,
-                    dtype=torch.long,
-                    device=x.device,
-                )
-                position_ids = position_ids.unsqueeze(0).expand_as(x)
-                position_embeds = self.wpe(position_ids)
-
         x = self.wte(x)
-
-        if not self.use_alibi:
-            x = self.dropout(x + position_embeds)
-        else:
-            x = self.dropout(x)
-
+        x = self.dropout(x)
         present_states = []
         if not use_cache:
             past_states = [None] * self.N

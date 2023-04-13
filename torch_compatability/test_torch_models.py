@@ -169,7 +169,7 @@ def test_gpt2_no_labels(model_config):
         num_ctx=cfg["ctx"],
         vocab_size=cfg["vocab_size"],
         N=cfg["n_layer"],
-        use_alibi=True,
+        
     )
 
     # test with no labels
@@ -186,7 +186,7 @@ def test_gpt2_labels(model_config):
         num_ctx=cfg["ctx"],
         vocab_size=cfg["vocab_size"],
         N=cfg["n_layer"],
-        use_alibi=True,
+        
     )
 
     batch = torch.ones((1, cfg["ctx"]), dtype=torch.int32).long()
