@@ -406,15 +406,15 @@ def main():
         batch_size=cfg.training.batch_size,
         collate_fn=numpy_collate,
         drop_last=True,
-        num_workers=0
+        num_workers=0,
     )
-    
-    vl = DataLoader( 
+
+    vl = DataLoader(
         dataset=validation_dataset,
-        batch_size=cfg.training.batch_size//4,
+        batch_size=cfg.training.batch_size // 4,
         collate_fn=numpy_collate,
         drop_last=True,
-        num_workers=0
+        num_workers=0,
     )
 
     running_metrics = []
