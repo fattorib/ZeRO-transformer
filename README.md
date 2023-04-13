@@ -47,7 +47,7 @@ TODO
 
 ## Tests
 
-Tests are written in a combination of ```unittest``` and ```pytest```. All tests can be run with:
+Tests are written in a combination of ```unittest``` and ```pytest``` (yes, I know this is kinda silly). All tests can be run with:
 ```bash
 pytest
 ```
