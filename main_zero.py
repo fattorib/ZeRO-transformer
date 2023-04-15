@@ -64,7 +64,7 @@ def save_checkpoint_params(params: Any, step: int, workdir: str) -> None:
             step=step, apply_fn=None, params=params, tx=None, opt_state=None
         )
         checkpoints.save_checkpoint(
-            workdir, faux_state, step, keep=3, overwrite=True, prefix="params_"
+            workdir, faux_state, step, keep=5, overwrite=True, prefix="params_"
         )
 
 
@@ -86,7 +86,7 @@ def save_checkpoint_optimizer(opt_state: Any, step: int, workdir: str) -> None:
             step=step, apply_fn=None, params=None, tx=None, opt_state=opt_state
         )
         checkpoints.save_checkpoint(
-            workdir, faux_state, step, keep=3, overwrite=True, prefix="optimizer_"
+            workdir, faux_state, step, keep=5, overwrite=True, prefix="optimizer_"
         )
 
 
