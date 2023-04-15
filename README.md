@@ -8,7 +8,7 @@
 
 # ZeRO Optimizer Sharding in Jax
 
-JAX codebase demonstrating an application of [ZeRO](https://arxiv.org/abs/1910.02054)-style optimizer sharding using a combination of ```xmap``` and ```pjit```. This codebase was used to train a 1.3B parameter transformer model on a TPU v3-32, something that would not be possible with standard data parallel training. I have a full post detailing my work which you can read [here](TODO).
+JAX codebase demonstrating an application of [ZeRO](https://arxiv.org/abs/1910.02054)-style optimizer sharding using a combination of ```xmap``` and ```pjit```. This codebase was used to train a 1.3B parameter transformer model on a TPU v3-32, something that would not be possible with standard data parallel training. **I have a full post detailing my work which you can read [here](https://fattorib.github.io/blog/2023/jax-pmap/).**
 
 # Configuration Setup
 
