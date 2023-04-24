@@ -39,14 +39,14 @@ class TransformerBlock(nn.Module):
             self.N,
             self.alibi_attn,
             self.dtype,
-        )(nn.LayerNorm(dtype=self.dtype)(x), train)
+        )(nn.LayerNorm(dtype=self.dtype, use_bias=False)(x), train)
         x = x + attn_out
         x = x + MLPBlock(
             self.embedding_dim,
             dropout=self.residual_dropout,
             N=self.N,
             dtype=self.dtype,
-        )(nn.LayerNorm(dtype=self.dtype)(x), train)
+        )(nn.LayerNorm(dtype=self.dtype, use_bias=False)(x), train)
         return x
 
 
@@ -83,18 +83,8 @@ class Transformer(nn.Module):
         wte = embed(x)
 
         out = wte
-        if not self.alibi_attn:
-            wpe = nn.Embed(
-                name="wpe",
-                num_embeddings=self.block_size,
-                features=self.embedding_dim,
-                embedding_init=initializers.normal(stddev=0.02),
-                dtype=self.dtype,
-            )(jnp.ones((T), dtype=jnp.uint8))
 
-            out += wpe
-
-        for i in range(self.N):
+        for _ in range(self.N):
             out = TransformerBlock(
                 self.embedding_dim,
                 self.num_head,
@@ -105,7 +95,7 @@ class Transformer(nn.Module):
                 self.alibi_attn,
             )(out, train)
 
-        out = nn.LayerNorm(dtype=self.dtype)(out)
+        out = nn.LayerNorm(dtype=self.dtype, use_bias=False)(out)
 
         logits = embed.attend(out)
 

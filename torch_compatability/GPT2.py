@@ -6,6 +6,7 @@ from typing import List, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from omegaconf import OmegaConf
 
 """
 Module class for GPT2. Follows paper specifications wherever possible.
@@ -250,27 +251,19 @@ class GPT2Block(nn.Module):
         block_size: int,
         resid_dropout: float,
         num_layers: int,
-        fused_residuals: bool = False,
-        use_alibi: bool = True,
     ) -> None:
         super().__init__()
         self.ln1 = nn.LayerNorm(embedding_dim)
-        self.fused_residuals = fused_residuals
 
-        if not self.fused_residuals:
-            self.ln2 = nn.LayerNorm(embedding_dim)
+        self.ln2 = nn.LayerNorm(embedding_dim)
 
-        if use_alibi:
-            self.attn = ALiBi(
-                embedding_dim,
-                num_head,
-                block_size,
-                resid_dropout,
-                num_layers,
-            )
-
-        else:
-            raise NotImplementedError("Model conversion only support ALiBi")
+        self.attn = ALiBi(
+            embedding_dim,
+            num_head,
+            block_size,
+            resid_dropout,
+            num_layers,
+        )
 
         self.mlp = MLPBlock(
             embedding_dim,
@@ -285,14 +278,10 @@ class GPT2Block(nn.Module):
         use_cache: bool = False,
         layer_past: Tuple[torch.Tensor, torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        if self.fused_residuals:
-            mlp_out = self.mlp(self.ln1(x))
-            attn_out = self.attn(self.ln1(x), use_cache, layer_past)
-            x = x + mlp_out + attn_out[0]
-        else:
-            attn_out = self.attn(self.ln1(x), use_cache, layer_past)
-            x = x + attn_out[0]
-            x = x + self.mlp(self.ln2(x))
+
+        attn_out = self.attn(self.ln1(x), use_cache, layer_past)
+        x = x + attn_out[0]
+        x = x + self.mlp(self.ln2(x))
 
         return x, attn_out[1]
 
@@ -305,11 +294,9 @@ class GPT2(nn.Module):
         N: int,
         vocab_size: int,
         num_head: int = 12,
-        fused_residuals: bool = False,
         mlp_dropout: float = 0.0,
         resid_dropout: float = 0.0,
         embedding_dropout: float = 0.0,
-        use_alibi: bool = False,
     ):
         super().__init__()
         self.num_ctx = num_ctx
@@ -320,17 +307,12 @@ class GPT2(nn.Module):
         self.resid_dropout = resid_dropout
         self.embedding_dropout = embedding_dropout
         self.num_head = num_head
-        self.use_alibi = use_alibi
-        self.fused_residuals = fused_residuals
 
         """
         Basic GPT2 transformer module
         """
 
         self.wte = nn.Embedding(self.vocab_size, self.embedding_dim)
-
-        if not self.use_alibi:
-            self.wpe = nn.Embedding(self.num_ctx, self.embedding_dim)
 
         self.dropout = nn.Dropout(p=self.embedding_dropout)
 
@@ -343,8 +325,6 @@ class GPT2(nn.Module):
                         block_size=self.num_ctx,
                         resid_dropout=resid_dropout,
                         num_layers=N,
-                        fused_residuals=fused_residuals,
-                        use_alibi=self.use_alibi,
                     )
                 )
                 for i in range(self.N)
@@ -419,32 +399,8 @@ class GPT2(nn.Module):
         past_states: Tuple[torch.Tensor, torch.Tensor] = None,
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
 
-        b, t = x.size()
-
-        if not self.use_alibi:
-            if past_states is None:
-                position_ids = torch.arange(0, t, dtype=torch.long, device=x.device)
-                position_ids = position_ids.unsqueeze(0).view(-1, t)
-                position_embeds = self.wpe(position_ids)
-            else:
-                past_length = past_states[0][0].size(-2)
-
-                position_ids = torch.arange(
-                    past_length,
-                    t + past_length,
-                    dtype=torch.long,
-                    device=x.device,
-                )
-                position_ids = position_ids.unsqueeze(0).expand_as(x)
-                position_embeds = self.wpe(position_ids)
-
         x = self.wte(x)
-
-        if not self.use_alibi:
-            x = self.dropout(x + position_embeds)
-        else:
-            x = self.dropout(x)
-
+        x = self.dropout(x)
         present_states = []
         if not use_cache:
             past_states = [None] * self.N
@@ -481,20 +437,23 @@ class GPT2(nn.Module):
                 return logits_lm
 
 
-def create_GPT2_test(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
+def model_getter(
+    model_size: str,
+    config_path: str = "torch_compatability/model_config.yaml",
+    model_checkpoint: str = None,
+) -> nn.Module:
+    """Loads model configuration from YAML files
+    and returns models
+
+    Args:
+        model_size (str): model name
+            This is checked against all top-level model names in the
+            YAML file (defaults to 'conf/model_config.yaml')
     """
-    Unittest model
-    """
-    model = GPT2(
-        num_ctx=num_ctx,
-        embedding_dim=64,
-        N=2,
-        vocab_size=vocab_size,
-        num_head=4,
-        fused_residuals=False,
-        use_alibi=True,
-        **kwargs,
-    )
+
+    configs = OmegaConf.load(config_path)
+    assert model_size in list(configs.keys()), "Invalid model name provided"
+    model = GPT2(**configs[model_size])
 
     if model_checkpoint is not None:
         state_dict = torch.load(
@@ -505,153 +464,3 @@ def create_GPT2_test(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
         model.load_state_dict(state_dict)
 
     return model
-
-
-def create_GPT2_bytelevel(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
-    """
-    TODO: Fill this in
-    """
-    model = GPT2(
-        num_ctx=num_ctx,
-        embedding_dim=1024,
-        N=10,
-        vocab_size=257,
-        num_head=16,
-        fused_residuals=False,
-        use_alibi=True,
-        **kwargs,
-    )
-
-    if model_checkpoint is not None:
-        state_dict = torch.load(
-            model_checkpoint,
-            map_location="cpu",
-        )
-
-        model.load_state_dict(state_dict)
-
-    return model
-
-
-def create_GPT2_flax(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
-    """
-    TODO: Fill this in
-    """
-    model = GPT2(
-        num_ctx=num_ctx,
-        embedding_dim=768,
-        N=6,
-        vocab_size=vocab_size,
-        num_head=12,
-        fused_residuals=False,
-        use_alibi=True,
-        **kwargs,
-    )
-
-    if model_checkpoint is not None:
-        state_dict = torch.load(
-            model_checkpoint,
-            map_location="cpu",
-        )
-
-        model.load_state_dict(state_dict)
-
-    return model
-
-
-def create_GPT2_flax_large(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
-    """
-    TODO: Fill this in
-    """
-    model = GPT2(
-        num_ctx=num_ctx,
-        embedding_dim=1536,
-        N=18,
-        vocab_size=vocab_size,
-        num_head=12,
-        fused_residuals=False,
-        use_alibi=True,
-        **kwargs,
-    )
-
-    if model_checkpoint is not None:
-        state_dict = torch.load(
-            model_checkpoint,
-            map_location="cpu",
-        )
-
-        model.load_state_dict(state_dict)
-
-    return model
-
-
-def create_GPT2_flax_xlarge(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
-    """
-    TODO: Fill this in
-    """
-    model = GPT2(
-        num_ctx=num_ctx,
-        embedding_dim=1536,
-        N=24,
-        vocab_size=vocab_size,
-        num_head=12,
-        fused_residuals=False,
-        use_alibi=True,
-        **kwargs,
-    )
-
-    if model_checkpoint is not None:
-        state_dict = torch.load(
-            model_checkpoint,
-            map_location="cpu",
-        )
-
-        model.load_state_dict(state_dict)
-
-    return model
-
-
-def create_GPT2_flax_xxlarge(vocab_size, num_ctx, model_checkpoint=None, **kwargs):
-    """
-    TODO: Fill this in
-    """
-    model = GPT2(
-        num_ctx=num_ctx,
-        embedding_dim=1536,
-        N=36,
-        vocab_size=vocab_size,
-        num_head=12,
-        fused_residuals=False,
-        use_alibi=True,
-        **kwargs,
-    )
-
-    if model_checkpoint is not None:
-        state_dict = torch.load(
-            model_checkpoint,
-            map_location="cpu",
-        )
-
-        model.load_state_dict(state_dict)
-
-    return model
-
-
-def model_getter(model_name, vocab_size, num_ctx, model_checkpoint=None, **kwargs):
-    assert vocab_size > 0, "Vocab size must be positive"
-    assert num_ctx > 0, "Model context must be positive"
-
-    MODELS_DICT = {
-        "flax-test": create_GPT2_test,
-        "flax-distill": create_GPT2_flax,
-        "flax-large": create_GPT2_flax_large,
-        "flax-xlarge": create_GPT2_flax_xlarge,
-        "flax-xxlarge": create_GPT2_flax_xxlarge,
-        "flax-bytelevel": create_GPT2_bytelevel,
-    }
-
-    assert (
-        model_name in MODELS_DICT.keys()
-    ), f"Invalid model name provided. Must be one of {MODELS_DICT.keys()}"
-
-    return MODELS_DICT[model_name](vocab_size, num_ctx, model_checkpoint, **kwargs)

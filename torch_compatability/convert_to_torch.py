@@ -6,8 +6,8 @@ make it a bit easier to push to HF Hub if I want to do that.
 
 import argparse
 
-from torch_compatability.flax_to_pytorch import match_and_save
-from torch_compatability.GPT2 import model_getter
+from flax_to_pytorch import match_and_save
+from GPT2 import model_getter
 
 
 def parse():
@@ -26,9 +26,7 @@ def parse():
 def main():
 
     args = parse()
-    model = model_getter(
-        model_name=args.model_name, vocab_size=args.vocab_size, num_ctx=args.seq_len
-    )
+    model = model_getter(model_size=args.model_name)
 
     match_and_save(model, args.flax_path, args.torch_path)
 

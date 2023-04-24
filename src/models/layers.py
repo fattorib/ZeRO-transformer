@@ -62,6 +62,7 @@ class MLPBlock(nn.Module):
             kernel_init=initializers.normal(stddev=0.02),
             bias_init=initializers.zeros,
             dtype=self.dtype,
+            use_bias=False,
         )(x)
         x = nn.gelu(x)
         out = nn.Dense(
@@ -70,6 +71,7 @@ class MLPBlock(nn.Module):
             kernel_init=initializers.normal(stddev=(0.02 / jnp.sqrt(2 * self.N))),
             bias_init=initializers.zeros,
             dtype=self.dtype,
+            use_bias=False,
         )(x)
         return dropout()(out)
 
@@ -114,6 +116,7 @@ class CausalAttention(nn.Module):
                 kernel_init=initializers.normal(stddev=0.02),
                 bias_init=initializers.zeros,
                 dtype=self.dtype,
+                use_bias=False,
             )(x)
             .reshape(-1, T, self.num_head, self.embedding_dim // self.num_head)
             .transpose(0, 2, 1, 3)
@@ -127,6 +130,7 @@ class CausalAttention(nn.Module):
                 kernel_init=initializers.normal(stddev=0.02),
                 bias_init=initializers.zeros,
                 dtype=self.dtype,
+                use_bias=False,
             )(x)
             .reshape(-1, T, self.num_head, self.embedding_dim // self.num_head)
             .transpose(0, 2, 1, 3)
@@ -140,6 +144,7 @@ class CausalAttention(nn.Module):
                 kernel_init=initializers.normal(stddev=0.02),
                 bias_init=initializers.zeros,
                 dtype=self.dtype,
+                use_bias=False,
             )(x)
             .reshape(-1, T, self.num_head, self.embedding_dim // self.num_head)
             .transpose(0, 2, 1, 3)
@@ -175,6 +180,7 @@ class CausalAttention(nn.Module):
             ),
             bias_init=initializers.zeros,
             dtype=self.dtype,
+            use_bias=False,
         )(attn_out)
 
         return dropout()(out)

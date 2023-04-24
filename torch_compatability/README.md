@@ -11,8 +11,6 @@ python torch_compatability/extract_msgpack.py --ckpt-dir *checkpoint directory* 
 
 python torch_compatability/convert_to_torch.py --model-name *model name* \
 --flax-path *path of extracted msgpack file* \
---torch-path *path to export torch model to * \
---vocab-size *vocab size* \
---seq-len *sequence length*
+--torch-path *path to export torch model to * 
 ```
 

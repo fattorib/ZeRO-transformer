@@ -38,7 +38,7 @@ def test_jax_model():
 
 def test_match_conversion(test_jax_model):
 
-    torch_model = torch_model_getter(model_name="flax-test", vocab_size=256, num_ctx=32)
+    torch_model = torch_model_getter("test")
 
     jax_pytree_path = test_jax_model
 
@@ -47,12 +47,7 @@ def test_match_conversion(test_jax_model):
     with open(jax_pytree_path, "rb") as f:
         jax_pytree = msgpack_restore(f.read())
 
-    torch_model = torch_model_getter(
-        model_name="flax-test",
-        vocab_size=256,
-        num_ctx=32,
-        model_checkpoint="checkpoints/test.pth",
-    )
+    torch_model = torch_model_getter("test", model_checkpoint="checkpoints/test.pth")
 
     for block_idx in range(torch_model.N):
         block_mapping_dict = create_transformer_block_mapping(block_idx)

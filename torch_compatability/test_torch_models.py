@@ -169,7 +169,7 @@ def test_gpt2_no_labels(model_config):
         num_ctx=cfg["ctx"],
         vocab_size=cfg["vocab_size"],
         N=cfg["n_layer"],
-        use_alibi=True,
+        
     )
 
     # test with no labels
@@ -186,7 +186,7 @@ def test_gpt2_labels(model_config):
         num_ctx=cfg["ctx"],
         vocab_size=cfg["vocab_size"],
         N=cfg["n_layer"],
-        use_alibi=True,
+        
     )
 
     batch = torch.ones((1, cfg["ctx"]), dtype=torch.int32).long()
@@ -200,7 +200,7 @@ def test_gpt2_labels(model_config):
 
 def test_model_getter():
     # Ensure we can call valid model and use it
-    model = model_getter("flax-test", vocab_size=256, num_ctx=32)
+    model = model_getter("test")
     batch = torch.ones((1, 32), dtype=torch.int32).long()
     with torch.no_grad():
         logits, loss = model(batch, batch)
@@ -209,10 +209,7 @@ def test_model_getter():
 def test_model_getter_errors():
 
     with pytest.raises(AssertionError):
-        model_getter("flax-XXL", vocab_size=1024, num_ctx=1024)
+        model_getter("flax-XXL")
 
     with pytest.raises(AssertionError):
-        model_getter("flax-test", vocab_size=-1, num_ctx=32)
-
-    with pytest.raises(AssertionError):
-        model_getter("flax-test", vocab_size=1024, num_ctx=-1)
+        model_getter("flax-test")
