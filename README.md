@@ -43,7 +43,33 @@ If resuming a run, pass the ```--resume``` flag to your script.
 
 ## Trained Models
 
-TODO
+The following three models are available for download:
+
+- 417M : [link](https://storage.googleapis.com/bfattori_public/torch_weights/gpt_417m.pth)
+- 760M : [link](https://storage.googleapis.com/bfattori_public/torch_weights/gpt_760m.pth)
+- 1.3B : [link](https://storage.googleapis.com/bfattori_public/torch_weights/gpt_1_3B.pth)
+
+Their performance is roughly summarized here:
+| Model Size (M) | Training Tokens (B) | LAMBADA (PPL) | LAMBADA (ACC) | PIQA (Acc) | Winogrande (Acc) | Hellaswag (Acc) |
+|----------------|---------------------|---------------|---------------|------------|------------------|-----------------|
+| 417            | 300                 | 13.1534       | 0.4811        | 0.6502     | 0.5193           | 0.3175          |
+| 760            | 330                 | 8.6189        | 0.5552        | 0.6763     | 0.5501           | 0.4141          |
+| 1300           | 200                 | 7.6880        | 0.5715        | 0.6948     | 0.5509           | 0.3810           |
+
+Once you've downloaded the weihgts, the following code is sufficient to load and run the models. For example, to load the 1.3B param model:
+
+```python
+from torch_compatability.GPT2 import model_getter
+
+model = model_getter(
+  size = "1_3b, 
+  model_checkpoint="path/to/weights"
+)
+
+model.to('cuda')
+```
+
+If you're interested in accessing the flax models including optimizer state, feel free to open an issue in the repo. 
 
 ## Tests
 
