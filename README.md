@@ -52,9 +52,9 @@ The following three models are available for download:
 Their performance is roughly summarized here:
 | Model Size (M) | Training Tokens (B) | LAMBADA (PPL) | LAMBADA (ACC) | PIQA (Acc) | Winogrande (Acc) | Hellaswag (Acc) |
 |----------------|---------------------|---------------|---------------|------------|------------------|-----------------|
-| 417            | 300                 | 13.1534       | 0.4811        | 0.6502     | 0.5193           | 0.3175          |
-| 760            | 330                 | 8.6189        | 0.5552        | 0.6763     | 0.5501           | 0.4141          |
-| 1300           | 200                 | 7.6880        | 0.5715        | 0.6948     | 0.5509           | 0.3810           |
+| 417            | 300                 | 13.1534       | 48.11%        | 65.02%     | 51.93%           | 31.75%          |
+| 760            | 330                 | 8.6189        | 55.52%        | 67.63%     | 55.01%           | 41.41%          |
+| 1300           | 200                 | 7.6880        | 57.15%        | 69.48%     | 55.09%           | 38.10%          |
 
 Once you've downloaded the weihgts, the following code is sufficient to load and run the models. For example, to load the 1.3B param model:
 
