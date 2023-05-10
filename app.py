@@ -33,6 +33,9 @@ def model_creator(size: str, path: str) -> torch.nn.Module:
 
     model.to(DEVICE)
     model.eval()
+    model.half()
+
+    torch.cuda.empty_cache()
 
     return model
 
@@ -65,7 +68,7 @@ def generate_from_prompt(
     generated_tokens = []
 
     for _ in tqdm(range(steps), disable=True):
-        with torch.cuda.amp.autocast(cache_enabled=False):
+        with torch.cuda.amp.autocast(enabled = False, cache_enabled=False):
             logits, layer_past = model(x_cond, use_cache=True, past_states=layer_past)
 
         logits = logit_processor(logits, generated_tokens)
