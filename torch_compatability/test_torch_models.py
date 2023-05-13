@@ -4,8 +4,7 @@ Tests for PyTorch models
 import pytest
 import torch
 
-from torch_compatability.GPT2 import (GPT2, ALiBi, GPT2Block, MLPBlock,
-                                      model_getter)
+from torch_compatability.GPT2 import GPT2, ALiBi, GPT2Block, MLPBlock, model_getter
 
 
 @pytest.fixture
@@ -169,7 +168,6 @@ def test_gpt2_no_labels(model_config):
         num_ctx=cfg["ctx"],
         vocab_size=cfg["vocab_size"],
         N=cfg["n_layer"],
-        
     )
 
     # test with no labels
@@ -186,7 +184,6 @@ def test_gpt2_labels(model_config):
         num_ctx=cfg["ctx"],
         vocab_size=cfg["vocab_size"],
         N=cfg["n_layer"],
-        
     )
 
     batch = torch.ones((1, cfg["ctx"]), dtype=torch.int32).long()

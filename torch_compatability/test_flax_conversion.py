@@ -13,7 +13,10 @@ from flax.serialization import msgpack_restore, msgpack_serialize
 
 from src.models.GPT import model_getter as jax_model_getter
 from torch_compatability.flax_to_pytorch import (
-    create_transformer_block_mapping, flatten, match_and_save)
+    create_transformer_block_mapping,
+    flatten,
+    match_and_save,
+)
 from torch_compatability.GPT2 import model_getter as torch_model_getter
 
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
