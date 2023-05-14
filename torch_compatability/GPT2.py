@@ -208,6 +208,7 @@ class ALiBi(nn.Module):
 
             self.alibi_cache = a * self.slopes.view(self.slopes.shape[0], 1, 1)
             self.cached_ctx = seq_len_k
+            self.alibi_cache = self.alibi_cache.masked_fill(self.mask[:, :, :T, :T] == 0, float("-inf"))
 
         if seq_len_k != seq_len_q:
             assert (
@@ -231,10 +232,10 @@ class ALiBi(nn.Module):
             a = a * self.slopes.view(self.slopes.shape[0], 1, 1)
 
             self.alibi_cache = a[:, seq_len_k - 1, :].view(a.shape[0], 1, a.shape[2])
+            self.alibi_cache = self.alibi_cache.masked_fill(self.mask[:, :, :T, :T] == 0, float("-inf"))
 
         att = att + self.alibi_cache
 
-        att = att.masked_fill(self.mask[:, :, :T, :T] == 0, float("-inf"))
         att = F.softmax(att, dim=-1)
         y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
         y = (
