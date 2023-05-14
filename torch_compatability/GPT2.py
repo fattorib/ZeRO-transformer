@@ -186,7 +186,7 @@ class ALiBi(nn.Module):
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
 
-        att = (q @ rearrange(k, "b n t c -> b n c t")) * (1.0 / math.sqrt(k.size(-1)))
+        
 
         # Creation of ALiBi distance matrix -> Computed on first forward pass
         # and stored. If CTX changes, we update this
@@ -234,10 +234,8 @@ class ALiBi(nn.Module):
             self.alibi_cache = a[:, seq_len_k - 1, :].view(a.shape[0], 1, a.shape[2])
             self.alibi_cache = self.alibi_cache.masked_fill(self.mask[:, :, :T, :T] == 0, float("-inf"))
 
-        att = att + self.alibi_cache
+        y = nn.functional.scaled_dot_product_attention(q,k,v, self.alibi_cache)
 
-        att = F.softmax(att, dim=-1)
-        y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
         y = (
             rearrange(y, "b n c t -> b c n t").contiguous().view(B, T, C)
         )  # re-assemble all head outputs side by side
