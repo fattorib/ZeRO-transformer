@@ -9,5 +9,5 @@ google-cloud-storage
 torch 
 tqdm 
 requests
-einops==0.3.0
+einops
 transformers
