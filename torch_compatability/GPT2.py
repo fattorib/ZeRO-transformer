@@ -237,7 +237,7 @@ class ALiBi(nn.Module):
         y = nn.functional.scaled_dot_product_attention(q,k,v, self.alibi_cache)
 
         y = (
-            rearrange(y, "b n c t -> b c n t").contiguous().view(B, T, C)
+            rearrange(y, "b n t h -> b t n h").contiguous().view(B, T, C)
         )  # re-assemble all head outputs side by side
 
         # output projection

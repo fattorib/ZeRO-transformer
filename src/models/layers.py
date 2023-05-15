@@ -7,6 +7,7 @@ import jax
 import jax.nn.initializers as initializers
 import jax.numpy as jnp
 from flax.linen import partitioning as nn_partitioning
+from einops import rearrange
 
 
 def shard_noop(x, spec):
@@ -118,8 +119,6 @@ class CausalAttention(nn.Module):
                 dtype=self.dtype,
                 use_bias=False,
             )(x)
-            .reshape(-1, T, self.num_head, self.embedding_dim // self.num_head)
-            .transpose(0, 2, 1, 3)
         )
 
         # Shape is (B, nh, T, h_dim)
@@ -132,8 +131,6 @@ class CausalAttention(nn.Module):
                 dtype=self.dtype,
                 use_bias=False,
             )(x)
-            .reshape(-1, T, self.num_head, self.embedding_dim // self.num_head)
-            .transpose(0, 2, 1, 3)
         )
 
         # Shape is (B, nh, T, h_dim)
@@ -146,12 +143,25 @@ class CausalAttention(nn.Module):
                 dtype=self.dtype,
                 use_bias=False,
             )(x)
-            .reshape(-1, T, self.num_head, self.embedding_dim // self.num_head)
-            .transpose(0, 2, 1, 3)
         )
 
+        key = rearrange(
+            key, "b t (nh hd) -> b t nh hd", nh=self.num_head, hd=C // self.num_head
+        )
+        query = rearrange(
+            query, "b t (nh hd) -> b t nh hd", nh=self.num_head, hd=C // self.num_head
+        )
+        value = rearrange(
+            value, "b t (nh hd) -> b t nh hd", nh=self.num_head, hd=C // self.num_head
+        )
+
+        key = rearrange(key, "b t n c -> b n c t")
+        value = rearrange(value, "b t n c -> b n t c")
+        query = rearrange(query, "b t n c -> b n t c")
+
+        #TODO: Can do one less rearrange for key
         # get raw attention scores
-        attn_full = (query @ key.transpose(0, 1, 3, 2)) / jnp.sqrt(
+        attn_full = (query @ key) / jnp.sqrt(
             key.shape[-1]
         )  # Shape is (B, nh, sq, sk)
 
@@ -167,11 +177,12 @@ class CausalAttention(nn.Module):
 
         attn_scores = nn.softmax(masked_attn, axis=-1)
         attn_scores = dropout()(attn_scores)
-        attn_out = (attn_scores @ value).transpose(
-            0, 2, 1, 3
-        )  # Shape is (B, T, nh, h_dim)
+        attn_out = (attn_scores @ value)
+        attn_out = rearrange(attn_out, "b n t h -> b t n h")
 
-        attn_out = attn_out.reshape(-1, T, C)
+        #TODO: This should be collapsed with rearrange too
+        attn_out = rearrange(attn_out, "b t n h -> b t (n h)")
+        
         out = nn.Dense(
             name="residual_out",
             features=self.embedding_dim,
