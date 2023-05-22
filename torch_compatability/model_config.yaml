@@ -2,7 +2,7 @@ test:
   embedding_dim: 64
   vocab_size: 256
   num_head: 4
-  num_ctx: 32
+  num_ctx: 8
   N: 2
 
 distill:

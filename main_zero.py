@@ -24,8 +24,11 @@ from tqdm import tqdm
 import wandb
 from src.models.GPT import model_getter
 from src.partitioning.partition import create_opt_spec, set_partitions_zero
-from src.partitioning.xmap_train_functions import (eval_step, train_step,
-                                                   update_opt_state)
+from src.partitioning.xmap_train_functions import (
+    eval_step,
+    train_step,
+    update_opt_state,
+)
 from src.training.training_utils import compute_tokens_seen, initialized
 from src.utils.configs import flatten_dict
 from src.utils.dataloader import numpy_collate

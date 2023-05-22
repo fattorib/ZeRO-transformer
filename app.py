@@ -32,6 +32,8 @@ def model_creator(size: str, path: str) -> torch.nn.Module:
     model = model_getter(size, model_checkpoint=path)
 
     model.to(DEVICE)
+    model.half()
+    torch.cuda.empty_cache()
     model.eval()
 
     return model
@@ -191,6 +193,8 @@ if __name__ == "__main__":
     args = parse()
 
     model = model_creator(args.model_size, args.model_path)
+
+    # model = torch.compile(model)
 
     with gr.Blocks() as demo:
         with gr.Row():
