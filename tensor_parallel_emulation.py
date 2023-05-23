@@ -149,8 +149,8 @@ if __name__ == "__main__":
         batch_grad_spec = set_partitions_rules(param_shape, mesh, _get_partition_rules_tp_dp)
 
     else:
-        param_spec = None
-        batch_grad_spec = set_partitions_rules(param_spec, mesh, _get_partition_rules_dp)
+        param_spec = NamedSharding(mesh,None)
+        batch_grad_spec = set_partitions_rules(param_shape, mesh, _get_partition_rules_dp)
 
     configs = OmegaConf.load("conf/model_config.yaml")
     model_info = configs[MODEL_SIZE]
