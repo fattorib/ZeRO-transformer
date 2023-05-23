@@ -20,8 +20,6 @@ from typing import Any
 from jax.lax import with_sharding_constraint
 
 
-
-
 def parse():
     parser = argparse.ArgumentParser(description="pjit/jit training emulator & benchmarker")
     parser.add_argument("--emulation", default=False, action="store_true")
@@ -38,7 +36,6 @@ def train_step(
     accum_steps: int = 8,
     model: Any = None,
     model_mp_spec: Any = None,
-    dp: int = None
 ):
     """
     Computes loss/grads for a single batch of data.
@@ -75,14 +72,8 @@ def train_step(
         )
         return (grad_idx + minibatch.shape[0], loss, grads), None 
     
-    (idx,loss,grads), _ = jax.lax.scan(cumul_minibatch_step, init = (0, 0.0, with_sharding_constraint(to_bf16(jax.tree_util.tree_map(jnp.zeros_like, params)), model_mp_spec)), xs = None, length = accum_steps)
+    (idx,loss,grads), _ = jax.lax.scan(cumul_minibatch_step, init = (0, 0.0, to_bf16(jax.tree_util.tree_map(jnp.zeros_like, params))), xs = None, length = accum_steps)
     
-    grads = jax.tree_map(lambda x: x.reshape([1, *x.shape]), grads)
-    grads = jax.tree_map(lambda x: jax.numpy.repeat(x, dp, axis=0), grads)
-    grads = with_sharding_constraint(grads, model_mp_spec)
-    grads = jax.tree_map(lambda x: jax.numpy.mean(x, axis=0), grads)
-
-
     loss, grads = jax.tree_util.tree_map(lambda x: x / accum_steps, (loss, grads))
 
     metrics = {
@@ -162,7 +153,7 @@ if __name__ == "__main__":
     with mesh:
         #TODO: Rng sharding is not currently correct
         train_step_dp = jax.jit(
-            partial(train_step, model=model, accum_steps=GRAD_ACCUM_STEPS, model_mp_spec = param_spec, dp = args.dp),
+            partial(train_step, model=model, accum_steps=GRAD_ACCUM_STEPS, model_mp_spec = param_spec,),
             in_shardings=(param_spec, batch_sharding, NamedSharding(mesh,None)),
             out_shardings=(param_spec,NamedSharding(mesh,None))
         )
