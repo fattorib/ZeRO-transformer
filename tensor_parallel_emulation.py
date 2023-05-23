@@ -112,6 +112,8 @@ if __name__ == "__main__":
         CTX_LEN = 1024
         NUM_PASSES = args.iter
         MODEL_SIZE = "base"
+        mp = 2 
+        dp = 4 
 
         # only works on TPU
         def to_bf16(t):
@@ -125,7 +127,7 @@ if __name__ == "__main__":
     # 4-way dp / 2 way tp
     
     # named sharding is easier to follow along with 
-    mesh = Mesh(np.array(jax.devices()).reshape(4,2), ('dp','mp'))
+    mesh = Mesh(np.array(jax.devices()).reshape(dp,mp), ('dp','mp'))
 
     # indicates batch dim is split across dp axis
     batch_sharding = jax.sharding.NamedSharding(mesh, P('dp', None))
@@ -181,7 +183,7 @@ if __name__ == "__main__":
         print(
             f"TP Step - Global BS {BATCH_SIZE} - accum steps {GRAD_ACCUM_STEPS} - Num Executions {NUM_PASSES}"
         )
-        print(f"Mesh Layout (dp,mp): (4,2)")
+        print(f"Mesh Layout (dp,mp): {(dp,mp)}")
         print(f"Model Size: {MODEL_SIZE}")
         print(f"Total Time: {total_time:.4f}s")
         param_count = sum(p.size for p in jax.tree_util.tree_leaves(param_shape))
