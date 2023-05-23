@@ -44,6 +44,8 @@ def train_step(
     # this now has to be modified to only take a batch of shape (BS,CTX) and pull data of size (MB)
     batch_size,context = batch.shape
 
+    batch = batch.reshape(accum_steps, -1, context)
+
     params = with_sharding_constraint(params, model_mp_spec)
 
     def get_minibatch(grad_idx):
@@ -63,16 +65,17 @@ def train_step(
     grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
 
     # accumulate gradients
-    def cumul_minibatch_step(carry, _):
+    def cumul_minibatch_step(carry, x_y):
         grad_idx, cumul_loss, cumul_grads = carry
-        minibatch = get_minibatch(grad_idx) if grad_idx is not None else batch
+        # minibatch = get_minibatch(grad_idx) if grad_idx is not None else batch
+        minibatch = x_y
         loss, grads = grad_fn(to_bf16(params), minibatch)
         cumul_loss, cumul_grads = jax.tree_util.tree_map(
             jnp.add, (cumul_loss, cumul_grads), (loss, grads)
         )
         return (grad_idx + minibatch.shape[0], loss, grads), None 
     
-    (idx,loss,grads), _ = jax.lax.scan(cumul_minibatch_step, init = (0, 0.0, to_bf16(jax.tree_util.tree_map(jnp.zeros_like, params))), xs = None, length = accum_steps)
+    (idx,loss,grads), _ = jax.lax.scan(cumul_minibatch_step, init = (0, 0.0, to_bf16(jax.tree_util.tree_map(jnp.zeros_like, params))), xs = batch, length = accum_steps)
     
     loss, grads = jax.tree_util.tree_map(lambda x: x / accum_steps, (loss, grads))
 
