@@ -13,7 +13,7 @@ from flax.core import FrozenDict
 from flax.core.frozen_dict import freeze
 from flax.traverse_util import flatten_dict, unflatten_dict
 from jax.sharding import Mesh, PartitionSpec
-
+from jax.sharding import PositionalSharding, NamedSharding
 
 def setup_dp_mesh():
     """
@@ -46,7 +46,7 @@ def _replacement_rules(rules):
     return replace
 
 
-def _get_partition_rules_zero():
+def _get_partition_rules_tp(mesh: Mesh):
     """
     Follows Megatron-LM partition rules from
 
@@ -56,25 +56,25 @@ def _get_partition_rules_zero():
 
     """
     return [
-        (("wte", "embedding"), PartitionSpec("dp", None)),
-        (("wpe", "embedding"), PartitionSpec("dp", None)),
+        (("wte", "embedding"), NamedSharding(mesh, PartitionSpec("mp", None))),
+        (("wpe", "embedding"), NamedSharding(mesh,PartitionSpec("mp", None))),
         # attention
-        (("(query_proj|key_proj|value_proj)", "kernel"), PartitionSpec(None, "dp")),
-        (("residual_out", "kernel"), PartitionSpec("dp", None)),
-        (("(query_proj|key_proj|value_proj)", "bias"), PartitionSpec("dp")),
-        (("residual_out", "bias"), PartitionSpec("dp")),
+        (("(query_proj|key_proj|value_proj)", "kernel"), NamedSharding(mesh,PartitionSpec(None, "mp"))),
+        (("residual_out", "kernel"), NamedSharding(mesh,PartitionSpec("mp", None))),
+        (("(query_proj|key_proj|value_proj)", "bias"), NamedSharding(mesh,PartitionSpec(None))),
+        (("residual_out", "bias"), NamedSharding(mesh,PartitionSpec("mp"))),
         # MLP
-        (("fc_in", "kernel"), PartitionSpec(None, "dp")),
-        (("fc_residual", "kernel"), PartitionSpec("dp", None)),
-        (("fc_in", "bias"), PartitionSpec("dp")),
-        (("fc_residual", "bias"), PartitionSpec("dp")),
+        (("fc_in", "kernel"), NamedSharding(mesh,PartitionSpec(None, "mp"))),
+        (("fc_residual", "kernel"), NamedSharding(mesh,PartitionSpec("mp", None))),
+        (("fc_in", "bias"), NamedSharding(mesh,PartitionSpec(None))),
+        (("fc_residual", "bias"), NamedSharding(mesh,PartitionSpec(None))),
         # layer norms
         (
             (
                 "LayerNorm_0",
                 "(bias|scale)",
             ),
-            PartitionSpec("dp"),
+            NamedSharding(mesh,PartitionSpec(None)),
         ),
         # layer norms
         (
@@ -82,18 +82,18 @@ def _get_partition_rules_zero():
                 "LayerNorm_1",
                 "(bias|scale)",
             ),
-            PartitionSpec("dp"),
+            NamedSharding(mesh,PartitionSpec(None)),
         ),
     ]
 
 
-def set_partitions_zero(in_dict):
+def set_partitions_tp(in_dict, mesh: Mesh):
     """
     Takes a FrozenDict and returns the associated PartitionSpec rule
     for all groups of parameters
     """
 
-    rules = _get_partition_rules_zero()
+    rules = _get_partition_rules_tp(mesh)
     replace = _replacement_rules(rules)
 
     _unmatched = object()
