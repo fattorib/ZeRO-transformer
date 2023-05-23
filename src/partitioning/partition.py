@@ -14,6 +14,7 @@ from flax.core.frozen_dict import freeze
 from flax.traverse_util import flatten_dict, unflatten_dict
 from jax.sharding import Mesh, PartitionSpec
 from jax.sharding import PositionalSharding, NamedSharding
+from typing import Callable
 
 def setup_dp_mesh():
     """
@@ -45,6 +46,45 @@ def _replacement_rules(rules):
 
     return replace
 
+def _get_partition_rules_dp(mesh: Mesh):
+    """
+    Follows Megatron-LM partition rules from
+
+    `Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism`
+    by Shoeybi et al.
+    <https://arxiv.org/abs/1909.08053>
+
+    """
+    return [
+        (("wte", "embedding"), NamedSharding(mesh, PartitionSpec("dp",None, None))),
+        (("wpe", "embedding"), NamedSharding(mesh,PartitionSpec("dp",None, None))),
+        # attention
+        (("(query_proj|key_proj|value_proj)", "kernel"), NamedSharding(mesh,PartitionSpec("dp",None, None))),
+        (("residual_out", "kernel"), NamedSharding(mesh,PartitionSpec("dp",None, None))),
+        (("(query_proj|key_proj|value_proj)", "bias"), NamedSharding(mesh,PartitionSpec("dp",None))),
+        (("residual_out", "bias"), NamedSharding(mesh,PartitionSpec("dp",None))),
+        # MLP
+        (("fc_in", "kernel"), NamedSharding(mesh,PartitionSpec("dp",None, None))),
+        (("fc_residual", "kernel"), NamedSharding(mesh,PartitionSpec("dp",None, None))),
+        (("fc_in", "bias"), NamedSharding(mesh,PartitionSpec("dp",None))),
+        (("fc_residual", "bias"), NamedSharding(mesh,PartitionSpec("dp",None))),
+        # layer norms
+        (
+            (
+                "LayerNorm_0",
+                "(bias|scale)",
+            ),
+            NamedSharding(mesh,PartitionSpec("dp",None)),
+        ),
+        # layer norms
+        (
+            (
+                "LayerNorm_1",
+                "(bias|scale)",
+            ),
+            NamedSharding(mesh,PartitionSpec("dp",None)),
+        ),
+    ]
 
 def _get_partition_rules_tp(mesh: Mesh):
     """
@@ -86,14 +126,53 @@ def _get_partition_rules_tp(mesh: Mesh):
         ),
     ]
 
+def _get_partition_rules_tp_dp(mesh: Mesh):
+    """
+    Follows Megatron-LM partition rules from
 
-def set_partitions_tp(in_dict, mesh: Mesh):
+    `Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism`
+    by Shoeybi et al.
+    <https://arxiv.org/abs/1909.08053>
+
+    """
+    return [
+        (("wte", "embedding"), NamedSharding(mesh, PartitionSpec("dp","mp", None))),
+        (("wpe", "embedding"), NamedSharding(mesh,PartitionSpec("dp","mp", None))),
+        # attention
+        (("(query_proj|key_proj|value_proj)", "kernel"), NamedSharding(mesh,PartitionSpec("dp",None, "mp"))),
+        (("residual_out", "kernel"), NamedSharding(mesh,PartitionSpec("dp","mp", None))),
+        (("(query_proj|key_proj|value_proj)", "bias"), NamedSharding(mesh,PartitionSpec("dp",None))),
+        (("residual_out", "bias"), NamedSharding(mesh,PartitionSpec("dp","mp"))),
+        # MLP
+        (("fc_in", "kernel"), NamedSharding(mesh,PartitionSpec("dp",None, "mp"))),
+        (("fc_residual", "kernel"), NamedSharding(mesh,PartitionSpec("dp","mp", None))),
+        (("fc_in", "bias"), NamedSharding(mesh,PartitionSpec("dp",None))),
+        (("fc_residual", "bias"), NamedSharding(mesh,PartitionSpec("dp",None))),
+        # layer norms
+        (
+            (
+                "LayerNorm_0",
+                "(bias|scale)",
+            ),
+            NamedSharding(mesh,PartitionSpec("dp",None)),
+        ),
+        # layer norms
+        (
+            (
+                "LayerNorm_1",
+                "(bias|scale)",
+            ),
+            NamedSharding(mesh,PartitionSpec("dp",None)),
+        ),
+    ]
+
+def set_partitions_rules(in_dict, mesh: Mesh, rules_func: Callable):
     """
     Takes a FrozenDict and returns the associated PartitionSpec rule
     for all groups of parameters
     """
 
-    rules = _get_partition_rules_tp(mesh)
+    rules = rules_func(mesh)
     replace = _replacement_rules(rules)
 
     _unmatched = object()

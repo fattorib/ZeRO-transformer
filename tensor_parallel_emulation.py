@@ -13,7 +13,7 @@ from jax.experimental import mesh_utils
 from jax.sharding import PositionalSharding, NamedSharding
 from jax.sharding import PartitionSpec as P
 from src.models.GPT import model_getter
-from src.partitioning.partition import create_opt_spec, set_partitions_tp
+from src.partitioning.partition import create_opt_spec, set_partitions_rules, _get_partition_rules_dp,_get_partition_rules_tp,_get_partition_rules_tp_dp
 from src.training.training_utils import initialized
 import jax.numpy as jnp 
 from typing import Any
@@ -36,6 +36,7 @@ def train_step(
     accum_steps: int = 8,
     model: Any = None,
     model_mp_spec: Any = None,
+    batch_grad_spec: Any = None
 ):
     """
     Computes loss/grads for a single batch of data.
@@ -64,19 +65,23 @@ def train_step(
         cumul_loss, cumul_grads = carry
         minibatch = x_y
         loss, grads = grad_fn(to_bf16(params), minibatch)
-        grads = with_sharding_constraint(grads, model_mp_spec)
+        # grads = with_sharding_constraint(grads, batch_grad_spec)
         cumul_loss, cumul_grads = jax.tree_util.tree_map(
             jnp.add, (cumul_loss, cumul_grads), (loss, grads)
         )
 
-        cumul_grads = with_sharding_constraint(cumul_grads, model_mp_spec)
+        # cumul_grads = with_sharding_constraint(cumul_grads, batch_grad_spec)
         
         return (loss, grads), None 
     
     with jax.named_scope('scanned_accumulate'):
-        (loss,grads), _ = jax.lax.scan(cumul_minibatch_step, init = (0.0, to_bf16(jax.tree_util.tree_map(jnp.zeros_like, params))), xs = batch, length = accum_steps)
+        (loss,grads), _ = jax.lax.scan(cumul_minibatch_step, init = (0.0, to_bf16(jax.tree_util.tree_map(jnp.zeros_like, params))), xs = batch)
     
-    grads = with_sharding_constraint(grads, model_mp_spec)
+    grads = jax.tree_map(lambda x: x.reshape([1, *x.shape]), grads)
+    grads = jax.tree_map(lambda x: jax.numpy.repeat(x, 8, axis=0), grads)
+    grads = with_sharding_constraint(grads, batch_grad_spec)
+    grads = jax.tree_map(lambda x: jax.numpy.mean(x, axis=0), grads)
+
     loss, grads = jax.tree_util.tree_map(lambda x: x / accum_steps, (loss, grads))
 
     metrics = {
@@ -139,7 +144,13 @@ if __name__ == "__main__":
     params = initialized(rng, model, input_shape=(1, model.block_size))
     param_shape = jax.eval_shape(model.init, rng, batch_tok)
 
-    param_spec = set_partitions_tp(param_shape, mesh)
+    if args.mp > 1:
+        param_spec = set_partitions_rules(param_shape, mesh, _get_partition_rules_tp)
+        batch_grad_spec = set_partitions_rules(param_shape, mesh, _get_partition_rules_tp_dp)
+
+    else:
+        param_spec = None
+        batch_grad_spec = set_partitions_rules(param_spec, mesh, _get_partition_rules_dp)
 
     configs = OmegaConf.load("conf/model_config.yaml")
     model_info = configs[MODEL_SIZE]
@@ -157,7 +168,7 @@ if __name__ == "__main__":
     with mesh:
         #TODO: Rng sharding is not currently correct
         train_step_dp = jax.jit(
-            partial(train_step, model=model, accum_steps=GRAD_ACCUM_STEPS, model_mp_spec = param_spec,),
+            partial(train_step, model=model, accum_steps=GRAD_ACCUM_STEPS, model_mp_spec = param_spec,batch_grad_spec = batch_grad_spec),
             in_shardings=(param_spec, batch_sharding, no_shard),
             out_shardings=(param_spec,no_shard)
         )
