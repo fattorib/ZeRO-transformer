@@ -97,7 +97,7 @@ class CausalAttention(nn.Module):
 
     def setup(self):
         self.slopes = jnp.array(get_slopes(self.num_head))
-
+        self.mask = jnp.tril(jnp.ones((self.block_size, self.block_size), dtype=jnp.int8)).reshape(1, 1, self.block_size, self.block_size)
         self.alibi_mask = create_mask(self.block_size, self.slopes)
 
     @nn.compact
@@ -169,10 +169,9 @@ class CausalAttention(nn.Module):
             # NOTE: We are fixing the ALiBi mask since this is for training, during inference or is seq_len changes this will cause issues
             attn_full = attn_full + self.alibi_mask[:, :T, :T]
 
-        mask = jnp.tril(jnp.ones((T, T), dtype=jnp.int8)).reshape(1, 1, T, T)
-
+    
         masked_attn = jnp.where(
-            mask, attn_full.astype(jnp.float32), jnp.finfo(jnp.float32).min
+            self.mask, attn_full.astype(jnp.float32), jnp.finfo(jnp.float32).min
         )
 
         attn_scores = nn.softmax(masked_attn, axis=-1)
