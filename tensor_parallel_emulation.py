@@ -26,6 +26,8 @@ def parse():
     parser = argparse.ArgumentParser(description="pjit/jit training emulator & benchmarker")
     parser.add_argument("--emulation", default=False, action="store_true")
     parser.add_argument("--iter", default=10, type=int)
+    parser.add_argument("--dp", default=4, type=int)
+    parser.add_argument("--mp", default=2, type=int)
     args = parser.parse_args()
     return args
 
@@ -35,7 +37,8 @@ def train_step(
     rng_key: jax.random.PRNGKey = None,
     accum_steps: int = 8,
     model: Any = None,
-    model_mp_spec: Any = None
+    model_mp_spec: Any = None,
+    dp: int = None
 ):
     """
     Computes loss/grads for a single batch of data.
@@ -73,8 +76,13 @@ def train_step(
         return (grad_idx + minibatch.shape[0], loss, grads), None 
     
     (idx,loss,grads), _ = jax.lax.scan(cumul_minibatch_step, init = (0, 0.0, to_bf16(jax.tree_util.tree_map(jnp.zeros_like, params))), xs = None, length = accum_steps)
-
+    
+    grads = jax.tree_map(lambda x: x.reshape([1, *x.shape]), grads)
+    grads = jax.tree_map(lambda x: jax.numpy.repeat(x, dp, axis=0), grads)
     grads = with_sharding_constraint(grads, model_mp_spec)
+    grads = jax.tree_map(lambda x: jax.numpy.mean(x, axis=0), grads)
+
+    
 
     loss, grads = jax.tree_util.tree_map(lambda x: x / accum_steps, (loss, grads))
 
@@ -107,13 +115,11 @@ if __name__ == "__main__":
             return t
 
     else:
-        GRAD_ACCUM_STEPS = 8
+        GRAD_ACCUM_STEPS = 64
         BATCH_SIZE = 512
         CTX_LEN = 1024
         NUM_PASSES = args.iter
         MODEL_SIZE = "base"
-        mp = 2 
-        dp = 4 
 
         # only works on TPU
         def to_bf16(t):
@@ -127,7 +133,7 @@ if __name__ == "__main__":
     # 4-way dp / 2 way tp
     
     # named sharding is easier to follow along with 
-    mesh = Mesh(np.array(jax.devices()).reshape(dp,mp), ('dp','mp'))
+    mesh = Mesh(np.array(jax.devices()).reshape(args.dp,args.mp), ('dp','mp'))
 
     # indicates batch dim is split across dp axis
     batch_sharding = jax.sharding.NamedSharding(mesh, P('dp', None))
@@ -155,8 +161,11 @@ if __name__ == "__main__":
     params = jax.device_put(params, param_spec)
 
     with mesh:
+        #TODO: Rng sharding is not currently correct
         train_step_dp = jax.jit(
-            partial(train_step, model=model, accum_steps=GRAD_ACCUM_STEPS, model_mp_spec = param_spec),
+            partial(train_step, model=model, accum_steps=GRAD_ACCUM_STEPS, model_mp_spec = param_spec, dp = args.dp),
+            in_shardings=(param_spec, batch_sharding, NamedSharding(mesh,None)),
+            out_shardings=(param_spec,NamedSharding(mesh,None))
         )
         rng, dropout_rng = jax.random.split(rng, 2)
 
@@ -183,7 +192,7 @@ if __name__ == "__main__":
         print(
             f"TP Step - Global BS {BATCH_SIZE} - accum steps {GRAD_ACCUM_STEPS} - Num Executions {NUM_PASSES}"
         )
-        print(f"Mesh Layout (dp,mp): {(dp,mp)}")
+        print(f"Mesh Layout (dp,mp): {(args.dp,args.mp)}")
         print(f"Model Size: {MODEL_SIZE}")
         print(f"Total Time: {total_time:.4f}s")
         param_count = sum(p.size for p in jax.tree_util.tree_leaves(param_shape))
