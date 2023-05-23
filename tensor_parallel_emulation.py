@@ -41,16 +41,11 @@ def train_step(
     Computes loss/grads for a single batch of data.
     """
     
-    # this now has to be modified to only take a batch of shape (BS,CTX) and pull data of size (MB)
-    batch_size,context = batch.shape
+    _,context = batch.shape
 
     batch = batch.reshape(accum_steps, -1, context)
 
     params = with_sharding_constraint(params, model_mp_spec)
-
-    def get_minibatch(grad_idx):
-        minibatch = jax.lax.dynamic_slice(batch, (grad_idx,0), slice_sizes = (batch_size//accum_steps, context))
-        return minibatch
 
     def loss_fn(params, batch):
         _, loss = model.apply(
@@ -66,17 +61,22 @@ def train_step(
 
     # accumulate gradients
     def cumul_minibatch_step(carry, x_y):
-        grad_idx, cumul_loss, cumul_grads = carry
-        # minibatch = get_minibatch(grad_idx) if grad_idx is not None else batch
+        cumul_loss, cumul_grads = carry
         minibatch = x_y
         loss, grads = grad_fn(to_bf16(params), minibatch)
+        grads = with_sharding_constraint(grads, model_mp_spec)
         cumul_loss, cumul_grads = jax.tree_util.tree_map(
             jnp.add, (cumul_loss, cumul_grads), (loss, grads)
         )
-        return (grad_idx + minibatch.shape[0], loss, grads), None 
+
+        cumul_grads = with_sharding_constraint(cumul_grads, model_mp_spec)
+        
+        return (loss, grads), None 
     
-    (idx,loss,grads), _ = jax.lax.scan(cumul_minibatch_step, init = (0, 0.0, to_bf16(jax.tree_util.tree_map(jnp.zeros_like, params))), xs = batch, length = accum_steps)
+    with jax.named_scope('scanned_accumulate'):
+        (loss,grads), _ = jax.lax.scan(cumul_minibatch_step, init = (0.0, to_bf16(jax.tree_util.tree_map(jnp.zeros_like, params))), xs = batch, length = accum_steps)
     
+    grads = with_sharding_constraint(grads, model_mp_spec)
     loss, grads = jax.tree_util.tree_map(lambda x: x / accum_steps, (loss, grads))
 
     metrics = {
@@ -130,6 +130,7 @@ if __name__ == "__main__":
 
     # indicates batch dim is split across dp axis
     batch_sharding = jax.sharding.NamedSharding(mesh, P('dp', None))
+    no_shard = NamedSharding(mesh, None)
     
     # # Setting up model + param spec
     model = model_getter(MODEL_SIZE, return_cfg=False)
@@ -157,8 +158,8 @@ if __name__ == "__main__":
         #TODO: Rng sharding is not currently correct
         train_step_dp = jax.jit(
             partial(train_step, model=model, accum_steps=GRAD_ACCUM_STEPS, model_mp_spec = param_spec,),
-            in_shardings=(param_spec, batch_sharding, NamedSharding(mesh,None)),
-            out_shardings=(param_spec,NamedSharding(mesh,None))
+            in_shardings=(param_spec, batch_sharding, no_shard),
+            out_shardings=(param_spec,no_shard)
         )
 
         rng, dropout_rng = jax.random.split(rng, 2)
@@ -170,17 +171,21 @@ if __name__ == "__main__":
         grads,metrics = train_step_dp(params, batch, dropout_rng)
 
         start = time()
+
+        # visualize array shardings
+        # jax.debug.visualize_array_sharding(grads['params']['wte']['embedding'])
         
-        for i in tqdm(range(NUM_PASSES)):
+        with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
+            for i in tqdm(range(NUM_PASSES)):
 
-            dropout_rng, rng = jax.random.split(dropout_rng)
+                dropout_rng, rng = jax.random.split(dropout_rng)
 
-            batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
-            batch = jax.device_put(batch, batch_sharding)
-            grads, metrics = train_step_dp(params, batch, dropout_rng)
+                batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
+                batch = jax.device_put(batch, batch_sharding)
+                grads, metrics = train_step_dp(params, batch, dropout_rng)
 
-            params = jax.tree_map(lambda x,y : x - 0.01*y, params, grads)
-            print(metrics)
+                params = jax.tree_map(lambda x,y : x - 0.01*y, params, grads)
+                print(metrics)
         total_time = time() - start
 
         print(
