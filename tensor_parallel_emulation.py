@@ -183,9 +183,9 @@ if __name__ == "__main__":
 
         # visualize array shardings
         # jax.debug.visualize_array_sharding(batch)
-        with jax.profiler.trace("jax-trace", create_perfetto_link=False):
-            for i in tqdm(range(NUM_PASSES)):
-
+        
+        for i in tqdm(range(NUM_PASSES)):
+            with jax.profiler.trace("jax-trace", create_perfetto_link=False):
                 dropout_rng, rng = jax.random.split(dropout_rng)
 
                 batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
