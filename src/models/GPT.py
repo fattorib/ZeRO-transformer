@@ -103,8 +103,8 @@ class Transformer(nn.Module):
         if labels is None:
             return logits
         else:
-            labels_shifted = labels[..., 1:].reshape(-1)
-            logits_shifted = logits[..., :-1, :].reshape(-1, logits.shape[-1])
+            labels_shifted = labels[..., 1:]
+            logits_shifted = logits[..., :-1, :]
 
             oh_labels_shifted = jax.nn.one_hot(
                 labels_shifted, num_classes=self.vocab_size
