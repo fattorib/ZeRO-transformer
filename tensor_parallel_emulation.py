@@ -42,7 +42,7 @@ def train_step(
     """
     Computes loss/grads for a single batch of data.
     """
-    
+    jax.debug.print("{x}", x = batch.shape)
     _,context = batch.shape
 
     batch = batch.reshape(accum_steps, -1, context)
@@ -66,12 +66,13 @@ def train_step(
         cumul_loss, cumul_grads = carry
         minibatch = x_y
         loss, grads = grad_fn(to_bf16(params), minibatch)
-        grads = with_sharding_constraint(grads, model_mp_spec)
+        # grads = with_sharding_constraint(grads, model_mp_spec)
         cumul_loss, cumul_grads = jax.tree_util.tree_map(
             jnp.add, (cumul_loss, cumul_grads), (loss, grads)
         )
+        # jax.debug.print("{x}", x = jax.tree_map(lambda x: x.shape, grads))
 
-        cumul_grads = with_sharding_constraint(cumul_grads, model_mp_spec)
+        # cumul_grads = with_sharding_constraint(cumul_grads, model_mp_spec)
         
         return (cumul_loss, cumul_grads), None 
     
@@ -186,9 +187,8 @@ if __name__ == "__main__":
         start = time()
 
         # visualize array shardings
-        # jax.debug.visualize_array_sharding(grads['params']['wte']['embedding'])
-        
-        # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
+        # jax.debug.visualize_array_sharding(batch)
+
         for i in tqdm(range(NUM_PASSES)):
 
             dropout_rng, rng = jax.random.split(dropout_rng)
@@ -197,7 +197,8 @@ if __name__ == "__main__":
             batch = jax.device_put(batch, batch_sharding)
             grads, metrics = train_step_dp(params, batch, dropout_rng)
 
-            params = jax.tree_map(lambda x,y : x - 0.01*y, params, grads)
+            # params = jax.tree_map(lambda x,y : x - 0.01*y, params, grads)
+        
         print(metrics)
         total_time = time() - start
 
