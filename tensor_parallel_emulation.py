@@ -66,14 +66,9 @@ def train_step(
         cumul_loss, cumul_grads = carry
         minibatch = x_y
         loss, grads = grad_fn(to_bf16(params), minibatch)
-        # grads = with_sharding_constraint(grads, model_mp_spec)
         cumul_loss, cumul_grads = jax.tree_util.tree_map(
             jnp.add, (cumul_loss, cumul_grads), (loss, grads)
-        )
-        # jax.debug.print("{x}", x = jax.tree_map(lambda x: x.shape, grads))
-
-        # cumul_grads = with_sharding_constraint(cumul_grads, model_mp_spec)
-        
+        )        
         return (cumul_loss, cumul_grads), None 
     
     grad_init = to_bf16(jax.tree_util.tree_map(jnp.zeros_like, params))
