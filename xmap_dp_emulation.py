@@ -157,7 +157,7 @@ if __name__ == "__main__":
         flops_per_iter = flops_per_fwdbwd * BATCH_SIZE
 
         total_flops = flops_per_iter * NUM_PASSES
-        v2_flops = 45e12   # from https://paperswithcode.com/paper/performance-and-power-evaluation-of-ai/review/
+        v2_flops = 180e12   # from https://paperswithcode.com/paper/performance-and-power-evaluation-of-ai/review/
 
         effective_tflops = total_flops / (total_time)
 
