@@ -123,24 +123,25 @@ if __name__ == "__main__":
 
         start = time()
         for i in tqdm(range(NUM_PASSES)):
+            
+            with jax.profiler.trace("jax-trace", create_perfetto_link=False):
+                dropout_rng, rng = jax.random.split(dropout_rng)
 
-            dropout_rng, rng = jax.random.split(dropout_rng)
+                batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
 
-            batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
+                batch = batch.reshape(
+                    GRAD_ACCUM_STEPS,
+                    init_batch.shape[0] // GRAD_ACCUM_STEPS,
+                    CTX_LEN,
+                ).transpose(1, 0, 2)
+                batch = batch.reshape(
+                    jax.local_device_count(),
+                    init_batch.shape[0] // (jax.local_device_count() * GRAD_ACCUM_STEPS),
+                    GRAD_ACCUM_STEPS,
+                    CTX_LEN,
+                )
 
-            batch = batch.reshape(
-                GRAD_ACCUM_STEPS,
-                init_batch.shape[0] // GRAD_ACCUM_STEPS,
-                CTX_LEN,
-            ).transpose(1, 0, 2)
-            batch = batch.reshape(
-                jax.local_device_count(),
-                init_batch.shape[0] // (jax.local_device_count() * GRAD_ACCUM_STEPS),
-                GRAD_ACCUM_STEPS,
-                CTX_LEN,
-            )
-
-            grads, metrics = train_step_xmap(params, batch, dropout_rng)
+                grads, metrics = train_step_xmap(params, batch, dropout_rng)
 
         total_time = time() - start
 
