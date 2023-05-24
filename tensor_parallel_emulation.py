@@ -36,19 +36,19 @@ def train_step(
     accum_steps: int = 8,
     model: Any = None,
     model_mp_spec: Any = None,
+    batch_loss_spec: Any = None,
     batch_grad_spec: Any = None,
     dp: int = 0
 ):
     """
     Computes loss/grads for a single batch of data.
     """
-    # jax.debug.print("{x}", x = batch.shape)
     _,context = batch.shape
 
     batch = batch.reshape(accum_steps, -1, context)
-
     params = with_sharding_constraint(params, model_mp_spec)
 
+    # force loss to only compute locally?
     def loss_fn(params, batch):
         _, loss = model.apply(
             {"params": params["params"]},
@@ -57,7 +57,8 @@ def train_step(
             train=True,
             rngs={"dropout": rng_key},
         )
-        return loss
+        loss = with_sharding_constraint(loss, batch_loss_spec)
+        return loss.mean()
 
     grad_fn = jax.value_and_grad(loss_fn, has_aux=False)
 
@@ -77,7 +78,7 @@ def train_step(
             
     # grads = jax.tree_map(lambda x: x.reshape([1, *x.shape]), grads)
     # grads = jax.tree_map(lambda x: jax.numpy.repeat(x, dp, axis=0), grads)
-    # grads = with_sharding_constraint(grads, batch_grad_spec)
+    grads = with_sharding_constraint(grads, batch_grad_spec) # if dp, this tells XLA to replicate gradients across all devices
     # grads = jax.tree_map(lambda x: jax.numpy.mean(x, axis=0), grads)
 
     loss, grads = jax.tree_util.tree_map(lambda x: x / accum_steps, (loss, grads))
@@ -129,10 +130,14 @@ if __name__ == "__main__":
     # 4-way dp / 2 way tp
     
     # named sharding is easier to follow along with 
-    mesh = Mesh(np.array(jax.devices()).reshape(args.dp,args.mp), ('dp','mp'))
+    if args.mp > 1:
+        mesh = Mesh(np.array(jax.devices()).reshape(args.dp,args.mp), ('dp','mp'))
+
+    else:
+        mesh = Mesh(np.array(jax.devices()).reshape(args.dp), ('dp'))
 
     # indicates batch dim is split across dp axis
-    batch_sharding = jax.sharding.NamedSharding(mesh, P('dp', None))
+    batch_sharding = jax.sharding.NamedSharding(mesh, P('dp'))
     no_shard = NamedSharding(mesh, None)
     
     # # Setting up model + param spec
@@ -148,7 +153,9 @@ if __name__ == "__main__":
 
     else:
         param_spec = no_shard
-        batch_grad_spec = set_partitions_rules(param_shape, mesh, _get_partition_rules_dp)
+        # batch_grad_spec = set_partitions_rules(param_shape, mesh, _get_partition_rules_dp)
+        batch_grad_spec = no_shard
+        batch_loss_spec = batch_sharding
 
     configs = OmegaConf.load("conf/model_config.yaml")
     model_info = configs[MODEL_SIZE]
@@ -166,7 +173,7 @@ if __name__ == "__main__":
     with mesh:
         #TODO: Rng sharding is not currently correct
         train_step_dp = jax.jit(
-            partial(train_step, model=model, accum_steps=GRAD_ACCUM_STEPS, model_mp_spec = param_spec,batch_grad_spec = batch_grad_spec, dp = args.dp),
+            partial(train_step, model=model, accum_steps=GRAD_ACCUM_STEPS, model_mp_spec = param_spec,batch_grad_spec = batch_grad_spec, batch_loss_spec = batch_loss_spec, dp = args.dp),
             in_shardings=(param_spec, batch_sharding, no_shard),
             out_shardings=(param_spec,no_shard)
         )
@@ -175,8 +182,7 @@ if __name__ == "__main__":
 
         init_batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
 
-        # batch = jax.device_put(init_batch, batch_sharding)
-        batch = init_batch
+        batch = jax.device_put(init_batch, batch_sharding)
         grads,metrics = train_step_dp(params, batch, dropout_rng)
 
         start = time()
@@ -185,14 +191,14 @@ if __name__ == "__main__":
         # jax.debug.visualize_array_sharding(batch)
         
         for i in tqdm(range(NUM_PASSES)):
-            with jax.profiler.trace("jax-trace", create_perfetto_link=False):
-                dropout_rng, rng = jax.random.split(dropout_rng)
+            # with jax.profiler.trace("jax-trace", create_perfetto_link=True):
+            dropout_rng, rng = jax.random.split(dropout_rng)
 
-                batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
-                # batch = jax.device_put(batch, batch_sharding)
-                grads, metrics = train_step_dp(params, batch, dropout_rng)
+            batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
+            batch = jax.device_put(batch, batch_sharding)
+            grads, metrics = train_step_dp(params, batch, dropout_rng)
 
-                # params = jax.tree_map(lambda x,y : x - 0.01*y, params, grads)
+            params = jax.tree_map(lambda x,y : x - 0.01*y, params, grads)
         
         print(metrics)
         total_time = time() - start
