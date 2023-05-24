@@ -183,16 +183,16 @@ if __name__ == "__main__":
 
         # visualize array shardings
         # jax.debug.visualize_array_sharding(batch)
+        with jax.profiler.trace("jax-trace", create_perfetto_link=True):
+            for i in tqdm(range(NUM_PASSES)):
 
-        for i in tqdm(range(NUM_PASSES)):
+                dropout_rng, rng = jax.random.split(dropout_rng)
 
-            dropout_rng, rng = jax.random.split(dropout_rng)
+                batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
+                batch = jax.device_put(batch, batch_sharding)
+                grads, metrics = train_step_dp(params, batch, dropout_rng)
 
-            batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
-            batch = jax.device_put(batch, batch_sharding)
-            grads, metrics = train_step_dp(params, batch, dropout_rng)
-
-            # params = jax.tree_map(lambda x,y : x - 0.01*y, params, grads)
+                # params = jax.tree_map(lambda x,y : x - 0.01*y, params, grads)
         
         print(metrics)
         total_time = time() - start
