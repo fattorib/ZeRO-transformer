@@ -42,7 +42,7 @@ def train_step(
     """
     Computes loss/grads for a single batch of data.
     """
-    jax.debug.print("{x}", x = batch.shape)
+    # jax.debug.print("{x}", x = batch.shape)
     _,context = batch.shape
 
     batch = batch.reshape(accum_steps, -1, context)
@@ -75,10 +75,10 @@ def train_step(
 
     (loss,grads), _ = jax.lax.scan(cumul_minibatch_step, init = (0.0, grad_init), xs = batch)
             
-    grads = jax.tree_map(lambda x: x.reshape([1, *x.shape]), grads)
-    grads = jax.tree_map(lambda x: jax.numpy.repeat(x, dp, axis=0), grads)
-    grads = with_sharding_constraint(grads, batch_grad_spec)
-    grads = jax.tree_map(lambda x: jax.numpy.mean(x, axis=0), grads)
+    # grads = jax.tree_map(lambda x: x.reshape([1, *x.shape]), grads)
+    # grads = jax.tree_map(lambda x: jax.numpy.repeat(x, dp, axis=0), grads)
+    # grads = with_sharding_constraint(grads, batch_grad_spec)
+    # grads = jax.tree_map(lambda x: jax.numpy.mean(x, axis=0), grads)
 
     loss, grads = jax.tree_util.tree_map(lambda x: x / accum_steps, (loss, grads))
 
@@ -175,21 +175,21 @@ if __name__ == "__main__":
 
         init_batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
 
-        batch = jax.device_put(init_batch, batch_sharding)
-        
+        # batch = jax.device_put(init_batch, batch_sharding)
+        batch = init_batch
         grads,metrics = train_step_dp(params, batch, dropout_rng)
 
         start = time()
 
         # visualize array shardings
         # jax.debug.visualize_array_sharding(batch)
-        with jax.profiler.trace("jax-trace", create_perfetto_link=True):
+        with jax.profiler.trace("jax-trace", create_perfetto_link=False):
             for i in tqdm(range(NUM_PASSES)):
 
                 dropout_rng, rng = jax.random.split(dropout_rng)
 
                 batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
-                batch = jax.device_put(batch, batch_sharding)
+                # batch = jax.device_put(batch, batch_sharding)
                 grads, metrics = train_step_dp(params, batch, dropout_rng)
 
                 # params = jax.tree_map(lambda x,y : x - 0.01*y, params, grads)
