@@ -1,12 +1,10 @@
 """
 Loss function
 """
-import flax.linen as nn
+import jax
 import jax.numpy as jnp
-from jax import jit
 
 
-@jit
 def cross_entropy_loss(labels: jnp.array, logits: jnp.array) -> jnp.array:
     """Standard Cross Entropy Loss function
 
@@ -19,5 +17,5 @@ def cross_entropy_loss(labels: jnp.array, logits: jnp.array) -> jnp.array:
     """
 
     return (
-        -jnp.sum(labels * nn.log_softmax(logits.astype(jnp.float32), axis=-1), axis=-1)
+        -jnp.sum(labels * jax.nn.log_softmax(logits.astype(jnp.float32), axis=-1), axis=-1)
     )

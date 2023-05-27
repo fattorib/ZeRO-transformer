@@ -13,17 +13,8 @@ from flax.core import FrozenDict
 from flax.core.frozen_dict import freeze
 from flax.traverse_util import flatten_dict, unflatten_dict
 from jax.sharding import Mesh, PartitionSpec
-from jax.sharding import PositionalSharding, NamedSharding
+from jax.sharding import NamedSharding
 from typing import Callable
-
-def setup_dp_mesh():
-    """
-    Creates jax device mesh for data-parallel training
-    """
-    devices = np.asarray(jax.devices())
-    mesh = Mesh(devices, ["dp"])
-
-    return mesh
 
 
 def _match(qs, ks):
@@ -102,7 +93,7 @@ def _get_partition_rules_tp(mesh: Mesh):
         (("(query_proj|key_proj|value_proj)", "kernel"), NamedSharding(mesh,PartitionSpec(None, "mp"))),
         (("residual_out", "kernel"), NamedSharding(mesh,PartitionSpec("mp", None))),
         (("(query_proj|key_proj|value_proj)", "bias"), NamedSharding(mesh,PartitionSpec(None))),
-        (("residual_out", "bias"), NamedSharding(mesh,PartitionSpec("mp"))),
+        (("residual_out", "bias"), NamedSharding(mesh,PartitionSpec("None"))),
         # MLP
         (("fc_in", "kernel"), NamedSharding(mesh,PartitionSpec(None, "mp"))),
         (("fc_residual", "kernel"), NamedSharding(mesh,PartitionSpec("mp", None))),
