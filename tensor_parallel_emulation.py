@@ -46,7 +46,7 @@ def train_step(
     # reshape to add a microbatch dimension 
     batch = batch.reshape(accum_steps, -1, context)
     batch = with_sharding_constraint(batch, batch_loss_spec)
-    # params = with_sharding_constraint(params, model_mp_spec)
+    params = with_sharding_constraint(params, model_mp_spec)
 
     def loss_fn(params, batch):
         _, loss = model.apply(
@@ -97,7 +97,7 @@ if __name__ == "__main__":
 
     if args.emulation:
         print("Emulating 8 TPU cores")
-        GRAD_ACCUM_STEPS = 16
+        GRAD_ACCUM_STEPS = 32
         BATCH_SIZE = 128
         CTX_LEN = 32
         NUM_PASSES = args.iter
@@ -145,11 +145,12 @@ if __name__ == "__main__":
     if args.mp > 1:
         param_spec = set_partitions_rules(param_shape, mesh, _get_partition_rules_tp)
         batch_grad_spec = set_partitions_rules(param_shape, mesh, _get_partition_rules_tp_dp)
+        batch_loss_spec = NamedSharding(mesh, P(None, 'dp', None))
 
     else:
         param_spec = no_shard
         batch_grad_spec = no_shard 
-        batch_loss_spec = NamedSharding(mesh, P(None, 'dp'))
+        batch_loss_spec = NamedSharding(mesh, P(None, 'dp', None))
 
     configs = OmegaConf.load("conf/model_config.yaml")
     model_info = configs[MODEL_SIZE]
