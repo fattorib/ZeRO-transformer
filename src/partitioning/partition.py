@@ -93,7 +93,7 @@ def _get_partition_rules_tp(mesh: Mesh):
         (("(query_proj|key_proj|value_proj)", "kernel"), NamedSharding(mesh,PartitionSpec(None, "mp"))),
         (("residual_out", "kernel"), NamedSharding(mesh,PartitionSpec("mp", None))),
         (("(query_proj|key_proj|value_proj)", "bias"), NamedSharding(mesh,PartitionSpec(None))),
-        (("residual_out", "bias"), NamedSharding(mesh,PartitionSpec("None"))),
+        (("residual_out", "bias"), NamedSharding(mesh,PartitionSpec(None))),
         # MLP
         (("fc_in", "kernel"), NamedSharding(mesh,PartitionSpec(None, "mp"))),
         (("fc_residual", "kernel"), NamedSharding(mesh,PartitionSpec("mp", None))),
