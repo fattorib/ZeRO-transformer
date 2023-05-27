@@ -97,7 +97,7 @@ if __name__ == "__main__":
 
     if args.emulation:
         print("Emulating 8 TPU cores")
-        GRAD_ACCUM_STEPS = 32
+        GRAD_ACCUM_STEPS = 8
         BATCH_SIZE = 128
         CTX_LEN = 32
         NUM_PASSES = args.iter
@@ -143,12 +143,12 @@ if __name__ == "__main__":
     param_shape = jax.eval_shape(model.init, rng, batch_tok)
 
     if args.mp > 1:
-        param_spec = set_partitions_rules(param_shape, mesh, _get_partition_rules_tp)
-        batch_grad_spec = set_partitions_rules(param_shape, mesh, _get_partition_rules_tp_dp)
+        param_spec = set_partitions_rules(param_shape, mesh, _get_partition_rules_tp, axis_name = 'mp')
+        batch_grad_spec = set_partitions_rules(param_shape, mesh, _get_partition_rules_tp_dp, axis_name = 'mp')
         batch_loss_spec = NamedSharding(mesh, P(None, 'dp', None))
 
     else:
-        param_spec = no_shard
+        param_spec = set_partitions_rules(param_shape, mesh, _get_partition_rules_tp, axis_name = 'dp')
         batch_grad_spec = no_shard 
         batch_loss_spec = NamedSharding(mesh, P(None, 'dp', None))
 
