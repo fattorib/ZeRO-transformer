@@ -1,7 +1,7 @@
 test:
   embedding_dim: 64
   vocab_size: 256
-  num_head: 4
+  num_head: 8
   block_size: 32
   dropout: 0.0
   N: 2

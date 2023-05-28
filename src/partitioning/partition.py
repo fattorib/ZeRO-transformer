@@ -37,6 +37,7 @@ def _replacement_rules(rules):
 
     return replace
 
+
 def _get_partition_rules_dp(mesh: Mesh):
     """
     Follows Megatron-LM partition rules from
@@ -48,24 +49,36 @@ def _get_partition_rules_dp(mesh: Mesh):
     """
     return [
         (("wte", "embedding"), NamedSharding(mesh, PartitionSpec("dp", None, None))),
-        (("wpe", "embedding"), NamedSharding(mesh,PartitionSpec("dp", None, None))),
+        (("wpe", "embedding"), NamedSharding(mesh, PartitionSpec("dp", None, None))),
         # attention
-        (("(query_proj|key_proj|value_proj)", "kernel"), NamedSharding(mesh,PartitionSpec("dp", None, None))),
-        (("residual_out", "kernel"), NamedSharding(mesh,PartitionSpec("dp", None, None))),
-        (("(query_proj|key_proj|value_proj)", "bias"), NamedSharding(mesh,PartitionSpec("dp", None))),
-        (("residual_out", "bias"), NamedSharding(mesh,PartitionSpec("dp", None))),
+        (
+            ("(query_proj|key_proj|value_proj)", "kernel"),
+            NamedSharding(mesh, PartitionSpec("dp", None, None)),
+        ),
+        (
+            ("residual_out", "kernel"),
+            NamedSharding(mesh, PartitionSpec("dp", None, None)),
+        ),
+        (
+            ("(query_proj|key_proj|value_proj)", "bias"),
+            NamedSharding(mesh, PartitionSpec("dp", None)),
+        ),
+        (("residual_out", "bias"), NamedSharding(mesh, PartitionSpec("dp", None))),
         # MLP
-        (("fc_in", "kernel"), NamedSharding(mesh,PartitionSpec("dp", None, None))),
-        (("fc_residual", "kernel"), NamedSharding(mesh,PartitionSpec("dp", None, None))),
-        (("fc_in", "bias"), NamedSharding(mesh,PartitionSpec("dp", None))),
-        (("fc_residual", "bias"), NamedSharding(mesh,PartitionSpec("dp", None))),
+        (("fc_in", "kernel"), NamedSharding(mesh, PartitionSpec("dp", None, None))),
+        (
+            ("fc_residual", "kernel"),
+            NamedSharding(mesh, PartitionSpec("dp", None, None)),
+        ),
+        (("fc_in", "bias"), NamedSharding(mesh, PartitionSpec("dp", None))),
+        (("fc_residual", "bias"), NamedSharding(mesh, PartitionSpec("dp", None))),
         # layer norms
         (
             (
                 "LayerNorm_0",
                 "(bias|scale)",
             ),
-            NamedSharding(mesh,PartitionSpec("dp", None)),
+            NamedSharding(mesh, PartitionSpec("dp", None)),
         ),
         # layer norms
         (
@@ -73,11 +86,12 @@ def _get_partition_rules_dp(mesh: Mesh):
                 "LayerNorm_1",
                 "(bias|scale)",
             ),
-            NamedSharding(mesh,PartitionSpec("dp", None)),
+            NamedSharding(mesh, PartitionSpec("dp", None)),
         ),
     ]
 
-def _get_partition_rules_tp(mesh: Mesh, axis_name:str):
+
+def _get_partition_rules_tp(axis_name: str):
     """
     Follows Megatron-LM partition rules from
 
@@ -87,25 +101,37 @@ def _get_partition_rules_tp(mesh: Mesh, axis_name:str):
 
     """
     return [
-        (("wte", "embedding"), NamedSharding(mesh, PartitionSpec(axis_name, None))),
-        (("wpe", "embedding"), NamedSharding(mesh,PartitionSpec(axis_name, None))),
+        (("wte", "embedding"), PartitionSpec(axis_name, None)),
+        (("wpe", "embedding"), PartitionSpec(axis_name, None)),
         # attention
-        (("(query_proj|key_proj|value_proj)", "kernel"), NamedSharding(mesh,PartitionSpec(None, axis_name))),
-        (("residual_out", "kernel"), NamedSharding(mesh,PartitionSpec(axis_name, None))),
-        (("(query_proj|key_proj|value_proj)", "bias"), NamedSharding(mesh,PartitionSpec(None))),
-        (("residual_out", "bias"), NamedSharding(mesh,PartitionSpec(None))),
+        (
+            ("(query_proj|key_proj|value_proj)", "kernel"),
+            PartitionSpec(None, axis_name),
+        ),
+        (
+            ("residual_out", "kernel"),
+            PartitionSpec(axis_name, None),
+        ),
+        (
+            ("(query_proj|key_proj|value_proj)", "bias"),
+            PartitionSpec(None),
+        ),
+        (("residual_out", "bias"), PartitionSpec(None)),
         # MLP
-        (("fc_in", "kernel"), NamedSharding(mesh,PartitionSpec(None, axis_name))),
-        (("fc_residual", "kernel"), NamedSharding(mesh,PartitionSpec(axis_name, None))),
-        (("fc_in", "bias"), NamedSharding(mesh,PartitionSpec(None))),
-        (("fc_residual", "bias"), NamedSharding(mesh,PartitionSpec(None))),
+        (("fc_in", "kernel"), PartitionSpec(None, axis_name)),
+        (
+            ("fc_residual", "kernel"),
+            PartitionSpec(axis_name, None),
+        ),
+        (("fc_in", "bias"), PartitionSpec(None)),
+        (("fc_residual", "bias"), PartitionSpec(None)),
         # layer norms
         (
             (
                 "LayerNorm_0",
                 "(bias|scale)",
             ),
-            NamedSharding(mesh,PartitionSpec(None)),
+            PartitionSpec(None),
         ),
         # layer norms
         (
@@ -113,11 +139,12 @@ def _get_partition_rules_tp(mesh: Mesh, axis_name:str):
                 "LayerNorm_1",
                 "(bias|scale)",
             ),
-            NamedSharding(mesh,PartitionSpec(None)),
+            PartitionSpec(None),
         ),
     ]
 
-def _get_partition_rules_tp_dp(mesh: Mesh, axis_name:str):
+
+def _get_partition_rules_tp_dp(mesh: Mesh, axis_name: str):
     """
     Follows Megatron-LM partition rules from
 
@@ -127,25 +154,46 @@ def _get_partition_rules_tp_dp(mesh: Mesh, axis_name:str):
 
     """
     return [
-        (("wte", "embedding"), NamedSharding(mesh, PartitionSpec("dp",axis_name, None))),
-        (("wpe", "embedding"), NamedSharding(mesh,PartitionSpec("dp",axis_name, None))),
+        (
+            ("wte", "embedding"),
+            NamedSharding(mesh, PartitionSpec("dp", axis_name, None)),
+        ),
+        (
+            ("wpe", "embedding"),
+            NamedSharding(mesh, PartitionSpec("dp", axis_name, None)),
+        ),
         # attention
-        (("(query_proj|key_proj|value_proj)", "kernel"), NamedSharding(mesh,PartitionSpec("dp",None, axis_name))),
-        (("residual_out", "kernel"), NamedSharding(mesh,PartitionSpec("dp",axis_name, None))),
-        (("(query_proj|key_proj|value_proj)", "bias"), NamedSharding(mesh,PartitionSpec("dp",None))),
-        (("residual_out", "bias"), NamedSharding(mesh,PartitionSpec("dp",axis_name))),
+        (
+            ("(query_proj|key_proj|value_proj)", "kernel"),
+            NamedSharding(mesh, PartitionSpec("dp", None, axis_name)),
+        ),
+        (
+            ("residual_out", "kernel"),
+            NamedSharding(mesh, PartitionSpec("dp", axis_name, None)),
+        ),
+        (
+            ("(query_proj|key_proj|value_proj)", "bias"),
+            NamedSharding(mesh, PartitionSpec("dp", None)),
+        ),
+        (("residual_out", "bias"), NamedSharding(mesh, PartitionSpec("dp", axis_name))),
         # MLP
-        (("fc_in", "kernel"), NamedSharding(mesh,PartitionSpec("dp",None, axis_name))),
-        (("fc_residual", "kernel"), NamedSharding(mesh,PartitionSpec("dp",axis_name, None))),
-        (("fc_in", "bias"), NamedSharding(mesh,PartitionSpec("dp",None))),
-        (("fc_residual", "bias"), NamedSharding(mesh,PartitionSpec("dp",None))),
+        (
+            ("fc_in", "kernel"),
+            NamedSharding(mesh, PartitionSpec("dp", None, axis_name)),
+        ),
+        (
+            ("fc_residual", "kernel"),
+            NamedSharding(mesh, PartitionSpec("dp", axis_name, None)),
+        ),
+        (("fc_in", "bias"), NamedSharding(mesh, PartitionSpec("dp", None))),
+        (("fc_residual", "bias"), NamedSharding(mesh, PartitionSpec("dp", None))),
         # layer norms
         (
             (
                 "LayerNorm_0",
                 "(bias|scale)",
             ),
-            NamedSharding(mesh,PartitionSpec("dp",None)),
+            NamedSharding(mesh, PartitionSpec("dp", None)),
         ),
         # layer norms
         (
@@ -153,17 +201,20 @@ def _get_partition_rules_tp_dp(mesh: Mesh, axis_name:str):
                 "LayerNorm_1",
                 "(bias|scale)",
             ),
-            NamedSharding(mesh,PartitionSpec("dp",None)),
+            NamedSharding(mesh, PartitionSpec("dp", None)),
         ),
     ]
 
-def set_partitions_rules(in_dict, mesh: Mesh, rules_func: Callable, axis_name: str = 'mp'):
+
+def set_partitions_rules(
+    in_dict, mesh: Mesh, rules_func: Callable, axis_name: str = "mp"
+):
     """
     Takes a FrozenDict and returns the associated PartitionSpec rule
     for all groups of parameters
     """
 
-    rules = rules_func(mesh, axis_name)
+    rules = rules_func(axis_name)
     replace = _replacement_rules(rules)
 
     _unmatched = object()

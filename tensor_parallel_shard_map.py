@@ -159,8 +159,7 @@ if __name__ == "__main__":
 
     params = jax.jit(init)(rng, (jnp.ones((1, CTX_LEN), dtype=jnp.int32)))
 
-    param_shape = jax.tree_map(lambda x: x.shape, params) 
-
+    param_shape = jax.tree_map(lambda x: x.size, params) # we literally just do this to get keys
     if args.mp > 1:
         param_spec = set_partitions_rules(
             param_shape, mesh, _get_partition_rules_tp, axis_name="mp"
@@ -214,8 +213,11 @@ if __name__ == "__main__":
                 )
                 grads, metrics = train_step_tp(params, batch)
 
-        print(metrics)
+                params = jax.tree_map(lambda x,y: x - 0.01*y, params, grads)
+
+        jnp.zeros((10,10)).block_until_ready()
         total_time = time() - start
+        print(metrics)
 
         print(
             f"TP Step - Global BS {BATCH_SIZE} - accum steps {GRAD_ACCUM_STEPS} - Num Executions {NUM_PASSES}"
@@ -223,7 +225,8 @@ if __name__ == "__main__":
         print(f"Mesh Layout (dp,mp): {(args.dp,args.mp)}")
         print(f"Model Size: {MODEL_SIZE}")
         print(f"Total Time: {total_time:.4f}s")
-        param_count = sum(p.size for p in jax.tree_util.tree_leaves(param_shape))
+
+        param_count = sum(p for p in jax.tree_util.tree_leaves(param_shape))
 
         flops_per_token = 6 * param_count + 12 * L * H * Q * T
         flops_per_fwdbwd = flops_per_token * T

@@ -11,7 +11,6 @@ from omegaconf import OmegaConf
 
 from src.models.layers import CausalAttention, MLPBlock
 from src.utils.losses import cross_entropy_loss
-from einops import rearrange
 
 
 class TransformerBlock(nn.Module):

@@ -136,7 +136,7 @@ class ALiBi(nn.Module):
         def get_slopes_power_of_2(n):
             start = 2 ** (-(2 ** -(math.log2(n) - 3)))
             ratio = start
-            return [start * ratio**i for i in range(n)]
+            return [start * ratio ** i for i in range(n)]
 
         if math.log2(n).is_integer():
             return get_slopes_power_of_2(n)
@@ -157,7 +157,7 @@ class ALiBi(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         B, T, C = x.size()
 
-        k,q,v = self.key(x), self.query(x), self.value(x)
+        k, q, v = self.key(x), self.query(x), self.value(x)
         k = rearrange(
             k, "b t (nh hd) -> b t nh hd", nh=self.n_head, hd=C // self.n_head
         )
@@ -186,8 +186,6 @@ class ALiBi(nn.Module):
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
 
-        
-
         # Creation of ALiBi distance matrix -> Computed on first forward pass
         # and stored. If CTX changes, we update this
         if self.cached_ctx != seq_len_k:
@@ -208,7 +206,9 @@ class ALiBi(nn.Module):
 
             self.alibi_cache = a * self.slopes.view(self.slopes.shape[0], 1, 1)
             self.cached_ctx = seq_len_k
-            self.alibi_cache = self.alibi_cache.masked_fill(self.mask[:, :, :T, :T] == 0, float("-inf"))
+            self.alibi_cache = self.alibi_cache.masked_fill(
+                self.mask[:, :, :T, :T] == 0, float("-inf")
+            )
 
         if seq_len_k != seq_len_q:
             assert (
@@ -232,9 +232,11 @@ class ALiBi(nn.Module):
             a = a * self.slopes.view(self.slopes.shape[0], 1, 1)
 
             self.alibi_cache = a[:, seq_len_k - 1, :].view(a.shape[0], 1, a.shape[2])
-            self.alibi_cache = self.alibi_cache.masked_fill(self.mask[:, :, :T, :T] == 0, float("-inf"))
+            self.alibi_cache = self.alibi_cache.masked_fill(
+                self.mask[:, :, :T, :T] == 0, float("-inf")
+            )
 
-        y = nn.functional.scaled_dot_product_attention(q,k,v, self.alibi_cache)
+        y = nn.functional.scaled_dot_product_attention(q, k, v, self.alibi_cache)
 
         y = (
             rearrange(y, "b n t h -> b t n h").contiguous().view(B, T, C)

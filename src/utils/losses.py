@@ -16,6 +16,6 @@ def cross_entropy_loss(labels: jnp.array, logits: jnp.array) -> jnp.array:
         jnp.array: Loss
     """
 
-    return (
-        -jnp.sum(labels * jax.nn.log_softmax(logits.astype(jnp.float32), axis=-1), axis=-1)
+    return -jnp.sum(
+        labels * jax.nn.log_softmax(logits.astype(jnp.float32), axis=-1), axis=-1
     )
