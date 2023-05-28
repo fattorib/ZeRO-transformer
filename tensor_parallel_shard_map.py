@@ -9,21 +9,18 @@ import optax
 from jax.sharding import Mesh
 from omegaconf import OmegaConf
 from tqdm import tqdm
-from jax.experimental import mesh_utils
 from jax.sharding import PartitionSpec as P
 from src.models.GPT import model_getter
 from src.partitioning.partition import (
     create_opt_spec,
     set_partitions_rules,
-    _get_partition_rules_dp,
     _get_partition_rules_tp,
-    _get_partition_rules_tp_dp,
 )
-from src.training.training_utils import initialized
 import jax.numpy as jnp
 from typing import Any
-from jax.lax import with_sharding_constraint
 from jax.experimental.shard_map import shard_map
+from jax.experimental.pjit import pjit
+from jax.lax import with_sharding_constraint
 
 
 def parse():
@@ -86,6 +83,19 @@ def train_step(
 
     return grads, metrics
 
+def update_opt_state(
+    params: Any,
+    grads: Any,
+    opt_state: Any,
+    optimizer: Any,
+    tp_spec: Any
+):
+    # updates the optimizer state and params
+    params = with_sharding_constraint(params, tp_spec)
+    grads = with_sharding_constraint(grads, tp_spec)
+    updates, new_opt_state = optimizer.update(grads, opt_state, params)
+    new_params = optax.apply_updates(params, updates)
+    return new_params, new_opt_state
 
 # Emulating 8 TPU cores
 import os
@@ -160,12 +170,38 @@ if __name__ == "__main__":
     params = jax.jit(init)(rng, (jnp.ones((1, CTX_LEN), dtype=jnp.int32)))
 
     param_shape = jax.tree_map(lambda x: x.size, params) # we literally just do this to get keys
+    
     if args.mp > 1:
         param_spec = set_partitions_rules(
             param_shape, mesh, _get_partition_rules_tp, axis_name="mp"
         )
-        batch_loss_spec = P(None, "dp", None)
         params = shard_map(lambda x:x, mesh, in_specs=no_shard, out_specs=param_spec)(params)
+
+        batch_loss_spec = P(None, "dp", None)
+        
+        # optimizer state init 
+        mask = jax.tree_map(
+            lambda x: x.ndim != 1 and x.shape != (model.block_size, model.embedding_dim),
+            params,
+        )
+
+        tx = optax.chain(
+            optax.clip(1.0),
+            optax.adamw(
+                learning_rate=0.001,
+                weight_decay=0.1,
+                mask=mask,
+                b2=0.95,
+            ),
+        )
+        
+        opt_state_shapes = jax.eval_shape(tx.init, params)
+        opt_state_spec = create_opt_spec(param_spec, opt_state_shapes)
+
+        with mesh:
+            opt_state = pjit(
+                    tx.init, in_axis_resources=(param_spec,), out_axis_resources=opt_state_spec,
+            )(params)
 
     else:
         param_spec = no_shard
@@ -183,6 +219,7 @@ if __name__ == "__main__":
 
     # shard model across desired TP axes
     with mesh:
+        
         train_step_tp = jax.jit(
             shard_map(
                 partial(train_step, model = model, accum_steps=GRAD_ACCUM_STEPS),
@@ -193,11 +230,19 @@ if __name__ == "__main__":
             )
         )
 
+        update_opt_step_tp = pjit(
+            partial(update_opt_state, optimizer = tx, tp_spec=param_spec), 
+            in_axis_resources=(param_spec, param_spec, opt_state_spec),
+            out_axis_resources= (param_spec, opt_state_spec)
+        )
+
         rng, dropout_rng = jax.random.split(rng, 2)
 
         init_batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
 
         grads, metrics = train_step_tp(params, init_batch)
+
+        params, opt_state = update_opt_step_tp(params, grads, opt_state)
 
         start = time()
 
@@ -212,8 +257,7 @@ if __name__ == "__main__":
                     shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32
                 )
                 grads, metrics = train_step_tp(params, batch)
-
-                params = jax.tree_map(lambda x,y: x - 0.01*y, params, grads)
+                params, opt_state = update_opt_step_tp(params, grads, opt_state)
 
         jnp.zeros((10,10)).block_until_ready()
         total_time = time() - start
