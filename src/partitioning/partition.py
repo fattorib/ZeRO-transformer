@@ -5,15 +5,12 @@ Modified from: https://github.com/borisdayma/dalle-mini/blob/main/src/dalle_mini
 """
 
 import re
-
 import jax
-import numpy as np
 import optax
 from flax.core import FrozenDict
 from flax.core.frozen_dict import freeze
 from flax.traverse_util import flatten_dict, unflatten_dict
 from jax.sharding import Mesh, PartitionSpec
-from jax.sharding import NamedSharding
 from typing import Callable
 
 
@@ -36,60 +33,6 @@ def _replacement_rules(rules):
         return val
 
     return replace
-
-
-def _get_partition_rules_dp(mesh: Mesh):
-    """
-    Follows Megatron-LM partition rules from
-
-    `Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism`
-    by Shoeybi et al.
-    <https://arxiv.org/abs/1909.08053>
-
-    """
-    return [
-        (("wte", "embedding"), NamedSharding(mesh, PartitionSpec("dp", None, None))),
-        (("wpe", "embedding"), NamedSharding(mesh, PartitionSpec("dp", None, None))),
-        # attention
-        (
-            ("(query_proj|key_proj|value_proj)", "kernel"),
-            NamedSharding(mesh, PartitionSpec("dp", None, None)),
-        ),
-        (
-            ("residual_out", "kernel"),
-            NamedSharding(mesh, PartitionSpec("dp", None, None)),
-        ),
-        (
-            ("(query_proj|key_proj|value_proj)", "bias"),
-            NamedSharding(mesh, PartitionSpec("dp", None)),
-        ),
-        (("residual_out", "bias"), NamedSharding(mesh, PartitionSpec("dp", None))),
-        # MLP
-        (("fc_in", "kernel"), NamedSharding(mesh, PartitionSpec("dp", None, None))),
-        (
-            ("fc_residual", "kernel"),
-            NamedSharding(mesh, PartitionSpec("dp", None, None)),
-        ),
-        (("fc_in", "bias"), NamedSharding(mesh, PartitionSpec("dp", None))),
-        (("fc_residual", "bias"), NamedSharding(mesh, PartitionSpec("dp", None))),
-        # layer norms
-        (
-            (
-                "LayerNorm_0",
-                "(bias|scale)",
-            ),
-            NamedSharding(mesh, PartitionSpec("dp", None)),
-        ),
-        # layer norms
-        (
-            (
-                "LayerNorm_1",
-                "(bias|scale)",
-            ),
-            NamedSharding(mesh, PartitionSpec("dp", None)),
-        ),
-    ]
-
 
 def _get_partition_rules_tp(axis_name: str):
     """
@@ -144,68 +87,6 @@ def _get_partition_rules_tp(axis_name: str):
     ]
 
 
-def _get_partition_rules_tp_dp(mesh: Mesh, axis_name: str):
-    """
-    Follows Megatron-LM partition rules from
-
-    `Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism`
-    by Shoeybi et al.
-    <https://arxiv.org/abs/1909.08053>
-
-    """
-    return [
-        (
-            ("wte", "embedding"),
-            NamedSharding(mesh, PartitionSpec("dp", axis_name, None)),
-        ),
-        (
-            ("wpe", "embedding"),
-            NamedSharding(mesh, PartitionSpec("dp", axis_name, None)),
-        ),
-        # attention
-        (
-            ("(query_proj|key_proj|value_proj)", "kernel"),
-            NamedSharding(mesh, PartitionSpec("dp", None, axis_name)),
-        ),
-        (
-            ("residual_out", "kernel"),
-            NamedSharding(mesh, PartitionSpec("dp", axis_name, None)),
-        ),
-        (
-            ("(query_proj|key_proj|value_proj)", "bias"),
-            NamedSharding(mesh, PartitionSpec("dp", None)),
-        ),
-        (("residual_out", "bias"), NamedSharding(mesh, PartitionSpec("dp", axis_name))),
-        # MLP
-        (
-            ("fc_in", "kernel"),
-            NamedSharding(mesh, PartitionSpec("dp", None, axis_name)),
-        ),
-        (
-            ("fc_residual", "kernel"),
-            NamedSharding(mesh, PartitionSpec("dp", axis_name, None)),
-        ),
-        (("fc_in", "bias"), NamedSharding(mesh, PartitionSpec("dp", None))),
-        (("fc_residual", "bias"), NamedSharding(mesh, PartitionSpec("dp", None))),
-        # layer norms
-        (
-            (
-                "LayerNorm_0",
-                "(bias|scale)",
-            ),
-            NamedSharding(mesh, PartitionSpec("dp", None)),
-        ),
-        # layer norms
-        (
-            (
-                "LayerNorm_1",
-                "(bias|scale)",
-            ),
-            NamedSharding(mesh, PartitionSpec("dp", None)),
-        ),
-    ]
-
-
 def set_partitions_rules(
     in_dict, mesh: Mesh, rules_func: Callable, axis_name: str = "mp"
 ):
@@ -244,8 +125,8 @@ def create_opt_spec(param_spec, opt_state_shapes):
             x, (FrozenDict,)
         ):  # if we get first/second moment buffers, clone PSpec of the params
             return param_spec
-        return None  # else, PSpec of None (this is to be copied across all devices) (stuff like GA step, skip_step, etc)
-
+        return PartitionSpec() # else, PSpec of None (this is to be copied across all devices) (stuff like GA step, skip_step, etc)
+    
     opt_state_spec = jax.tree_util.tree_map(
         get_opt_spec,
         opt_state_shapes,

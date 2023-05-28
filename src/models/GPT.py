@@ -23,6 +23,7 @@ class TransformerBlock(nn.Module):
     N: int = None
     dtype: Any = jnp.float32
     alibi_attn: bool = True
+    tp_comms: bool = True
 
     @nn.compact
     def __call__(
@@ -39,6 +40,7 @@ class TransformerBlock(nn.Module):
             self.N,
             self.alibi_attn,
             self.dtype,
+            tp_comms=self.tp_comms
         )(nn.LayerNorm(dtype=self.dtype, use_bias=False)(x), train)
         x = x + attn_out
         x = x + MLPBlock(
@@ -46,6 +48,7 @@ class TransformerBlock(nn.Module):
             dropout=self.residual_dropout,
             N=self.N,
             dtype=self.dtype,
+            tp_comms=self.tp_comms
         )(nn.LayerNorm(dtype=self.dtype, use_bias=False)(x), train)
         return x
 
@@ -63,6 +66,7 @@ class Transformer(nn.Module):
     N: int = None
     dtype: Any = jnp.float32
     alibi_attn: bool = False
+    tp_comms: bool = True
 
     @nn.compact
     def __call__(
@@ -93,6 +97,7 @@ class Transformer(nn.Module):
                 self.N,
                 self.dtype,
                 self.alibi_attn,
+                self.tp_comms
             )(out, train)
 
         out = nn.LayerNorm(dtype=self.dtype, use_bias=False)(out)

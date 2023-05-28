@@ -6,9 +6,8 @@ import flax.linen as nn
 import jax
 import jax.nn.initializers as initializers
 import jax.numpy as jnp
-from flax.linen import partitioning as nn_partitioning
 from einops import rearrange
-from src.models.replicated_utils import *
+from src.models.replicated_utils import f_psum, g_psum
 
 
 def get_slopes(n: int) -> List:
@@ -48,6 +47,7 @@ class MLPBlock(nn.Module):
     dimension_multiplier: int = 4
     dropout: float = 0.0
     N: int = None
+    tp_comms: bool = True
 
     dtype: Any = jnp.float32
 
@@ -55,7 +55,8 @@ class MLPBlock(nn.Module):
     def __call__(self, x: jnp.array, train: bool) -> jnp.array:
         dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
 
-        x = f_psum(x)
+        if self.tp_comms:
+            x = f_psum(x)
 
         x = nn.Dense(
             features=self.dimension_multiplier * self.embedding_dim,
@@ -74,7 +75,9 @@ class MLPBlock(nn.Module):
             dtype=self.dtype,
             use_bias=False,
         )(x)
-        out = g_psum(out)
+        if self.tp_comms:
+            
+            out = g_psum(out)
         return dropout()(out)
 
 
@@ -95,6 +98,7 @@ class CausalAttention(nn.Module):
     N: int = None
     alibi_attn: bool = False
     dtype: Any = jnp.float32
+    tp_comms: bool = True
 
     def setup(self):
         self.slopes = jnp.array(get_slopes(self.num_head))
@@ -112,7 +116,8 @@ class CausalAttention(nn.Module):
         dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
         T, C = x.shape[-2:]
 
-        x = f_psum(x)
+        if self.tp_comms:
+            x = f_psum(x)
 
         key = nn.Dense(
             name="key_proj",
@@ -155,8 +160,9 @@ class CausalAttention(nn.Module):
         attn_full = (query @ key) / jnp.sqrt(key.shape[-1])  # Shape is (B, nh, sq, sk)
 
         if self.alibi_attn:
-            # NOTE: We are fixing the ALiBi mask since this is for training, during inference or is seq_len changes this will cause issues
-            attn_full = attn_full + self.alibi_mask[:, :T, :T]
+            # NOTE: We are fixing the ALiBi mask since this is for training, 
+            # during inference or is seq_len changes this will cause issues
+            attn_full = attn_full + self.alibi_mask
 
         masked_attn = jnp.where(
             self.mask, attn_full.astype(jnp.float32), jnp.finfo(jnp.float32).min
@@ -178,6 +184,7 @@ class CausalAttention(nn.Module):
             use_bias=False,
         )(attn_out)
 
-        out = g_psum(out)
+        if self.tp_comms:
+            out = g_psum(out)
 
         return dropout()(out)
