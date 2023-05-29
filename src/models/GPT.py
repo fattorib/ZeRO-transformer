@@ -33,11 +33,11 @@ class TransformerBlock(nn.Module):
         train: bool = False,
     ) -> jnp.array:
         
-        x = f_psum(x)
+        if self.tp_comms:
+            x = f_psum(x)
+        
         x_ln = nn.LayerNorm(dtype=self.dtype, use_bias=False)(x)
-        
-        
-
+    
         attn_out = CausalAttention(
             self.embedding_dim,
             self.num_head,
@@ -48,7 +48,6 @@ class TransformerBlock(nn.Module):
             self.dtype,
             tp_comms=self.tp_comms
         )(x_ln, train)
-        # x = x + attn_out
         mlp_out = MLPBlock(
             self.embedding_dim,
             dropout=self.residual_dropout,
@@ -56,7 +55,13 @@ class TransformerBlock(nn.Module):
             dtype=self.dtype,
             tp_comms=self.tp_comms
         )(x_ln, train)
-        return x_ln + g_psum(attn_out + mlp_out)
+
+        if self.tp_comms:
+            out = x_ln + g_psum(attn_out + mlp_out)
+        else:
+            out = x_ln + attn_out + mlp_out
+
+        return out 
 
 
 class Transformer(nn.Module):
