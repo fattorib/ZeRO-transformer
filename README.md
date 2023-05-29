@@ -1,3 +1,5 @@
+This branch is for Tensor-Parallelism using JAX's ```shard_map``` operator. It is a work in progress.
+
 # Table of Contents
 
 1. [ZeRO Optimizer Sharding in Jax](#zero-optimizer-sharding-in-jax)
