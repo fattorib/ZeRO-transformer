@@ -75,6 +75,8 @@ def train_step(
         cumul_minibatch_step, init=(jnp.zeros(()), grad_init), xs=batch
     )
 
+    grads = jax.lax.pmean(grads, axis_name = 'dp')
+
     loss, grads = jax.tree_util.tree_map(lambda x: x / accum_steps, (loss, grads))
 
     metrics = {
@@ -124,7 +126,7 @@ if __name__ == "__main__":
 
     else:
         GRAD_ACCUM_STEPS = 32
-        BATCH_SIZE = 512
+        BATCH_SIZE = 128 # assuming 4 hosts and a total BS of 0.5M tokens
         CTX_LEN = 1024
         NUM_PASSES = args.iter
         MODEL_SIZE = "base"
@@ -167,7 +169,7 @@ if __name__ == "__main__":
         return model.init(rng, init_batch, None, False)
 
     params = jax.jit(init)(rng, (jnp.ones((1, CTX_LEN), dtype=jnp.int32)))
-
+        
     param_shape = jax.tree_map(lambda x: x.size, params) # we literally just do this to get keys
     
     if args.mp > 1:
@@ -183,15 +185,10 @@ if __name__ == "__main__":
             lambda x: x.ndim != 1 and x.shape != (model.block_size, model.embedding_dim),
             params,
         )
-
+        
+        # not scale invariant!
         tx = optax.chain(
             optax.clip(1.0),
-            # optax.adamw(
-            #     learning_rate=0.001,
-            #     weight_decay=0.1,
-            #     mask=mask,
-            #     b2=0.95,
-            # ),
             optax.lion(
                 learning_rate=0.001,
                 weight_decay=0.1,
@@ -218,12 +215,6 @@ if __name__ == "__main__":
 
         tx = optax.chain(
             optax.clip(1.0),
-            # optax.adamw(
-            #     learning_rate=0.001,
-            #     weight_decay=0.1,
-            #     mask=mask,
-            #     b2=0.95,
-            # ),
             optax.lion(
                 learning_rate=0.001,
                 weight_decay=0.1,
@@ -249,7 +240,6 @@ if __name__ == "__main__":
         CTX_LEN,
     )
 
-    # shard model across desired TP axes
     with mesh:
         
         train_step_tp = jax.jit(
@@ -265,7 +255,8 @@ if __name__ == "__main__":
         update_opt_step_tp = pjit(
             partial(update_opt_state, optimizer = tx, tp_spec=param_spec), 
             in_axis_resources=(param_spec, param_spec, opt_state_spec),
-            out_axis_resources= (param_spec, opt_state_spec)
+            out_axis_resources= (param_spec, opt_state_spec),
+            donate_argnums=0
         )
 
         rng, dropout_rng = jax.random.split(rng, 2)
