@@ -123,7 +123,7 @@ if __name__ == "__main__":
         maybe_profiler = contextlib.nullcontext()
 
     else:
-        GRAD_ACCUM_STEPS = 64
+        GRAD_ACCUM_STEPS = 32
         BATCH_SIZE = 512
         CTX_LEN = 1024
         NUM_PASSES = args.iter
@@ -210,6 +210,34 @@ if __name__ == "__main__":
     else:
         param_spec = no_shard
         batch_loss_spec = P(None, "dp", None)
+
+        mask = jax.tree_map(
+            lambda x: x.ndim != 1 and x.shape != (model.block_size, model.embedding_dim),
+            params,
+        )
+
+        tx = optax.chain(
+            optax.clip(1.0),
+            # optax.adamw(
+            #     learning_rate=0.001,
+            #     weight_decay=0.1,
+            #     mask=mask,
+            #     b2=0.95,
+            # ),
+            optax.lion(
+                learning_rate=0.001,
+                weight_decay=0.1,
+                mask=mask,
+            )
+        )
+        
+        opt_state_shapes = jax.eval_shape(tx.init, params)
+        opt_state_spec = create_opt_spec(param_spec, opt_state_shapes)
+
+        with mesh:
+            opt_state = pjit(
+                    tx.init, in_axis_resources=(param_spec,), out_axis_resources=opt_state_spec,
+            )(params)
 
     configs = OmegaConf.load("conf/model_config.yaml")
     model_info = configs[MODEL_SIZE]
