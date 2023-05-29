@@ -11,6 +11,7 @@ from omegaconf import OmegaConf
 
 from src.models.layers import CausalAttention, MLPBlock
 from src.utils.losses import cross_entropy_loss
+from src.models.replicated_utils import f_psum, g_psum
 
 
 class TransformerBlock(nn.Module):
@@ -31,6 +32,11 @@ class TransformerBlock(nn.Module):
         x: jnp.array,
         train: bool = False,
     ) -> jnp.array:
+        
+        x = f_psum(x)
+        x_ln = nn.LayerNorm(dtype=self.dtype, use_bias=False)(x)
+        
+        
 
         attn_out = CausalAttention(
             self.embedding_dim,
@@ -41,16 +47,16 @@ class TransformerBlock(nn.Module):
             self.alibi_attn,
             self.dtype,
             tp_comms=self.tp_comms
-        )(nn.LayerNorm(dtype=self.dtype, use_bias=False)(x), train)
-        x = x + attn_out
-        x = x + MLPBlock(
+        )(x_ln, train)
+        # x = x + attn_out
+        mlp_out = MLPBlock(
             self.embedding_dim,
             dropout=self.residual_dropout,
             N=self.N,
             dtype=self.dtype,
             tp_comms=self.tp_comms
-        )(nn.LayerNorm(dtype=self.dtype, use_bias=False)(x), train)
-        return x
+        )(x_ln, train)
+        return x_ln + g_psum(attn_out + mlp_out)
 
 
 class Transformer(nn.Module):
