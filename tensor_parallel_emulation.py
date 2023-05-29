@@ -13,21 +13,30 @@ from jax.experimental import mesh_utils
 from jax.sharding import NamedSharding
 from jax.sharding import PartitionSpec as P
 from src.models.GPT import model_getter
-from src.partitioning.partition import create_opt_spec, set_partitions_rules, _get_partition_rules_dp,_get_partition_rules_tp,_get_partition_rules_tp_dp
+from src.partitioning.partition import (
+    create_opt_spec,
+    set_partitions_rules,
+    _get_partition_rules_dp,
+    _get_partition_rules_tp,
+    _get_partition_rules_tp_dp,
+)
 from src.training.training_utils import initialized
-import jax.numpy as jnp 
+import jax.numpy as jnp
 from typing import Any
 from jax.lax import with_sharding_constraint
 
 
 def parse():
-    parser = argparse.ArgumentParser(description="pjit/jit training emulator & benchmarker")
+    parser = argparse.ArgumentParser(
+        description="pjit/jit training emulator & benchmarker"
+    )
     parser.add_argument("--emulation", default=False, action="store_true")
     parser.add_argument("--iter", default=10, type=int)
     parser.add_argument("--dp", default=4, type=int)
     parser.add_argument("--mp", default=2, type=int)
     args = parser.parse_args()
     return args
+
 
 def train_step(
     params: Any,
@@ -41,9 +50,9 @@ def train_step(
     """
     Computes loss/grads for a single batch of data, optionally with gradient accumulation
     """
-    _,context = batch.shape
+    _, context = batch.shape
 
-    # reshape to add a microbatch dimension 
+    # reshape to add a microbatch dimension
     batch = batch.reshape(accum_steps, -1, context)
     batch = with_sharding_constraint(batch, batch_loss_spec)
     params = with_sharding_constraint(to_bf16(params), model_mp_spec)
@@ -56,29 +65,31 @@ def train_step(
             train=True,
             rngs={"dropout": rng_key},
         )
-        return loss 
+        return loss
 
     def train_batch_loss(params, batch):
-        per_ex_loss = jax.vmap(loss_fn, in_axes=(None,0), out_axes = (0), axis_name='batch')(params,batch)
-        return jnp.mean(per_ex_loss, axis = 0)
+        per_ex_loss = jax.vmap(
+            loss_fn, in_axes=(None, 0), out_axes=(0), axis_name="batch"
+        )(params, batch)
+        return jnp.mean(per_ex_loss, axis=0)
 
     grad_fn = jax.value_and_grad(train_batch_loss)
-    
+
     # accumulate gradients
     def cumul_minibatch_step(carry, x_y):
         cumul_loss, cumul_grads = carry
         minibatch = x_y
-        minibatch = jnp.expand_dims(minibatch, axis = 1) # yuck
+        minibatch = jnp.expand_dims(minibatch, axis=1)  # yuck
         loss, grads = grad_fn(params, minibatch)
-        cumul_grads = jax.tree_map(
-            jnp.add, cumul_grads, grads
-        )        
-        return (cumul_loss+loss, cumul_grads), None 
-    
+        cumul_grads = jax.tree_map(jnp.add, cumul_grads, grads)
+        return (cumul_loss + loss, cumul_grads), None
+
     grad_init = to_bf16(jax.tree_util.tree_map(jnp.zeros_like, params))
 
-    (loss,grads), _ = jax.lax.scan(cumul_minibatch_step, init = (jnp.zeros(()), grad_init), xs = batch)
-            
+    (loss, grads), _ = jax.lax.scan(
+        cumul_minibatch_step, init=(jnp.zeros(()), grad_init), xs=batch
+    )
+
     loss, grads = jax.tree_util.tree_map(lambda x: x / accum_steps, (loss, grads))
 
     metrics = {
@@ -88,8 +99,10 @@ def train_step(
 
     return grads, metrics
 
+
 # Emulating 8 TPU cores
 import os
+
 os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=8"
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
@@ -108,8 +121,9 @@ if __name__ == "__main__":
 
         def to_bf16(t):
             return t
-        
-        import contextlib 
+
+        import contextlib
+
         maybe_profiler = contextlib.nullcontext()
 
     else:
@@ -124,20 +138,22 @@ if __name__ == "__main__":
             return jax.tree_map(
                 lambda x: x.astype(jnp.bfloat16) if x.dtype == jnp.float32 else x, t
             )
-        
-        maybe_profiler = jax.profiler.trace("jax-trace-pjit", create_perfetto_link=False)
+
+        maybe_profiler = jax.profiler.trace(
+            "jax-trace-pjit", create_perfetto_link=False
+        )
 
     # Setting up device mesh
     if args.mp > 1:
-        mesh = Mesh(np.array(jax.devices()).reshape(args.dp,args.mp), ('dp','mp'))
+        mesh = Mesh(np.array(jax.devices()).reshape(args.dp, args.mp), ("dp", "mp"))
 
     else:
-        mesh = Mesh(np.array(jax.devices()).reshape(args.dp), ('dp'))
+        mesh = Mesh(np.array(jax.devices()).reshape(args.dp), ("dp"))
 
     # indicates batch dim is split across dp axis
-    batch_sharding = NamedSharding(mesh, P('dp'))
+    batch_sharding = NamedSharding(mesh, P("dp"))
     no_shard = NamedSharding(mesh, None)
-    
+
     # # Setting up model + param spec
     model = model_getter(MODEL_SIZE, return_cfg=False)
 
@@ -146,14 +162,18 @@ if __name__ == "__main__":
     param_shape = jax.eval_shape(model.init, rng, batch_tok)
 
     if args.mp > 1:
-        param_spec = set_partitions_rules(param_shape, mesh, _get_partition_rules_tp, axis_name = 'mp')
-        batch_grad_spec = set_partitions_rules(param_shape, mesh, _get_partition_rules_tp_dp, axis_name = 'mp')
-        batch_loss_spec = NamedSharding(mesh, P(None, 'dp', None))
+        param_spec = set_partitions_rules(
+            param_shape, mesh, _get_partition_rules_tp, axis_name="mp"
+        )
+        batch_grad_spec = set_partitions_rules(
+            param_shape, mesh, _get_partition_rules_tp_dp, axis_name="mp"
+        )
+        batch_loss_spec = NamedSharding(mesh, P(None, "dp", None))
 
     else:
         param_spec = no_shard
-        batch_grad_spec = no_shard 
-        batch_loss_spec = NamedSharding(mesh, P(None, 'dp', None))
+        batch_grad_spec = no_shard
+        batch_loss_spec = NamedSharding(mesh, P(None, "dp", None))
 
     configs = OmegaConf.load("conf/model_config.yaml")
     model_info = configs[MODEL_SIZE]
@@ -169,11 +189,17 @@ if __name__ == "__main__":
     params = jax.device_put(params, param_spec)
 
     with mesh:
-        #TODO: Rng sharding is not currently correct
+        # TODO: Rng sharding is not currently correct
         train_step_dp = jax.jit(
-            partial(train_step, model=model, accum_steps=GRAD_ACCUM_STEPS, model_mp_spec = param_spec,batch_loss_spec = batch_loss_spec),
+            partial(
+                train_step,
+                model=model,
+                accum_steps=GRAD_ACCUM_STEPS,
+                model_mp_spec=param_spec,
+                batch_loss_spec=batch_loss_spec,
+            ),
             in_shardings=(param_spec, batch_sharding, no_shard),
-            out_shardings=(param_spec,no_shard),
+            out_shardings=(param_spec, no_shard),
         )
 
         rng, dropout_rng = jax.random.split(rng, 2)
@@ -181,23 +207,25 @@ if __name__ == "__main__":
         init_batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
 
         batch = jax.device_put(init_batch, batch_sharding)
-        grads,metrics = train_step_dp(params, batch, dropout_rng)
+        grads, metrics = train_step_dp(params, batch, dropout_rng)
 
         start = time()
 
         # visualize array shardings
         # jax.debug.visualize_array_sharding(batch)
-        
+
         for i in tqdm(range(NUM_PASSES)):
             with maybe_profiler:
                 dropout_rng, rng = jax.random.split(dropout_rng)
 
-                batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
+                batch = jax.numpy.ones(
+                    shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32
+                )
                 batch = jax.device_put(batch, batch_sharding)
                 grads, metrics = train_step_dp(params, batch, dropout_rng)
 
                 # params = jax.tree_map(lambda x,y : x - 0.01*y, params, grads)
-        
+
         print(metrics)
         total_time = time() - start
 
@@ -214,7 +242,7 @@ if __name__ == "__main__":
         flops_per_iter = flops_per_fwdbwd * BATCH_SIZE
 
         total_flops = flops_per_iter * NUM_PASSES
-        v2_flops = 180e12 
+        v2_flops = 180e12
 
         effective_tflops = total_flops / (total_time)
 

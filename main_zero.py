@@ -78,11 +78,6 @@ def save_checkpoint_optimizer(opt_state: Any, step: int, workdir: str) -> None:
     TODO: Add async manager to do this in a background process
     """
     if jax.process_index() == 0:
-        # print(type(opt_state))
-        # def grab_shards(tree):
-        #     return jax.experimental.multihost_utils.process_allgather(tree)
-
-        # opt_state = grab_shards(opt_state)
         opt_state = jax.device_get(opt_state)
 
         faux_state = train_state.TrainState(
@@ -579,9 +574,6 @@ def main():
                             "Checkpointing not currently implemented for GPU/CPU"
                         )
 
-                    # TODO: Call gc.collect here?
-                    # del opt_state_cpu
-                    # gc.collect()
 
             else:
                 if jax.process_index() == 0:

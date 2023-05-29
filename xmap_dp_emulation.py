@@ -10,8 +10,9 @@ from omegaconf import OmegaConf
 from tqdm import tqdm
 
 from src.models.GPT import model_getter
-from src.partitioning.xmap_train_functions import (train_step,
-                                                   )
+from src.partitioning.xmap_train_functions import (
+    train_step,
+)
 
 from src.training.training_utils import initialized
 
@@ -95,13 +96,11 @@ if __name__ == "__main__":
         axis_resources={"batch": "dp"},
     )
 
-
     with mesh:
 
         rng, dropout_rng = jax.random.split(rng, 2)
 
         params = jax.device_get(params)
-
 
         init_batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
 
@@ -123,11 +122,13 @@ if __name__ == "__main__":
 
         start = time()
         for i in tqdm(range(NUM_PASSES)):
-            
+
             with jax.profiler.trace("jax-trace", create_perfetto_link=False):
                 dropout_rng, rng = jax.random.split(dropout_rng)
 
-                batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
+                batch = jax.numpy.ones(
+                    shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32
+                )
 
                 batch = batch.reshape(
                     GRAD_ACCUM_STEPS,
@@ -136,7 +137,8 @@ if __name__ == "__main__":
                 ).transpose(1, 0, 2)
                 batch = batch.reshape(
                     jax.local_device_count(),
-                    init_batch.shape[0] // (jax.local_device_count() * GRAD_ACCUM_STEPS),
+                    init_batch.shape[0]
+                    // (jax.local_device_count() * GRAD_ACCUM_STEPS),
                     GRAD_ACCUM_STEPS,
                     CTX_LEN,
                 )
@@ -158,7 +160,7 @@ if __name__ == "__main__":
         flops_per_iter = flops_per_fwdbwd * BATCH_SIZE
 
         total_flops = flops_per_iter * NUM_PASSES
-        v2_flops = 180e12   # from https://paperswithcode.com/paper/performance-and-power-evaluation-of-ai/review/
+        v2_flops = 180e12  # from https://paperswithcode.com/paper/performance-and-power-evaluation-of-ai/review/
 
         effective_tflops = total_flops / (total_time)
 
