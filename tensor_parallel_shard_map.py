@@ -20,6 +20,7 @@ from typing import Any
 from jax.experimental.shard_map import shard_map
 from jax.experimental.pjit import pjit
 from jax.lax import with_sharding_constraint
+import contextlib
 
 
 def parse():
@@ -47,6 +48,7 @@ def train_step(
 
     # reshape to add a microbatch dimension
     batch = batch.reshape(accum_steps, -1, context)
+    params = to_bf16(params)
 
     def loss_fn(params, batch):
         _, loss = model.apply(
@@ -117,9 +119,7 @@ if __name__ == "__main__":
 
         def to_bf16(t):
             return t
-
-        import contextlib
-
+        
         maybe_profiler = contextlib.nullcontext()
 
     else:
@@ -134,10 +134,10 @@ if __name__ == "__main__":
             return jax.tree_map(
                 lambda x: x.astype(jnp.bfloat16) if x.dtype == jnp.float32 else x, t
             )
-
-        maybe_profiler = jax.profiler.trace(
-            "jax-trace-pjit", create_perfetto_link=False
-        )
+        maybe_profiler = contextlib.nullcontext()
+        # maybe_profiler = jax.profiler.trace(
+        #     "jax-trace-pjit", create_perfetto_link=False
+        # )
 
     # Setting up device mesh
     if args.mp > 1:
