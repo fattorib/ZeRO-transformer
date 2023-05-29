@@ -1,5 +1,4 @@
 import argparse
-import functools
 from functools import partial
 from time import time
 
@@ -187,12 +186,17 @@ if __name__ == "__main__":
 
         tx = optax.chain(
             optax.clip(1.0),
-            optax.adamw(
+            # optax.adamw(
+            #     learning_rate=0.001,
+            #     weight_decay=0.1,
+            #     mask=mask,
+            #     b2=0.95,
+            # ),
+            optax.lion(
                 learning_rate=0.001,
                 weight_decay=0.1,
                 mask=mask,
-                b2=0.95,
-            ),
+            )
         )
         
         opt_state_shapes = jax.eval_shape(tx.init, params)
