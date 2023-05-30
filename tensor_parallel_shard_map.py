@@ -137,9 +137,8 @@ if __name__ == "__main__":
                 lambda x: x.astype(jnp.bfloat16) if x.dtype == jnp.float32 else x, t
             )
         maybe_profiler = contextlib.nullcontext()
-        # maybe_profiler = jax.profiler.trace(
-        #     "jax-trace-pjit", create_perfetto_link=False
-        # )
+
+
 
     # Setting up device mesh
     if args.mp > 1:
@@ -177,8 +176,7 @@ if __name__ == "__main__":
             param_shape, mesh, _get_partition_rules_tp, axis_name="mp"
         )
         params = shard_map(lambda x:x, mesh, in_specs=no_shard, out_specs=param_spec)(params)
-
-        batch_loss_spec = P(None, "dp", None)
+        grad_spec = param_spec
         
         # optimizer state init 
         mask = jax.tree_map(
@@ -206,7 +204,7 @@ if __name__ == "__main__":
 
     else:
         param_spec = no_shard
-        batch_loss_spec = P(None, "dp", None)
+        grad_spec = param_spec
 
         mask = jax.tree_map(
             lambda x: x.ndim != 1 and x.shape != (model.block_size, model.embedding_dim),
@@ -246,15 +244,15 @@ if __name__ == "__main__":
             shard_map(
                 partial(train_step, model = model, accum_steps=GRAD_ACCUM_STEPS),
                 in_specs=(param_spec, batch_spec),
-                out_specs=(param_spec, P(None)),
+                out_specs=(grad_spec, P(None)),
                 mesh=mesh,
                 check_rep=False,
             )
         )
 
         update_opt_step_tp = pjit(
-            partial(update_opt_state, optimizer = tx, tp_spec=param_spec), 
-            in_axis_resources=(param_spec, param_spec, opt_state_spec),
+            partial(update_opt_state, optimizer = tx, tp_spec=grad_spec), 
+            in_axis_resources=(param_spec, grad_spec, opt_state_spec),
             out_axis_resources= (param_spec, opt_state_spec),
             donate_argnums=0
         )
@@ -270,7 +268,7 @@ if __name__ == "__main__":
         start = time()
 
         # visualize array shardings
-        # jax.debug.visualize_array_sharding(batch)
+        # jax.debug.visualize_array_sharding(params['params']['TransformerBlock_1']['CausalAttention_0']['key_proj']['kernel'])
 
         for i in tqdm(range(NUM_PASSES)):
             with maybe_profiler:
