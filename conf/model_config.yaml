@@ -1,3 +1,13 @@
+test_no_tp:
+  embedding_dim: 64
+  vocab_size: 256
+  num_head: 8
+  block_size: 32
+  dropout: 0.0
+  N: 2
+  alibi_attn: True
+  tp_comms: False
+
 test:
   embedding_dim: 64
   vocab_size: 256

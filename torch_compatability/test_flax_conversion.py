@@ -25,7 +25,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ""
 @pytest.fixture
 def test_jax_model():
     # create a tiny 2L jax model and return its pytree
-    model = jax_model_getter("test")
+    model = jax_model_getter("test_no_tp")
     rng = jax.random.PRNGKey(0)
     init_batch = jax.random.randint(rng, shape=(1, 32), maxval=256, minval=0)
 
