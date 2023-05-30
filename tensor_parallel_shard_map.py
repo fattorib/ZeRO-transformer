@@ -75,7 +75,7 @@ def train_step(
         cumul_minibatch_step, init=(jnp.zeros(()), grad_init), xs=batch
     )
 
-    grads = jax.lax.pmean(grads, axis_name = 'dp')
+    grads = jax.lax.pmean(grads, axis_name="dp")
 
     loss, grads = jax.tree_util.tree_map(lambda x: x / accum_steps, (loss, grads))
 
@@ -86,12 +86,9 @@ def train_step(
 
     return grads, metrics
 
+
 def update_opt_state(
-    params: Any,
-    grads: Any,
-    opt_state: Any,
-    optimizer: Any,
-    tp_spec: Any
+    params: Any, grads: Any, opt_state: Any, optimizer: Any, tp_spec: Any
 ):
     # updates the optimizer state and params
     params = with_sharding_constraint(params, tp_spec)
@@ -99,6 +96,7 @@ def update_opt_state(
     updates, new_opt_state = optimizer.update(grads, opt_state, params)
     new_params = optax.apply_updates(params, updates)
     return new_params, new_opt_state
+
 
 # Emulating 8 TPU cores
 import os
@@ -112,7 +110,7 @@ if __name__ == "__main__":
     args = parse()
 
     # per-device shapes can be printed with shard_map
-    # this allows us to investigate model sharding issues 
+    # this allows us to investigate model sharding issues
 
     if args.emulation:
         print("Emulating 8 TPU cores")
@@ -124,12 +122,12 @@ if __name__ == "__main__":
 
         def to_bf16(t):
             return t
-        
+
         maybe_profiler = contextlib.nullcontext()
 
     else:
         GRAD_ACCUM_STEPS = 32
-        BATCH_SIZE = 128 # assuming 4 hosts and a total BS of 0.5M tokens
+        BATCH_SIZE = 128  # assuming 4 hosts and a total BS of 0.5M tokens
         CTX_LEN = 1024
         NUM_PASSES = args.iter
         MODEL_SIZE = "base"
@@ -139,14 +137,11 @@ if __name__ == "__main__":
             return jax.tree_map(
                 lambda x: x.astype(jnp.bfloat16) if x.dtype == jnp.float32 else x, t
             )
+
         maybe_profiler = contextlib.nullcontext()
 
     # Setting up device mesh
-    if args.mp > 1:
-        mesh = Mesh(np.array(jax.devices()).reshape(args.dp, args.mp), ("dp", "mp"))
-
-    else:
-        mesh = Mesh(np.array(jax.devices()).reshape(args.dp, 1), ("dp", "mp"))
+    mesh = Mesh(np.array(jax.devices()).reshape(args.dp, args.mp), ("dp", "mp"))
 
     # indicates batch dim is split across dp axis
     batch_spec = P("dp", None)
@@ -169,69 +164,52 @@ if __name__ == "__main__":
         return model.init(rng, init_batch, None, False)
 
     params = jax.jit(init)(rng, (jnp.ones((1, CTX_LEN), dtype=jnp.int32)))
-        
-    param_shape = jax.tree_map(lambda x: x.size, params) # we literally just do this to get keys
-    
+
+    param_shape = jax.tree_map(
+        lambda x: x.size, params
+    )  # we literally just do this to get keys
+
+    mask = jax.tree_map(
+        lambda x: x.ndim != 1 and x.shape != (model.block_size, model.embedding_dim),
+        params,
+    )
+
+    # not scale invariant!
+    tx = optax.chain(
+        optax.clip(1.0),
+        optax.lion(
+            learning_rate=0.001,
+            weight_decay=0.1,
+            mask=mask,
+        ),
+    )
+
     if args.mp > 1:
         param_spec = set_partitions_rules(
             param_shape, mesh, _get_partition_rules_tp, axis_name="mp"
         )
 
         # jax.debug.visualize_array_sharding(params['params']['wte']['embedding'])
-        params = shard_map(lambda x:x, mesh, in_specs=no_shard, out_specs=param_spec)(params)
+        params = shard_map(lambda x: x, mesh, in_specs=no_shard, out_specs=param_spec)(
+            params
+        )
         # jax.debug.visualize_array_sharding(params['params']['wte']['embedding'])
 
         grad_spec = param_spec
-        
-        # optimizer state init 
-        mask = jax.tree_map(
-            lambda x: x.ndim != 1 and x.shape != (model.block_size, model.embedding_dim),
-            params,
-        )
-        
-        # not scale invariant!
-        tx = optax.chain(
-            optax.clip(1.0),
-            optax.lion(
-                learning_rate=0.001,
-                weight_decay=0.1,
-                mask=mask,
-            )
-        )
-        
-        opt_state_shapes = jax.eval_shape(tx.init, params)
-        opt_state_spec = create_opt_spec(param_spec, opt_state_shapes)
-
-        with mesh:
-            opt_state = pjit(
-                    tx.init, in_axis_resources=(param_spec,), out_axis_resources=opt_state_spec,
-            )(params)
 
     else:
         param_spec = no_shard
         grad_spec = param_spec
 
-        mask = jax.tree_map(
-            lambda x: x.ndim != 1 and x.shape != (model.block_size, model.embedding_dim),
-            params,
-        )
+    opt_state_shapes = jax.eval_shape(tx.init, params)
+    opt_state_spec = create_opt_spec(param_spec, opt_state_shapes)
 
-        tx = optax.chain(
-            optax.clip(1.0),
-            optax.lion(
-                learning_rate=0.001,
-                weight_decay=0.1,
-                mask=mask,
-            )
-        )
-        
-        opt_state_shapes = jax.eval_shape(tx.init, params)
-        opt_state_spec = create_opt_spec(param_spec, opt_state_shapes)
-
-        with mesh:
-            opt_state = pjit(
-                    tx.init, in_axis_resources=(param_spec,), out_axis_resources=opt_state_spec,
-            )(params)
+    with mesh:
+        opt_state = pjit(
+            tx.init,
+            in_axis_resources=(param_spec,),
+            out_axis_resources=opt_state_spec,
+        )(params)
 
     configs = OmegaConf.load("conf/model_config.yaml")
     model_info = configs[MODEL_SIZE]
@@ -245,7 +223,7 @@ if __name__ == "__main__":
 
     train_step_tp = jax.jit(
         shard_map(
-            partial(train_step, model = model, accum_steps=GRAD_ACCUM_STEPS),
+            partial(train_step, model=model, accum_steps=GRAD_ACCUM_STEPS),
             in_specs=(param_spec, batch_spec),
             out_specs=(grad_spec, P(None)),
             mesh=mesh,
@@ -255,10 +233,10 @@ if __name__ == "__main__":
 
     with mesh:
         update_opt_step_tp = pjit(
-            partial(update_opt_state, optimizer = tx, tp_spec=grad_spec), 
+            partial(update_opt_state, optimizer=tx, tp_spec=grad_spec),
             in_axis_resources=(param_spec, grad_spec, opt_state_spec),
-            out_axis_resources= (param_spec, opt_state_spec),
-            donate_argnums=0
+            out_axis_resources=(param_spec, opt_state_spec),
+            donate_argnums=0,
         )
 
     rng, dropout_rng = jax.random.split(rng, 2)
@@ -267,26 +245,21 @@ if __name__ == "__main__":
 
     grads, metrics = train_step_tp(params, init_batch)
 
-    # jax.debug.visualize_array_sharding(grads['params']['TransformerBlock_1']['CausalAttention_0']['key_proj']['kernel'])
-    
     with mesh:
         params, opt_state = update_opt_step_tp(params, grads, opt_state)
 
     start = time()
 
-
     for i in tqdm(range(NUM_PASSES)):
         with maybe_profiler:
             dropout_rng, rng = jax.random.split(dropout_rng)
 
-            batch = jax.numpy.ones(
-                shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32
-            )
+            batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
             grads, metrics = train_step_tp(params, batch)
             with mesh:
                 params, opt_state = update_opt_step_tp(params, grads, opt_state)
 
-    jnp.zeros((10,10)).block_until_ready()
+    jnp.zeros((10, 10)).block_until_ready()
     total_time = time() - start
     print(metrics)
 
