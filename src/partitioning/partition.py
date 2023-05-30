@@ -34,6 +34,8 @@ def _replacement_rules(rules):
 
     return replace
 
+
+# flax dense layers are formatted as (in_feats, out_feats) 
 def _get_partition_rules_tp(axis_name: str):
     """
     Follows Megatron-LM partition rules from
@@ -44,8 +46,8 @@ def _get_partition_rules_tp(axis_name: str):
 
     """
     return [
-        (("wte", "embedding"), PartitionSpec(axis_name, None)),
-        (("wpe", "embedding"), PartitionSpec(axis_name, None)),
+        (("wte", "embedding"), PartitionSpec(axis_name,None)), # array shape is (vocab_size, features)
+        (("wpe", "embedding"), PartitionSpec(axis_name,None)),
         # attention
         (
             ("(query_proj|key_proj|value_proj)", "kernel"),
@@ -53,7 +55,7 @@ def _get_partition_rules_tp(axis_name: str):
         ),
         (
             ("residual_out", "kernel"),
-            PartitionSpec(axis_name, None),
+            PartitionSpec(axis_name,None),
         ),
         (
             ("(query_proj|key_proj|value_proj)", "bias"),
