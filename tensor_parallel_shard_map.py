@@ -111,6 +111,9 @@ if __name__ == "__main__":
     rng = jax.random.PRNGKey(23)
     args = parse()
 
+    # per-device shapes can be printed with shard_map
+    # this allows us to investigate model sharding issues 
+
     if args.emulation:
         print("Emulating 8 TPU cores")
         GRAD_ACCUM_STEPS = 8
@@ -137,8 +140,6 @@ if __name__ == "__main__":
                 lambda x: x.astype(jnp.bfloat16) if x.dtype == jnp.float32 else x, t
             )
         maybe_profiler = contextlib.nullcontext()
-
-
 
     # Setting up device mesh
     if args.mp > 1:
@@ -175,7 +176,11 @@ if __name__ == "__main__":
         param_spec = set_partitions_rules(
             param_shape, mesh, _get_partition_rules_tp, axis_name="mp"
         )
+
+        # jax.debug.visualize_array_sharding(params['params']['wte']['embedding'])
         params = shard_map(lambda x:x, mesh, in_specs=no_shard, out_specs=param_spec)(params)
+        # jax.debug.visualize_array_sharding(params['params']['wte']['embedding'])
+
         grad_spec = param_spec
         
         # optimizer state init 
@@ -238,18 +243,17 @@ if __name__ == "__main__":
         CTX_LEN,
     )
 
-    with mesh:
-        
-        train_step_tp = jax.jit(
-            shard_map(
-                partial(train_step, model = model, accum_steps=GRAD_ACCUM_STEPS),
-                in_specs=(param_spec, batch_spec),
-                out_specs=(grad_spec, P(None)),
-                mesh=mesh,
-                check_rep=False,
-            )
+    train_step_tp = jax.jit(
+        shard_map(
+            partial(train_step, model = model, accum_steps=GRAD_ACCUM_STEPS),
+            in_specs=(param_spec, batch_spec),
+            out_specs=(grad_spec, P(None)),
+            mesh=mesh,
+            check_rep=False,
         )
+    )
 
+    with mesh:
         update_opt_step_tp = pjit(
             partial(update_opt_state, optimizer = tx, tp_spec=grad_spec), 
             in_axis_resources=(param_spec, grad_spec, opt_state_spec),
@@ -257,54 +261,56 @@ if __name__ == "__main__":
             donate_argnums=0
         )
 
-        rng, dropout_rng = jax.random.split(rng, 2)
+    rng, dropout_rng = jax.random.split(rng, 2)
 
-        init_batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
+    init_batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
 
-        grads, metrics = train_step_tp(params, init_batch)
+    grads, metrics = train_step_tp(params, init_batch)
 
+    # jax.debug.visualize_array_sharding(grads['params']['TransformerBlock_1']['CausalAttention_0']['key_proj']['kernel'])
+    
+    with mesh:
         params, opt_state = update_opt_step_tp(params, grads, opt_state)
 
-        start = time()
+    start = time()
 
-        # visualize array shardings
-        # jax.debug.visualize_array_sharding(params['params']['TransformerBlock_1']['CausalAttention_0']['key_proj']['kernel'])
 
-        for i in tqdm(range(NUM_PASSES)):
-            with maybe_profiler:
-                dropout_rng, rng = jax.random.split(dropout_rng)
+    for i in tqdm(range(NUM_PASSES)):
+        with maybe_profiler:
+            dropout_rng, rng = jax.random.split(dropout_rng)
 
-                batch = jax.numpy.ones(
-                    shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32
-                )
-                grads, metrics = train_step_tp(params, batch)
+            batch = jax.numpy.ones(
+                shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32
+            )
+            grads, metrics = train_step_tp(params, batch)
+            with mesh:
                 params, opt_state = update_opt_step_tp(params, grads, opt_state)
 
-        jnp.zeros((10,10)).block_until_ready()
-        total_time = time() - start
-        print(metrics)
+    jnp.zeros((10,10)).block_until_ready()
+    total_time = time() - start
+    print(metrics)
 
-        print(
-            f"TP Step - Global BS {BATCH_SIZE} - accum steps {GRAD_ACCUM_STEPS} - Num Executions {NUM_PASSES}"
-        )
-        print(f"Mesh Layout (dp,mp): {(args.dp,args.mp)}")
-        print(f"Model Size: {MODEL_SIZE}")
-        print(f"Total Time: {total_time:.4f}s")
+    print(
+        f"TP Step - Global BS {BATCH_SIZE} - accum steps {GRAD_ACCUM_STEPS} - Num Executions {NUM_PASSES}"
+    )
+    print(f"Mesh Layout (dp,mp): {(args.dp,args.mp)}")
+    print(f"Model Size: {MODEL_SIZE}")
+    print(f"Total Time: {total_time:.4f}s")
 
-        param_count = sum(p for p in jax.tree_util.tree_leaves(param_shape))
+    param_count = sum(p for p in jax.tree_util.tree_leaves(param_shape))
 
-        flops_per_token = 6 * param_count + 12 * L * H * Q * T
-        flops_per_fwdbwd = flops_per_token * T
-        flops_per_iter = flops_per_fwdbwd * BATCH_SIZE
+    flops_per_token = 6 * param_count + 12 * L * H * Q * T
+    flops_per_fwdbwd = flops_per_token * T
+    flops_per_iter = flops_per_fwdbwd * BATCH_SIZE
 
-        total_flops = flops_per_iter * NUM_PASSES
-        v2_flops = 180e12
+    total_flops = flops_per_iter * NUM_PASSES
+    v2_flops = 180e12
 
-        effective_tflops = total_flops / (total_time)
+    effective_tflops = total_flops / (total_time)
 
-        mfu = effective_tflops / v2_flops
+    mfu = effective_tflops / v2_flops
 
-        print(f"Param Count: {param_count}")
-        # from https://github.com/kingoflolz/mesh-transformer-jax/blob/4c15ee74a8ce5d4bf2aee2462638c1b33c8288a8/tpuv38_example.py
-        print(f"Effective TFLOPS: {total_flops / (total_time)/1e12:.06}")
-        print(f"MFU: {100*mfu:.06}")
+    print(f"Param Count: {param_count}")
+    # from https://github.com/kingoflolz/mesh-transformer-jax/blob/4c15ee74a8ce5d4bf2aee2462638c1b33c8288a8/tpuv38_example.py
+    print(f"Effective TFLOPS: {total_flops / (total_time)/1e12:.06}")
+    print(f"MFU: {100*mfu:.06}")
