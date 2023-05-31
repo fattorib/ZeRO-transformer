@@ -71,11 +71,13 @@ def train_step(
 
     grad_init = to_bf16(jax.tree_util.tree_map(jnp.zeros_like, params))
 
-    (loss, grads), _ = jax.lax.scan(
-        cumul_minibatch_step, init=(jnp.zeros(()), grad_init), xs=batch
-    )
+    with jax.named_scope("scanned_microbatch"):
+        (loss, grads), _ = jax.lax.scan(
+            cumul_minibatch_step, init=(jnp.zeros(()), grad_init), xs=batch
+        )
 
-    grads = jax.lax.pmean(grads, axis_name="dp")
+    with jax.named_scope("gradient_all_reduce"):
+        grads = jax.lax.pmean(grads, axis_name="dp")
 
     loss, grads = jax.tree_util.tree_map(lambda x: x / accum_steps, (loss, grads))
 
@@ -118,7 +120,7 @@ if __name__ == "__main__":
         BATCH_SIZE = 256
         CTX_LEN = 32
         NUM_PASSES = args.iter
-        MODEL_SIZE = "test"
+        MODEL_SIZE = "test_no_tp"
 
         def to_bf16(t):
             return t
