@@ -11,7 +11,7 @@ from omegaconf import OmegaConf
 
 from src.models.layers import CausalAttention, MLPBlock
 from src.utils.losses import cross_entropy_loss
-
+from src.models.replicated_utils import g_psum, f_psum
 
 class TransformerBlock(nn.Module):
     """One full transformer block"""
@@ -83,10 +83,11 @@ class Transformer(nn.Module):
             embedding_init=initializers.normal(stddev=0.02),
             dtype=self.dtype,
         )
+        
+        out = embed(x)
 
-        wte = embed(x)
-
-        out = wte
+        if self.tp_comms:
+            out = g_psum(out)
 
         for _ in range(self.N):
             out = TransformerBlock(
@@ -103,6 +104,18 @@ class Transformer(nn.Module):
         out = nn.LayerNorm(dtype=self.dtype, use_bias=False)(out)
 
         logits = embed.attend(out)
+
+        
+
+        # jax.debug.print("{x}", x = embed.embedding.shape)
+        if self.tp_comms:
+            # logits are partitioned across mp ranks
+            # (B, T, [V_0,...,V_r])
+            
+            # compute loss on the subsection and then do an all-reduce across mp ranks...?
+            # jax.debug.print("{x}", x = logits.shape) # with example(B,T,256)
+            # jax.debug.print("hey!")
+            pass 
 
         if labels is None:
             return logits
