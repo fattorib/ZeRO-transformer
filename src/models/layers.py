@@ -59,8 +59,8 @@ class MLPBlock(nn.Module):
         # jax.eval_shape doesn't like dropout layers, disable for now
         dropout = partial(nn.Dropout, rate=self.dropout, deterministic=True) 
 
-        if self.tp_comms:
-            x = f_psum(x)
+        # if self.tp_comms:
+        #     x = f_psum(x)
 
         x = nn.Dense(
             features=(self.dimension_multiplier * self.embedding_dim)//self.num_shard,
@@ -81,8 +81,8 @@ class MLPBlock(nn.Module):
         )(x)
 
 
-        if self.tp_comms:
-            out = g_psum(out)
+        # if self.tp_comms:
+        #     out = g_psum(out)
         return dropout()(out)
 
 
@@ -127,10 +127,9 @@ class CausalAttention(nn.Module):
     ) -> jnp.array:
         # jax.eval_shape doesn't like dropout layers, disable for now
         dropout = partial(nn.Dropout, rate=self.dropout, deterministic=True) 
-        T, C = x.shape[-2:]
 
-        if self.tp_comms:
-            x = f_psum(x)
+        # if self.tp_comms:
+        #     x = f_psum(x)
 
         key = nn.Dense(
             name="key_proj",
@@ -195,7 +194,7 @@ class CausalAttention(nn.Module):
             use_bias=False,
         )(attn_out)
 
-        if self.tp_comms:
-            out = g_psum(out)
+        # if self.tp_comms:
+        #     out = g_psum(out)
 
         return dropout()(out)

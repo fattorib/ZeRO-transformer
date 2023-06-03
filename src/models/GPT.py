@@ -37,6 +37,33 @@ class TransformerBlock(nn.Module):
         train: bool = False,
     ) -> jnp.array:
 
+        # attn_out = CausalAttention(
+        #     self.embedding_dim,
+        #     self.num_head,
+        #     self.block_size,
+        #     self.residual_dropout,
+        #     self.N,
+        #     self.alibi_attn,
+        #     self.dtype,
+        #     tp_comms=self.tp_comms,
+        #     num_shard=self.num_shard
+        # )(nn.LayerNorm(dtype=self.dtype, use_bias=False, scale_init=nn.with_partitioning(jax.nn.initializers.ones, P(None)))(x), train)
+        # x = x + attn_out
+        # x = x + MLPBlock(
+        #     self.embedding_dim,
+        #     dropout=self.residual_dropout,
+        #     N=self.N,
+        #     dtype=self.dtype,
+        #     tp_comms=self.tp_comms,
+        #     num_shard=self.num_shard
+        # )(nn.LayerNorm(dtype=self.dtype, use_bias=False, scale_init=nn.with_partitioning(jax.nn.initializers.ones, P(None)))(x), train)
+        # return x
+
+        if self.tp_comms:
+            x = f_psum(x)
+        
+        x_ln = nn.LayerNorm(dtype=self.dtype, use_bias=False, scale_init=nn.with_partitioning(jax.nn.initializers.ones, P(None)))(x)
+
         attn_out = CausalAttention(
             self.embedding_dim,
             self.num_head,
@@ -47,17 +74,22 @@ class TransformerBlock(nn.Module):
             self.dtype,
             tp_comms=self.tp_comms,
             num_shard=self.num_shard
-        )(nn.LayerNorm(dtype=self.dtype, use_bias=False, scale_init=nn.with_partitioning(jax.nn.initializers.ones, P(None)))(x), train)
-        x = x + attn_out
-        x = x + MLPBlock(
+        )(x_ln, train)
+        mlp_out = MLPBlock(
             self.embedding_dim,
             dropout=self.residual_dropout,
             N=self.N,
             dtype=self.dtype,
             tp_comms=self.tp_comms,
             num_shard=self.num_shard
-        )(nn.LayerNorm(dtype=self.dtype, use_bias=False, scale_init=nn.with_partitioning(jax.nn.initializers.ones, P(None)))(x), train)
-        return x
+        )(x_ln, train)
+
+        if self.tp_comms:
+            out = x_ln + g_psum(attn_out + mlp_out)
+        else:
+            out = x_ln + attn_out + mlp_out
+
+        return out 
 
 
 class Transformer(nn.Module):
@@ -100,7 +132,7 @@ class Transformer(nn.Module):
             out = g_psum(out)
 
         for _ in range(self.N):
-            out = nn.checkpoint(TransformerBlock)(
+            out = TransformerBlock(
                 self.embedding_dim,
                 self.num_head,
                 self.block_size,
