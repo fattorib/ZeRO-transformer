@@ -37,28 +37,6 @@ class TransformerBlock(nn.Module):
         train: bool = False,
     ) -> jnp.array:
 
-        # attn_out = CausalAttention(
-        #     self.embedding_dim,
-        #     self.num_head,
-        #     self.block_size,
-        #     self.residual_dropout,
-        #     self.N,
-        #     self.alibi_attn,
-        #     self.dtype,
-        #     tp_comms=self.tp_comms,
-        #     num_shard=self.num_shard
-        # )(nn.LayerNorm(dtype=self.dtype, use_bias=False, scale_init=nn.with_partitioning(jax.nn.initializers.ones, P(None)))(x), train)
-        # x = x + attn_out
-        # x = x + MLPBlock(
-        #     self.embedding_dim,
-        #     dropout=self.residual_dropout,
-        #     N=self.N,
-        #     dtype=self.dtype,
-        #     tp_comms=self.tp_comms,
-        #     num_shard=self.num_shard
-        # )(nn.LayerNorm(dtype=self.dtype, use_bias=False, scale_init=nn.with_partitioning(jax.nn.initializers.ones, P(None)))(x), train)
-        # return x
-
         if self.tp_comms:
             x = f_psum(x)
         

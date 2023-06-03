@@ -129,9 +129,6 @@ class CausalAttention(nn.Module):
         # jax.eval_shape doesn't like dropout layers, disable for now
         dropout = partial(nn.Dropout, rate=self.dropout, deterministic=True) 
 
-        # if self.tp_comms:
-        #     x = f_psum(x)
-
         key = nn.Dense(
             name="key_proj",
             features=self.embedding_dim//self.num_shard,
@@ -157,7 +154,6 @@ class CausalAttention(nn.Module):
             use_bias=False,
         )(x)
 
-        # gross shape lines here TODO: fix
         key = rearrange(
             key, "b t (nh hd) -> b nh hd t", nh=self.heads_per_shard, hd=(self.embedding_dim //self.num_shard) // self.heads_per_shard
         )
@@ -198,8 +194,5 @@ class CausalAttention(nn.Module):
             dtype=self.dtype,
             use_bias=False,
         )(attn_out)
-
-        # if self.tp_comms:
-        #     out = g_psum(out)
 
         return dropout()(out)
