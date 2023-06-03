@@ -132,7 +132,7 @@ class Transformer(nn.Module):
             out = g_psum(out)
 
         for _ in range(self.N):
-            out = TransformerBlock(
+            out = nn.checkpoint(TransformerBlock)(
                 self.embedding_dim,
                 self.num_head,
                 self.block_size,
