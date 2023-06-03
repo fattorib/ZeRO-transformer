@@ -263,9 +263,7 @@ class GPT2Block(nn.Module):
         num_layers: int,
     ) -> None:
         super().__init__()
-        self.ln1 = nn.LayerNorm(embedding_dim)
-
-        self.ln2 = nn.LayerNorm(embedding_dim)
+        self.ln = nn.LayerNorm(embedding_dim)
 
         self.attn = ALiBi(
             embedding_dim,
@@ -289,11 +287,11 @@ class GPT2Block(nn.Module):
         layer_past: Tuple[torch.Tensor, torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
-        attn_out = self.attn(self.ln1(x), use_cache, layer_past)
-        x = x + attn_out[0]
-        x = x + self.mlp(self.ln2(x))
+        x_ln = self.ln(x)
+        attn_out = self.attn(x_ln, use_cache, layer_past)        
+        mlp_out = self.mlp(x_ln)
 
-        return x, attn_out[1]
+        return x + mlp_out + attn_out[0], attn_out[1]
 
 
 class GPT2(nn.Module):

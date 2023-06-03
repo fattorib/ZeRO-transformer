@@ -10,7 +10,6 @@ import numpy as np
 import pytest
 from flax.core import unfreeze
 from flax.serialization import msgpack_restore, msgpack_serialize
-
 from src.models.GPT import model_getter as jax_model_getter
 from torch_compatability.flax_to_pytorch import (
     create_transformer_block_mapping,
@@ -18,6 +17,8 @@ from torch_compatability.flax_to_pytorch import (
     match_and_save,
 )
 from torch_compatability.GPT2 import model_getter as torch_model_getter
+import orbax.checkpoint
+from flax.training import orbax_utils
 
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
@@ -25,30 +26,33 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ""
 @pytest.fixture
 def test_jax_model():
     # create a tiny 2L jax model and return its pytree
-    model = jax_model_getter("test_no_tp")
+    model = jax_model_getter("test")
     rng = jax.random.PRNGKey(0)
     init_batch = jax.random.randint(rng, shape=(1, 32), maxval=256, minval=0)
 
     params = model.init(rng, init_batch, None, False)
 
-    param_bytes = msgpack_serialize(unfreeze(params))
+    orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
+    save_args = orbax_utils.save_args_from_target(params)
+    options = orbax.checkpoint.CheckpointManagerOptions(max_to_keep=1, create=True)
+    checkpoint_manager = orbax.checkpoint.CheckpointManager(
+    'checkpoints/orbax', orbax_checkpointer, options)
 
-    with open("checkpoints/test.msgpack", "wb") as f:
-        f.write(param_bytes)
+    checkpoint_manager.save(0, params, save_kwargs={'save_args': save_args})
 
-    return "checkpoints/test.msgpack"
+    return "checkpoints/orbax/0/default"
 
 
 def test_match_conversion(test_jax_model):
 
     torch_model = torch_model_getter("test")
 
-    jax_pytree_path = test_jax_model
+    jax_pytree_dir = test_jax_model
 
-    match_and_save(torch_model, jax_pytree_path, "checkpoints/test.pth")
+    match_and_save(torch_model, jax_pytree_dir, "checkpoints/test.pth")
 
-    with open(jax_pytree_path, "rb") as f:
-        jax_pytree = msgpack_restore(f.read())
+    orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
+    jax_pytree = orbax_checkpointer.restore(jax_pytree_dir)
 
     torch_model = torch_model_getter("test", model_checkpoint="checkpoints/test.pth")
 
@@ -56,7 +60,7 @@ def test_match_conversion(test_jax_model):
         block_mapping_dict = create_transformer_block_mapping(block_idx)
 
         flattened_block = dict(
-            flatten(jax_pytree["params"][f"TransformerBlock_{block_idx}"])
+            flatten(jax_pytree["params"][f"CheckpointTransformerBlock_{block_idx}"])
         )
 
         for key, value in block_mapping_dict.items():
