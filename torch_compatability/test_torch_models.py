@@ -4,7 +4,8 @@ Tests for PyTorch models
 import pytest
 import torch
 
-from torch_compatability.GPT2 import GPT2, ALiBi, GPT2Block, MLPBlock, model_getter
+from torch_compatability.GPT2 import (GPT2, ALiBi, GPT2Block, MLPBlock,
+                                      model_getter)
 
 
 @pytest.fixture

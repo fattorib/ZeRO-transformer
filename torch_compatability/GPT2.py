@@ -6,8 +6,8 @@ from typing import List, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from omegaconf import OmegaConf
 from einops import rearrange
+from omegaconf import OmegaConf
 
 """
 Module class for GPT2. Follows paper specifications wherever possible.
@@ -261,9 +261,9 @@ class GPT2Block(nn.Module):
         block_size: int,
         resid_dropout: float,
         num_layers: int,
-        parallel_residual: bool = True 
+        parallel_residual: bool = True,
     ) -> None:
-        super().__init__()  
+        super().__init__()
 
         self.parallel_residual = parallel_residual
         if self.parallel_residual:
@@ -271,7 +271,6 @@ class GPT2Block(nn.Module):
         else:
             self.ln1 = nn.LayerNorm(embedding_dim)
             self.ln2 = nn.LayerNorm(embedding_dim)
-        
 
         self.attn = ALiBi(
             embedding_dim,
@@ -297,7 +296,7 @@ class GPT2Block(nn.Module):
 
         if self.parallel_residual:
             x_ln = self.ln(x)
-            attn_out = self.attn(x_ln, use_cache, layer_past)        
+            attn_out = self.attn(x_ln, use_cache, layer_past)
             mlp_out = self.mlp(x_ln)
             return x + mlp_out + attn_out[0], attn_out[1]
 

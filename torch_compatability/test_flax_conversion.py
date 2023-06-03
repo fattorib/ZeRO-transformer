@@ -7,18 +7,16 @@ import os
 
 import jax
 import numpy as np
+import orbax.checkpoint
 import pytest
 from flax.core import unfreeze
 from flax.serialization import msgpack_restore, msgpack_serialize
+from flax.training import orbax_utils
+
 from src.models.GPT import model_getter as jax_model_getter
 from torch_compatability.flax_to_pytorch import (
-    create_transformer_block_mapping,
-    flatten,
-    match_and_save,
-)
+    create_transformer_block_mapping, flatten, match_and_save)
 from torch_compatability.GPT2 import model_getter as torch_model_getter
-import orbax.checkpoint
-from flax.training import orbax_utils
 
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
@@ -36,9 +34,10 @@ def test_jax_model():
     save_args = orbax_utils.save_args_from_target(params)
     options = orbax.checkpoint.CheckpointManagerOptions(max_to_keep=1, create=True)
     checkpoint_manager = orbax.checkpoint.CheckpointManager(
-    'checkpoints/orbax', orbax_checkpointer, options)
+        "checkpoints/orbax", orbax_checkpointer, options
+    )
 
-    checkpoint_manager.save(0, params, save_kwargs={'save_args': save_args})
+    checkpoint_manager.save(0, params, save_kwargs={"save_args": save_args})
 
     return "checkpoints/orbax/0/default"
 

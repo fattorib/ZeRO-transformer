@@ -4,6 +4,7 @@ Loss function
 import jax
 import jax.numpy as jnp
 
+
 @jax.jit
 def cross_entropy_loss(labels: jnp.array, logits: jnp.array) -> jnp.array:
     """Standard Cross Entropy Loss function

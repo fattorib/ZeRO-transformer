@@ -7,12 +7,12 @@ import flax.linen as nn
 import jax
 import jax.nn.initializers as initializers
 import jax.numpy as jnp
+from jax.sharding import PartitionSpec as P
 from omegaconf import OmegaConf
 
 from src.models.layers import CausalAttention, MLPBlock
+from src.models.replicated_utils import f_psum, g_psum
 from src.utils.losses import cross_entropy_loss
-from src.models.replicated_utils import g_psum, f_psum
-from jax.sharding import PartitionSpec as P
 
 
 class TransformerBlock(nn.Module):
@@ -26,7 +26,6 @@ class TransformerBlock(nn.Module):
     dtype: Any = jnp.float32
     alibi_attn: bool = True
 
-
     tp_comms: bool = False
     num_shard: int = 1
 
@@ -39,8 +38,12 @@ class TransformerBlock(nn.Module):
 
         if self.tp_comms:
             x = f_psum(x)
-        
-        x_ln = nn.LayerNorm(dtype=self.dtype, use_bias=False, scale_init=nn.with_partitioning(jax.nn.initializers.ones, P(None)))(x)
+
+        x_ln = nn.LayerNorm(
+            dtype=self.dtype,
+            use_bias=False,
+            scale_init=nn.with_partitioning(jax.nn.initializers.ones, P(None)),
+        )(x)
 
         attn_out = CausalAttention(
             self.embedding_dim,
@@ -51,7 +54,7 @@ class TransformerBlock(nn.Module):
             self.alibi_attn,
             self.dtype,
             tp_comms=self.tp_comms,
-            num_shard=self.num_shard
+            num_shard=self.num_shard,
         )(x_ln, train)
         mlp_out = MLPBlock(
             self.embedding_dim,
@@ -59,7 +62,7 @@ class TransformerBlock(nn.Module):
             N=self.N,
             dtype=self.dtype,
             tp_comms=self.tp_comms,
-            num_shard=self.num_shard
+            num_shard=self.num_shard,
         )(x_ln, train)
 
         if self.tp_comms:
@@ -67,7 +70,7 @@ class TransformerBlock(nn.Module):
         else:
             out = x_ln + attn_out + mlp_out
 
-        return out 
+        return out
 
 
 class Transformer(nn.Module):
@@ -84,7 +87,6 @@ class Transformer(nn.Module):
     dtype: Any = jnp.float32
     alibi_attn: bool = False
 
-
     tp_comms: bool = False
     num_shard: int = 1
 
@@ -95,15 +97,17 @@ class Transformer(nn.Module):
         labels: jnp.array = None,
         train: bool = False,
     ) -> Union[jnp.array, Tuple[jnp.array, jnp.array]]:
-        
+
         embed = nn.Embed(
             name="wte",
-            num_embeddings=self.vocab_size//self.num_shard,
+            num_embeddings=self.vocab_size // self.num_shard,
             features=self.embedding_dim,
-            embedding_init=nn.with_partitioning(initializers.normal(stddev=0.02), P("mp", None)),
+            embedding_init=nn.with_partitioning(
+                initializers.normal(stddev=0.02), P("mp", None)
+            ),
             dtype=self.dtype,
         )
-        
+
         out = embed(x)
 
         if self.tp_comms:
@@ -119,33 +123,39 @@ class Transformer(nn.Module):
                 self.dtype,
                 self.alibi_attn,
                 self.tp_comms,
-                self.num_shard
+                self.num_shard,
             )(out, train)
 
-        out = nn.LayerNorm(dtype=self.dtype, use_bias=False, scale_init=nn.with_partitioning(jax.nn.initializers.ones, P(None)))(out)
+        out = nn.LayerNorm(
+            dtype=self.dtype,
+            use_bias=False,
+            scale_init=nn.with_partitioning(jax.nn.initializers.ones, P(None)),
+        )(out)
 
         logits = embed.attend(out)
-        
+
         if self.tp_comms:
-            # inefficient all-gather for debugging 
+            # inefficient all-gather for debugging
             # logits = jax.lax.all_gather(logits, axis_name='mp')
             # logits = jnp.concatenate(logits, axis = -1)
             if labels is None:
-                logits = jax.lax.all_gather(logits, axis_name='mp')
-                logits = jnp.concatenate(logits, axis = -1)
+                logits = jax.lax.all_gather(logits, axis_name="mp")
+                logits = jnp.concatenate(logits, axis=-1)
                 return logits
 
             else:
-                # each mp shard computes local loss and then we all-gather these to reduce 
+                # each mp shard computes local loss and then we all-gather these to reduce
                 # total comm volume
-                # loss calculation from mesh-transformer-jax: 
+                # loss calculation from mesh-transformer-jax:
                 # https://github.com/kingoflolz/mesh-transformer-jax/blob/master/mesh_transformer/layers.py#L569
                 labels = labels[..., 1:]
                 logits = logits[..., :-1, :]
 
-                dim_per_shard = self.vocab_size//self.num_shard
-                shard_start_index = jax.lax.axis_index('mp') * dim_per_shard
-                global_max = jax.lax.pmax(jax.lax.stop_gradient(logits.max(-1, keepdims=True)), "mp")
+                dim_per_shard = self.vocab_size // self.num_shard
+                shard_start_index = jax.lax.axis_index("mp") * dim_per_shard
+                global_max = jax.lax.pmax(
+                    jax.lax.stop_gradient(logits.max(-1, keepdims=True)), "mp"
+                )
                 logits -= jax.lax.stop_gradient(global_max)
 
                 gt_onehot = jax.nn.one_hot(labels - shard_start_index, dim_per_shard)
@@ -159,7 +169,7 @@ class Transformer(nn.Module):
 
                 loss = jnp.log(sum_exp_logits) - predicted_logits
 
-                return logits,loss 
+                return logits, loss
 
         else:
             if labels is None:

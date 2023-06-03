@@ -1,7 +1,7 @@
 import numpy as np
+import orbax.checkpoint
 import torch
 from flax.serialization import msgpack_restore
-import orbax.checkpoint
 
 
 def create_transformer_block_mapping(block_idx: int, use_bias: bool = False):
@@ -53,7 +53,9 @@ def match_transformer_block(pytree, state_dict, block_idx, use_bias):
 
     block_mappings = create_transformer_block_mapping(block_idx, use_bias)
 
-    flattened_block = dict(flatten(pytree["params"][f"CheckpointTransformerBlock_{block_idx}"]))
+    flattened_block = dict(
+        flatten(pytree["params"][f"CheckpointTransformerBlock_{block_idx}"])
+    )
     for key, value in flattened_block.items():
         pytorch_block_key = block_mappings[key]
         if value.ndim > 1:
@@ -84,7 +86,6 @@ def match_and_save(
 
     orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
     pytree = orbax_checkpointer.restore(flax_save_path)
-
 
     state_dict = model.state_dict()
 

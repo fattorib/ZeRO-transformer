@@ -5,13 +5,14 @@ Modified from: https://github.com/borisdayma/dalle-mini/blob/main/src/dalle_mini
 """
 
 import re
+from typing import Callable
+
 import jax
 import optax
 from flax.core import FrozenDict
 from flax.core.frozen_dict import freeze
 from flax.traverse_util import flatten_dict, unflatten_dict
 from jax.sharding import Mesh, PartitionSpec
-from typing import Callable
 
 
 def _match(qs, ks):
@@ -35,7 +36,7 @@ def _replacement_rules(rules):
     return replace
 
 
-# flax dense layers are formatted as (in_feats, out_feats) 
+# flax dense layers are formatted as (in_feats, out_feats)
 def _get_partition_rules_tp(axis_name: str):
     """
     Follows Megatron-LM partition rules from
@@ -46,7 +47,10 @@ def _get_partition_rules_tp(axis_name: str):
 
     """
     return [
-        (("wte", "embedding"), PartitionSpec(axis_name,None)), # array shape is (vocab_size, features)
+        (
+            ("wte", "embedding"),
+            PartitionSpec(axis_name, None),
+        ),  # array shape is (vocab_size, features)
         # attention
         (
             ("(query_proj|key_proj|value_proj)", "kernel"),
@@ -54,7 +58,7 @@ def _get_partition_rules_tp(axis_name: str):
         ),
         (
             ("residual_out", "kernel"),
-            PartitionSpec(axis_name,None),
+            PartitionSpec(axis_name, None),
         ),
         (
             ("(query_proj|key_proj|value_proj)", "bias"),
@@ -126,8 +130,10 @@ def create_opt_spec(param_spec, opt_state_shapes):
             x, (FrozenDict,)
         ):  # if we get first/second moment buffers, clone PSpec of the params
             return param_spec
-        return PartitionSpec() # else, PSpec of None (this is to be copied across all devices) (stuff like GA step, skip_step, etc)
-    
+        return (
+            PartitionSpec()
+        )  # else, PSpec of None (this is to be copied across all devices) (stuff like GA step, skip_step, etc)
+
     opt_state_spec = jax.tree_util.tree_map(
         get_opt_spec,
         opt_state_shapes,

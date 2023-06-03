@@ -19,12 +19,16 @@ class TestMLP(unittest.TestCase):
 
     def test_MLP_create(self):
 
-        mlp = MLPBlock(embedding_dim=128, dimension_multiplier=4, dropout=0.1, N=10, tp_comms=False)
+        mlp = MLPBlock(
+            embedding_dim=128, dimension_multiplier=4, dropout=0.1, N=10, tp_comms=False
+        )
         batch_cts = random.normal(self.rng, shape=(1, 512, 128))
         params = mlp.init(self.init_rng, batch_cts, False)
 
     def test_MLP_fwd(self):
-        mlp = MLPBlock(embedding_dim=128, dimension_multiplier=4, dropout=0.1, N=6, tp_comms=False)
+        mlp = MLPBlock(
+            embedding_dim=128, dimension_multiplier=4, dropout=0.1, N=6, tp_comms=False
+        )
         batch_cts = random.normal(self.rng, shape=(1, 512, 128))
         params = mlp.init(self.init_rng, batch_cts, False)
 
@@ -57,14 +61,24 @@ class TestAttn(unittest.TestCase):
     def test_attn_create(self):
 
         attn = CausalAttention(
-            embedding_dim=128, num_head=8, block_size=512, dropout=0.1, N=6, tp_comms=False
+            embedding_dim=128,
+            num_head=8,
+            block_size=512,
+            dropout=0.1,
+            N=6,
+            tp_comms=False,
         )
         batch_cts = random.normal(self.rng, shape=(1, 512, 128))
         params = attn.init(self.init_rng, batch_cts, False)
 
     def test_attn_fwd(self):
         attn = CausalAttention(
-            embedding_dim=128, num_head=8, block_size=512, dropout=0.1, N=6, tp_comms=False
+            embedding_dim=128,
+            num_head=8,
+            block_size=512,
+            dropout=0.1,
+            N=6,
+            tp_comms=False,
         )
         batch_cts = random.normal(self.rng, shape=(1, 512, 128))
         params = attn.init(self.init_rng, batch_cts, False)
@@ -94,7 +108,7 @@ class TestAttn(unittest.TestCase):
             dropout=0.1,
             N=6,
             alibi_attn=True,
-            tp_comms=False
+            tp_comms=False,
         )
         batch_cts = random.normal(self.rng, shape=(1, 512, 128))
         params = attn.init(self.init_rng, batch_cts, False)
@@ -134,7 +148,7 @@ class TestTransformerBlock(unittest.TestCase):
             residual_dropout=0.1,
             N=6,
             dtype=None,
-            tp_comms=False
+            tp_comms=False,
         )
         batch_cts = random.normal(self.rng, shape=(1, 512, 128))
         params = block.init(self.init_rng, batch_cts, False)
@@ -149,7 +163,7 @@ class TestTransformerBlock(unittest.TestCase):
             N=6,
             dtype=None,
             alibi_attn=True,
-            tp_comms=False
+            tp_comms=False,
         )
         batch_cts = random.normal(self.rng, shape=(1, 512, 128))
         params = block.init(self.init_rng, batch_cts, False)
@@ -182,7 +196,7 @@ class TestGPT(unittest.TestCase):
             dropout=0.1,
             N=6,
             dtype=None,
-            tp_comms=False
+            tp_comms=False,
         )
         batch_tok = random.randint(self.rng, shape=(1, 512), maxval=256, minval=0)
         params = block.init(self.init_rng, batch_tok, None, False)
@@ -198,7 +212,7 @@ class TestGPT(unittest.TestCase):
             N=6,
             dtype=None,
             alibi_attn=True,
-            tp_comms=False
+            tp_comms=False,
         )
         batch_tok = random.randint(self.rng, shape=(1, 512), maxval=256, minval=0)
         params = block.init(self.init_rng, batch_tok, None, False)
@@ -222,7 +236,7 @@ class TestGPT(unittest.TestCase):
             N=6,
             dtype=jnp.float16,
             alibi_attn=True,
-            tp_comms=False
+            tp_comms=False,
         )
         batch_tok = random.randint(self.rng, shape=(1, 512), maxval=256, minval=0)
         params = block.init(self.init_rng, batch_tok, None, False)
@@ -246,7 +260,7 @@ class TestGPT(unittest.TestCase):
             N=6,
             dtype=None,
             alibi_attn=True,
-            tp_comms=False
+            tp_comms=False,
         )
         batch_tok = random.randint(self.rng, shape=(1, 512), maxval=256, minval=0)
         params = block.init(self.init_rng, batch_tok, None, False)
