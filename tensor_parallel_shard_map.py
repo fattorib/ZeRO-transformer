@@ -124,7 +124,7 @@ if __name__ == "__main__":
         maybe_profiler = contextlib.nullcontext()
 
     else:
-        GRAD_ACCUM_STEPS = 32
+        GRAD_ACCUM_STEPS = 8
         BATCH_SIZE = 128  # assuming 4 hosts and a total BS of 0.5M tokens
         CTX_LEN = 1024
         NUM_PASSES = args.iter
