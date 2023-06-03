@@ -2,6 +2,7 @@ import argparse
 from functools import partial
 from time import time
 
+import flax.linen as nn
 import jax
 import numpy as np
 import optax
@@ -9,19 +10,17 @@ from jax.sharding import Mesh
 from omegaconf import OmegaConf
 from tqdm import tqdm
 from jax.sharding import PartitionSpec as P
-from src.models.GPT import model_getter
-from src.partitioning.partition import (
-    create_opt_spec,
-    set_partitions_rules,
-    _get_partition_rules_tp,
-)
+from src.models.GPT import model_getter, Transformer
 import jax.numpy as jnp
 from typing import Any
 from jax.experimental.shard_map import shard_map
 from jax.experimental.pjit import pjit
 from jax.lax import with_sharding_constraint
 import contextlib
-
+from src.partitioning.partition import (
+    create_opt_spec
+)
+jax.config.update('jax_threefry_partitionable', True)
 
 def parse():
     parser = argparse.ArgumentParser(
@@ -111,16 +110,13 @@ if __name__ == "__main__":
     rng = jax.random.PRNGKey(23)
     args = parse()
 
-    # per-device shapes can be printed with shard_map
-    # this allows us to investigate model sharding issues
-
     if args.emulation:
         print("Emulating 8 TPU cores")
         GRAD_ACCUM_STEPS = 8
         BATCH_SIZE = 256
         CTX_LEN = 32
         NUM_PASSES = args.iter
-        MODEL_SIZE = "test_no_tp"
+        MODEL_SIZE = "test"
 
         def to_bf16(t):
             return t
@@ -149,34 +145,24 @@ if __name__ == "__main__":
     batch_spec = P("dp", None)
     no_shard = P(None)
 
-    # # Setting up model + param spec
-    model = model_getter(MODEL_SIZE, return_cfg=False)
-
+    model_full, config = model_getter(MODEL_SIZE, return_cfg=True)
+    
+    # set up sharded config and model too 
+    config['num_shard'] = mesh.shape['mp']
+    config['tp_comms'] = True 
+    model_shard = Transformer(**config)
+    
     batch_tok = jax.random.randint(rng, shape=(1, CTX_LEN), maxval=50257, minval=0)
-
-    # init is a bit odd now since the transformer fwd pass contains collective operations now
-    @partial(
-        shard_map,
-        mesh=mesh,
-        in_specs=(no_shard, no_shard),
-        out_specs=no_shard,
-        check_rep=False,
-    )
-    def init(rng, init_batch):
-        return model.init(rng, init_batch, None, False)
-
-    params = jax.jit(init)(rng, (jnp.ones((1, CTX_LEN), dtype=jnp.int32)))
-
-    param_shape = jax.tree_map(
-        lambda x: x.size, params
-    )  # we literally just do this to get keys
-
+    param_abstract = jax.eval_shape(model_full.init, rng, batch_tok) # eval_shape doesn't like dropout!
+    
+    param_spec = nn.get_partition_spec(param_abstract)
+    
     mask = jax.tree_map(
-        lambda x: x.ndim != 1 and x.shape != (model.block_size, model.embedding_dim),
-        params,
+        lambda x: x.ndim != 1 and x.shape != (model_full.block_size, model_full.embedding_dim),
+        param_abstract,
     )
 
-    # not scale invariant!
+    # # not scale invariant!
     tx = optax.chain(
         optax.clip(1.0),
         optax.lion(
@@ -187,16 +173,10 @@ if __name__ == "__main__":
     )
 
     if args.mp > 1:
-        param_spec = set_partitions_rules(
-            param_shape, mesh, _get_partition_rules_tp, axis_name="mp"
-        )
-
-        # jax.debug.visualize_array_sharding(params['params']['wte']['embedding'])
-        params = shard_map(lambda x: x, mesh, in_specs=no_shard, out_specs=param_spec)(
-            params
-        )
-        # jax.debug.visualize_array_sharding(params['params']['wte']['embedding'])
-
+        with mesh: 
+            # do actual layer init wrapping with pjit
+            batch = jnp.ones((1, CTX_LEN), dtype = jnp.int32)
+            params = pjit(model_full.init,out_axis_resources=param_spec)(rng, batch)
         grad_spec = param_spec
 
     else:
@@ -223,9 +203,10 @@ if __name__ == "__main__":
         CTX_LEN,
     )
 
-    train_step_tp = jax.jit(
+    # disable jit while debugging
+    train_step_tp = (
         shard_map(
-            partial(train_step, model=model, accum_steps=GRAD_ACCUM_STEPS),
+            partial(train_step, model=model_shard, accum_steps=GRAD_ACCUM_STEPS),
             in_specs=(param_spec, batch_spec),
             out_specs=(grad_spec, P(None)),
             mesh=mesh,
@@ -272,7 +253,7 @@ if __name__ == "__main__":
     print(f"Model Size: {MODEL_SIZE}")
     print(f"Total Time: {total_time:.4f}s")
 
-    param_count = sum(p for p in jax.tree_util.tree_leaves(param_shape))
+    param_count = sum(p.size for p in jax.tree_util.tree_leaves(param_abstract))
 
     flops_per_token = 6 * param_count + 12 * L * H * Q * T
     flops_per_fwdbwd = flops_per_token * T
