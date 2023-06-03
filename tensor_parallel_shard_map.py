@@ -149,7 +149,7 @@ if __name__ == "__main__":
     
     # set up sharded config and model too 
     config['num_shard'] = mesh.shape['mp']
-    config['tp_comms'] = True 
+    config['tp_comms'] = True if mesh.shape['mp'] > 1 else False
     model_shard = Transformer(**config)
     
     batch_tok = jax.random.randint(rng, shape=(1, CTX_LEN), maxval=50257, minval=0)
@@ -182,6 +182,10 @@ if __name__ == "__main__":
     else:
         param_spec = no_shard
         grad_spec = param_spec
+        with mesh: 
+            # do actual layer init wrapping with pjit
+            batch = jnp.ones((1, CTX_LEN), dtype = jnp.int32)
+            params = pjit(model_full.init,out_axis_resources=param_spec)(rng, batch)
 
     opt_state_shapes = jax.eval_shape(tx.init, params)
     opt_state_spec = create_opt_spec(param_spec, opt_state_shapes)
@@ -203,8 +207,7 @@ if __name__ == "__main__":
         CTX_LEN,
     )
 
-    # disable jit while debugging
-    train_step_tp = (
+    train_step_tp = jax.jit(
         shard_map(
             partial(train_step, model=model_shard, accum_steps=GRAD_ACCUM_STEPS),
             in_specs=(param_spec, batch_spec),
