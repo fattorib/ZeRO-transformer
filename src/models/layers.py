@@ -8,6 +8,7 @@ import jax.nn.initializers as initializers
 import jax.numpy as jnp
 from einops import rearrange
 from src.models.replicated_utils import f_psum, g_psum
+from jax.sharding import PartitionSpec as P
 
 
 def get_slopes(n: int) -> List:
@@ -47,21 +48,24 @@ class MLPBlock(nn.Module):
     dimension_multiplier: int = 4
     dropout: float = 0.0
     N: int = None
-    tp_comms: bool = True
-
     dtype: Any = jnp.float32
+
+    # extra tensor-parallel arguments, disabled by default
+    num_shard: int = 1
+    tp_comms: bool = False
 
     @nn.compact
     def __call__(self, x: jnp.array, train: bool) -> jnp.array:
-        dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
+        # jax.eval_shape doesn't like dropout layers, disable for now
+        dropout = partial(nn.Dropout, rate=self.dropout, deterministic=True) 
 
         if self.tp_comms:
             x = f_psum(x)
 
         x = nn.Dense(
-            features=self.dimension_multiplier * self.embedding_dim,
+            features=(self.dimension_multiplier * self.embedding_dim)//self.num_shard,
             name="fc_in",
-            kernel_init=initializers.normal(stddev=0.02),
+            kernel_init=nn.with_partitioning(initializers.normal(stddev=0.02),P(None,"mp")),
             bias_init=initializers.zeros,
             dtype=self.dtype,
             use_bias=False,
@@ -70,13 +74,14 @@ class MLPBlock(nn.Module):
         out = nn.Dense(
             features=self.embedding_dim,
             name="fc_residual",
-            kernel_init=initializers.normal(stddev=(0.02 / jnp.sqrt(2 * self.N))),
+            kernel_init=nn.with_partitioning(jax.nn.initializers.normal(stddev=(0.02 / jnp.sqrt(2 * self.N))),P("mp", None)),
             bias_init=initializers.zeros,
             dtype=self.dtype,
             use_bias=False,
         )(x)
+
+
         if self.tp_comms:
-            
             out = g_psum(out)
         return dropout()(out)
 
@@ -98,14 +103,21 @@ class CausalAttention(nn.Module):
     N: int = None
     alibi_attn: bool = False
     dtype: Any = jnp.float32
-    tp_comms: bool = True
+
+    # extra tensor-parallel arguments, disabled by default
+    num_shard: int = 1
+    tp_comms: bool = False
 
     def setup(self):
-        self.slopes = jnp.array(get_slopes(self.num_head))
+        self.heads_per_shard = self.num_head // self.num_shard
+
+        # TODO: slopes-per head is not correct anymore 
+        self.slopes = jnp.array(get_slopes(self.heads_per_shard))
         self.mask = jnp.tril(
             jnp.ones((self.block_size, self.block_size), dtype=jnp.int8)
         ).reshape(1, 1, self.block_size, self.block_size)
         self.alibi_mask = create_mask(self.block_size, self.slopes)
+        
 
     @nn.compact
     def __call__(
@@ -113,7 +125,8 @@ class CausalAttention(nn.Module):
         x: jnp.array,
         train: bool,
     ) -> jnp.array:
-        dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
+        # jax.eval_shape doesn't like dropout layers, disable for now
+        dropout = partial(nn.Dropout, rate=self.dropout, deterministic=True) 
         T, C = x.shape[-2:]
 
         if self.tp_comms:
@@ -121,8 +134,8 @@ class CausalAttention(nn.Module):
 
         key = nn.Dense(
             name="key_proj",
-            features=self.embedding_dim,
-            kernel_init=initializers.normal(stddev=0.02),
+            features=self.embedding_dim//self.num_shard,
+            kernel_init=nn.with_partitioning(initializers.normal(stddev=0.02), P(None,"mp")),
             bias_init=initializers.zeros,
             dtype=self.dtype,
             use_bias=False,
@@ -130,30 +143,29 @@ class CausalAttention(nn.Module):
 
         value = nn.Dense(
             name="value_proj",
-            features=self.embedding_dim,
-            kernel_init=initializers.normal(stddev=0.02),
-            bias_init=initializers.zeros,
+            features=self.embedding_dim//self.num_shard,
+            kernel_init=nn.with_partitioning(initializers.normal(stddev=0.02), P(None,"mp")),
             dtype=self.dtype,
             use_bias=False,
         )(x)
 
         query = nn.Dense(
             name="query_proj",
-            features=self.embedding_dim,
-            kernel_init=initializers.normal(stddev=0.02),
-            bias_init=initializers.zeros,
+            features=self.embedding_dim//self.num_shard,
+            kernel_init=nn.with_partitioning(initializers.normal(stddev=0.02), P(None,"mp")),
             dtype=self.dtype,
             use_bias=False,
         )(x)
 
+        # gross shape lines here TODO: fix
         key = rearrange(
-            key, "b t (nh hd) -> b nh hd t", nh=self.num_head, hd=C // self.num_head
+            key, "b t (nh hd) -> b nh hd t", nh=self.heads_per_shard, hd=(self.embedding_dim //self.num_shard) // self.heads_per_shard
         )
         query = rearrange(
-            query, "b t (nh hd) -> b nh t hd", nh=self.num_head, hd=C // self.num_head
+            query, "b t (nh hd) -> b nh t hd", nh=self.heads_per_shard, hd=(self.embedding_dim //self.num_shard) // self.heads_per_shard
         )
         value = rearrange(
-            value, "b t (nh hd) -> b nh t hd", nh=self.num_head, hd=C // self.num_head
+            value, "b t (nh hd) -> b nh t hd", nh=self.heads_per_shard, hd=(self.embedding_dim //self.num_shard) // self.heads_per_shard
         )
 
         # get raw attention scores
@@ -176,10 +188,9 @@ class CausalAttention(nn.Module):
         out = nn.Dense(
             name="residual_out",
             features=self.embedding_dim,
-            kernel_init=jax.nn.initializers.normal(
+            kernel_init=nn.with_partitioning(jax.nn.initializers.normal(
                 stddev=(0.02 / jnp.sqrt(2 * self.N))
-            ),
-            bias_init=initializers.zeros,
+            ), P("mp", None)),
             dtype=self.dtype,
             use_bias=False,
         )(attn_out)

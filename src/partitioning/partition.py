@@ -47,7 +47,6 @@ def _get_partition_rules_tp(axis_name: str):
     """
     return [
         (("wte", "embedding"), PartitionSpec(axis_name,None)), # array shape is (vocab_size, features)
-        (("wpe", "embedding"), PartitionSpec(axis_name,None)),
         # attention
         (
             ("(query_proj|key_proj|value_proj)", "kernel"),
