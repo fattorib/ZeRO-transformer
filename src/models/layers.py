@@ -110,14 +110,15 @@ class CausalAttention(nn.Module):
 
     def setup(self):
         self.heads_per_shard = self.num_head // self.num_shard
-
-        # TODO: slopes-per head is not correct anymore 
-        self.slopes = jnp.array(get_slopes(self.heads_per_shard))
+        self.slopes = jnp.array(get_slopes(self.num_head))
         self.mask = jnp.tril(
             jnp.ones((self.block_size, self.block_size), dtype=jnp.int8)
         ).reshape(1, 1, self.block_size, self.block_size)
-        self.alibi_mask = create_mask(self.block_size, self.slopes)
+        self.alibi_mask = create_mask(self.block_size, self.slopes)   
         
+        if self.num_shard > 1:
+            #add shard dimension so each model shard pulls the correct slopes
+            self.alibi_mask = self.alibi_mask.reshape(self.num_shard, self.heads_per_shard,1, -1)
 
     @nn.compact
     def __call__(
@@ -173,7 +174,11 @@ class CausalAttention(nn.Module):
         if self.alibi_attn:
             # NOTE: We are fixing the ALiBi mask since this is for training, 
             # during inference or is seq_len changes this will cause issues
-            attn_full = attn_full + self.alibi_mask
+            if self.tp_comms:
+                mp_index = jax.lax.axis_index('mp')
+                attn_full = attn_full + self.alibi_mask[mp_index]
+            else:
+                attn_full = attn_full + self.alibi_mask
 
         masked_attn = jnp.where(
             self.mask, attn_full.astype(jnp.float32), jnp.finfo(jnp.float32).min
