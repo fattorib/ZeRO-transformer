@@ -100,7 +100,7 @@ class Transformer(nn.Module):
             out = g_psum(out)
 
         for _ in range(self.N):
-            out = TransformerBlock(
+            out = nn.checkpoint(TransformerBlock)(
                 self.embedding_dim,
                 self.num_head,
                 self.block_size,
@@ -130,19 +130,19 @@ class Transformer(nn.Module):
                 # total comm volume
                 # loss calculation from mesh-transformer-jax: 
                 # https://github.com/kingoflolz/mesh-transformer-jax/blob/master/mesh_transformer/layers.py#L569
-                labels_shifted = labels[..., 1:]
-                logits_shifted = logits[..., :-1, :]
+                labels = labels[..., 1:]
+                logits = logits[..., :-1, :]
 
                 dim_per_shard = self.vocab_size//self.num_shard
                 shard_start_index = jax.lax.axis_index('mp') * dim_per_shard
                 global_max = jax.lax.pmax(jax.lax.stop_gradient(logits.max(-1, keepdims=True)), "mp")
                 logits -= jax.lax.stop_gradient(global_max)
 
-                gt_onehot = jax.nn.one_hot(labels_shifted - shard_start_index, dim_per_shard)
-                predicted_logits = jnp.sum(jnp.multiply(gt_onehot, logits_shifted), axis=-1)
+                gt_onehot = jax.nn.one_hot(labels - shard_start_index, dim_per_shard)
+                predicted_logits = jnp.sum(jnp.multiply(gt_onehot, logits), axis=-1)
                 predicted_logits = g_psum(predicted_logits)
 
-                exp_logits = jnp.exp(logits_shifted.astype(jnp.float32))
+                exp_logits = jnp.exp(logits.astype(jnp.float32))
 
                 sum_exp_logits = exp_logits.sum(axis=-1)
                 sum_exp_logits = g_psum(sum_exp_logits)
