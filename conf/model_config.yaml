@@ -48,7 +48,7 @@ base:
   embedding_dim: 1536
   vocab_size: 50304
   num_head: 12
-  block_size: 2048
+  block_size: 1024
   dropout: 0.1
   N: 12
   alibi_attn: True
