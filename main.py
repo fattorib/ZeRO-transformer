@@ -403,10 +403,10 @@ def main():
         with mesh:
             params, opt_state = update_opt_step_tp(grads, opt_state, params)
 
-        metrics["Train Sequence Length"] = seq_len
-        metrics["Learning Rate"] = learning_rate_fn(resume_step + new_steps)
+        metrics["train/seq_len"] = seq_len
+        metrics["train/lr"] = learning_rate_fn(resume_step + new_steps)
         t1 = time()
-        metrics["Step Time (s)"] = t1 - t0
+        metrics["train/step_time"] = t1 - t0
 
         running_metrics.append(metrics)
 
@@ -420,7 +420,7 @@ def main():
 
         absolute_step = resume_step + new_steps
 
-        train_metrics_np["Tokens Seen (B)"] = (
+        train_metrics_np["train/tokens"] = (
             num_host
             * (
                 cfg.training.batch_size
