@@ -155,7 +155,7 @@ class Transformer(nn.Module):
                 # loss calculation from mesh-transformer-jax:
                 # https://github.com/kingoflolz/mesh-transformer-jax/blob/master/mesh_transformer/layers.py#L569
                 labels = labels[..., 1:]
-                logits = logits[..., :-1, :]
+                logits = logits[..., :-1, :].astype(jnp.float32)
 
                 dim_per_shard = self.vocab_size // self.num_shard
                 shard_start_index = jax.lax.axis_index("mp") * dim_per_shard
@@ -168,7 +168,7 @@ class Transformer(nn.Module):
                 predicted_logits = jnp.sum(jnp.multiply(gt_onehot, logits), axis=-1)
                 predicted_logits = g_psum(predicted_logits)
 
-                exp_logits = jnp.exp(logits.astype(jnp.float32))
+                exp_logits = jnp.exp(logits)
 
                 sum_exp_logits = exp_logits.sum(axis=-1)
                 sum_exp_logits = g_psum(sum_exp_logits)
