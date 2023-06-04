@@ -66,9 +66,9 @@ class TransformerBlock(nn.Module):
         )(x_ln, train)
 
         if self.tp_comms:
-            out = x_ln + g_psum(attn_out + mlp_out)
+            out = x + g_psum(attn_out + mlp_out)
         else:
-            out = x_ln + attn_out + mlp_out
+            out = x + attn_out + mlp_out
 
         return out
 
