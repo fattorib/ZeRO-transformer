@@ -111,6 +111,8 @@ def create_train_state(
             learning_rate=learning_rate_fn,
             weight_decay=weight_decay,
             mask=mask,
+            b1 = 0.95,
+            b2 = 0.98
         ),
     )
 
