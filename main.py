@@ -189,8 +189,6 @@ def main():
     param_spec = nn.get_partition_spec(param_abstract)
     grad_spec = param_spec
     batch_spec = P("dp", None)
-    P(None)
-
 
     # Setup params and optimizer states
     with mesh:

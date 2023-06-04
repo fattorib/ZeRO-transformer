@@ -50,6 +50,6 @@ base:
   num_head: 16
   block_size: 1024
   dropout: 0.1
-  N: 12
+  N: 6
   alibi_attn: True
   gradient_remat: False
