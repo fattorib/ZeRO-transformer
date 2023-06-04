@@ -60,9 +60,6 @@ class MLPBlock(nn.Module):
         # jax.eval_shape doesn't like dropout layers, disable for now
         dropout = partial(nn.Dropout, rate=self.dropout, deterministic=True)
 
-        # if self.tp_comms:
-        #     x = f_psum(x)
-
         x = nn.Dense(
             features=(self.dimension_multiplier * self.embedding_dim) // self.num_shard,
             name="fc_in",
@@ -86,8 +83,6 @@ class MLPBlock(nn.Module):
             use_bias=False,
         )(x)
 
-        # if self.tp_comms:
-        #     out = g_psum(out)
         return dropout()(out)
 
 
@@ -189,14 +184,14 @@ class CausalAttention(nn.Module):
         # get raw attention scores
         attn_full = (query @ key) / jnp.sqrt(key.shape[-1])  # Shape is (B, nh, sq, sk)
 
-        # if self.alibi_attn:
-        #     # NOTE: We are fixing the ALiBi mask since this is for training,
-        #     # during inference or is seq_len changes this will cause issues
-        #     if self.tp_comms:
-        #         mp_index = jax.lax.axis_index("mp")
-        #         attn_full = attn_full + self.alibi_mask[mp_index]
-        #     else:
-        #         attn_full = attn_full + self.alibi_mask
+        if self.alibi_attn:
+            # NOTE: We are fixing the ALiBi mask since this is for training,
+            # during inference or is seq_len changes this will cause issues
+            if self.tp_comms:
+                mp_index = jax.lax.axis_index("mp")
+                attn_full = attn_full + self.alibi_mask[mp_index]
+            else:
+                attn_full = attn_full + self.alibi_mask
 
         masked_attn = jnp.where(
             self.mask, attn_full.astype(jnp.float32), jnp.finfo(jnp.float32).min
