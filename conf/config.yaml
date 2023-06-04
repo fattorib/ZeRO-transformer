@@ -14,7 +14,7 @@ training:
   mp: 8
 
 model:
-  size: "2_6b"
+  size: "2_7b"
 
 
 data:
