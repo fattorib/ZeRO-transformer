@@ -1,4 +1,4 @@
-test_no_tp:
+test_remat:
   embedding_dim: 64
   vocab_size: 256
   num_head: 8
@@ -6,7 +6,7 @@ test_no_tp:
   dropout: 0.0
   N: 2
   alibi_attn: True
-  tp_comms: False
+  gradient_remat: True
 
 test:
   embedding_dim: 64
@@ -52,3 +52,4 @@ base:
   dropout: 0.1
   N: 12
   alibi_attn: True
+  gradient_remat: False

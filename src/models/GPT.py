@@ -86,6 +86,7 @@ class Transformer(nn.Module):
     N: int = None
     dtype: Any = jnp.float32
     alibi_attn: bool = False
+    gradient_remat: bool = False
 
     tp_comms: bool = False
     num_shard: int = 1
@@ -113,8 +114,13 @@ class Transformer(nn.Module):
         if self.tp_comms:
             out = g_psum(out)
 
+        if self.gradient_remat: 
+            layer = nn.checkpoint(TransformerBlock)
+        else:
+            layer = TransformerBlock
+
         for _ in range(self.N):
-            out = nn.checkpoint(TransformerBlock)(
+            out = layer(
                 self.embedding_dim,
                 self.num_head,
                 self.block_size,

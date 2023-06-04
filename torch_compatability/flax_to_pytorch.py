@@ -43,7 +43,7 @@ def flatten(p, label=None):
         yield (label, p)
 
 
-def match_transformer_block(pytree, state_dict, block_idx, use_bias):
+def match_transformer_block(pytree, state_dict, block_idx:int, use_bias: bool = False, use_checkpoint: bool = False):
     """
     Performs matching at an individual block level.
 
@@ -52,10 +52,15 @@ def match_transformer_block(pytree, state_dict, block_idx, use_bias):
     """
 
     block_mappings = create_transformer_block_mapping(block_idx, use_bias)
-
-    flattened_block = dict(
-        flatten(pytree["params"][f"CheckpointTransformerBlock_{block_idx}"])
-    )
+    
+    if use_checkpoint:
+        flattened_block = dict(
+            flatten(pytree["params"][f"CheckpointTransformerBlock_{block_idx}"])
+        )
+    else:
+        flattened_block = dict(
+            flatten(pytree["params"][f"TransformerBlock_{block_idx}"])
+        )
     for key, value in flattened_block.items():
         pytorch_block_key = block_mappings[key]
         if value.ndim > 1:
@@ -71,6 +76,7 @@ def match_and_save(
     flax_save_path: str,
     out_save_path: str,
     use_bias: bool = False,
+    use_checkpoint: bool = False
 ):
     """
     Top-level function which performs matching for all blocks, including wte/LN
@@ -90,7 +96,7 @@ def match_and_save(
     state_dict = model.state_dict()
 
     for block_idx in range(model.N):
-        state_dict = match_transformer_block(pytree, state_dict, block_idx, use_bias)
+        state_dict = match_transformer_block(pytree, state_dict, block_idx, use_bias, use_checkpoint)
 
     # Manually set top-layer weights
     state_dict["norm.weight"] = torch.from_numpy(

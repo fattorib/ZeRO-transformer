@@ -20,7 +20,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 
 @pytest.fixture
-def test_jax_model():
+def test_jax_model_noremat():
     # create a tiny 2L jax model and return its pytree
     model = jax_model_getter("test")
     rng = jax.random.PRNGKey(0)
@@ -40,11 +40,11 @@ def test_jax_model():
     return "checkpoints/orbax/0/default"
 
 
-def test_match_conversion(test_jax_model):
+def test_match_conversion_noremat(test_jax_model_noremat):
 
     torch_model = torch_model_getter("test")
 
-    jax_pytree_dir = test_jax_model
+    jax_pytree_dir = test_jax_model_noremat
 
     match_and_save(torch_model, jax_pytree_dir, "checkpoints/test.pth")
 
@@ -57,7 +57,7 @@ def test_match_conversion(test_jax_model):
         block_mapping_dict = create_transformer_block_mapping(block_idx)
 
         flattened_block = dict(
-            flatten(jax_pytree["params"][f"CheckpointTransformerBlock_{block_idx}"])
+            flatten(jax_pytree["params"][f"TransformerBlock_{block_idx}"])
         )
 
         for key, value in block_mapping_dict.items():
