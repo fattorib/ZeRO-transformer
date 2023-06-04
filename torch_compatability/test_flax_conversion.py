@@ -9,8 +9,6 @@ import jax
 import numpy as np
 import orbax.checkpoint
 import pytest
-from flax.core import unfreeze
-from flax.serialization import msgpack_restore, msgpack_serialize
 from flax.training import orbax_utils
 
 from src.models.GPT import model_getter as jax_model_getter
