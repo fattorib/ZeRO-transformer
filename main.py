@@ -390,7 +390,7 @@ def main():
 
         if seq_len < cfg.data.max_context:
             batch = batch.reshape(-1, seq_len)
-
+        print(batch)
         t0 = time()
         grads, metrics = train_step_tp(params, batch)
 
