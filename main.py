@@ -398,7 +398,7 @@ def main():
 
         with mesh:
             params, opt_state = update_opt_step_tp(params, grads, opt_state)
-
+        print(metrics)
         metrics["train/seq_len"] = seq_len
         metrics["train/lr"] = learning_rate_fn(resume_step + new_steps)
         t1 = time()
