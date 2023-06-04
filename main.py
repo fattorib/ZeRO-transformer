@@ -159,7 +159,6 @@ def main():
         cfg.model.size, config_path=args.model_cfg, return_cfg=True, dtype=jnp.float32
     )
     
-
     # set up sharded config and model too
     model_config["num_shard"] = mesh.shape["mp"]
     model_config["tp_comms"] = True if mesh.shape["mp"] > 1 else False
@@ -192,7 +191,6 @@ def main():
     batch_spec = P("dp", None)
     P(None)
 
-    
 
     # Setup params and optimizer states
     with mesh:
@@ -209,6 +207,9 @@ def main():
             out_axis_resources=opt_state_spec,
         )(params)
 
+    if jax.process_index() == 0:
+        logger.debug(f"Params and Optimizer state compiled and sharded")
+        
     train_step_tp = jax.jit(
         shard_map(
             partial(
@@ -265,12 +266,6 @@ def main():
         if jax.process_index() == 0:
             logger.debug(f"Resuming training from step {resume_step}")
 
-    if jax.process_index() == 0:
-        logger.debug(f"VM setup with {num_devices} devices.")
-        logger.debug(f"Host setup with {num_local_devices} devices.")
-        logger.debug(f"Using platform: {platform}.")
-        logger.debug(f"Mesh Shape (dp,mp): {(mesh.shape['dp'], mesh.shape['mp'])}.")
-
     if not args.resume:
         if cfg.data.bucket_path is not None:
             # clear bucket
@@ -290,7 +285,7 @@ def main():
                     blob.delete()
 
     # TODO: Update
-    local_batch_size = cfg.training.batch_size // (jax.local_device_count())
+    local_batch_size = cfg.training.batch_size // (cfg.training.dp)
 
     total_tokens = num_host * (
         cfg.training.batch_size
