@@ -374,8 +374,6 @@ def main():
         seq_len = cfg.data.max_context
 
 
-    rng = jax.random.fold_in(rng, resume_step)  # fold in resume step to create new rng
-
     # quick way to track global step count when resuming a run
     new_steps = 0
 
@@ -391,8 +389,6 @@ def main():
 
         if i < iterator_resume_step:
             continue
-
-        rng, dropout_rng = jax.random.split(rng, 2)
 
         if seq_len < cfg.data.max_context:
             batch = batch.reshape(-1, seq_len)
@@ -439,11 +435,6 @@ def main():
                 tqdm(vl, disable=not jax.process_index() == 0)
             ):
                 val_batch = val_batch.reshape(-1, seq_len)
-                val_batch = val_batch.reshape(
-                    jax.device_count(),
-                    val_batch.shape[0] // (jax.device_count()),
-                    seq_len,
-                )
                 if val_it < cfg.training.maximum_evaluation_steps:
                     metrics = eval_step_tp(params, val_batch)
                     validation_metrics.append(metrics)
