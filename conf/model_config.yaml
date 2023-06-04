@@ -55,12 +55,12 @@ base:
   gradient_remat: False
 
 
-2_7b:
+3b:
   embedding_dim: 5120
   vocab_size: 50304
   num_head: 40
   block_size: 1024
   dropout: 0.0
-  N: 7
+  N: 8
   alibi_attn: True
   gradient_remat: True
