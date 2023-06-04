@@ -133,6 +133,12 @@ def main():
         np.array(jax.devices()).reshape(cfg.training.dp, cfg.training.mp), ("dp", "mp")
     )
 
+    if jax.process_index() == 0:
+        logger.debug(f"VM setup with {num_devices} devices.")
+        logger.debug(f"Host setup with {num_local_devices} devices.")
+        logger.debug(f"Using platform: {platform}.")
+        logger.debug(f"Mesh Shape (dp,mp): {(mesh.shape['dp'], mesh.shape['mp'])}.")
+
     # setting up GCP bucket/client info if training on TPU
     save_to_bucket = False
     client = None
@@ -152,6 +158,7 @@ def main():
     model_full, model_config = model_getter(
         cfg.model.size, config_path=args.model_cfg, return_cfg=True, dtype=jnp.float32
     )
+    
 
     # set up sharded config and model too
     model_config["num_shard"] = mesh.shape["mp"]
