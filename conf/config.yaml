@@ -6,7 +6,7 @@ training:
   total_steps: 163000
   end_learning_rate: 3e-5
   weight_decay: 0.1
-  gradient_accumulation_steps: 4
+  gradient_accumulation_steps: 64
   evaluation_frequency: 1000 
   maximum_evaluation_steps: 250
   train_context: 1024
