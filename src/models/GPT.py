@@ -99,18 +99,23 @@ class Transformer(nn.Module):
         train: bool = False,
     ) -> Union[jnp.array, Tuple[jnp.array, jnp.array]]:
 
-        embed = nn.Embed(
+        #TODO: Debug
+        if self.tp_comms:
+            dim_per_shard = self.vocab_size // self.num_shard
+            shard_start_index = jax.lax.axis_index('mp') * dim_per_shard
+            input_onehot = jax.nn.one_hot(x - shard_start_index, dim_per_shard)
+        else:
+            input_onehot = jax.nn.one_hot(x , self.vocab_size)
+        out = nn.Dense(
             name="wte",
-            num_embeddings=self.vocab_size // self.num_shard,
             features=self.embedding_dim,
-            embedding_init=nn.with_partitioning(
+            kernel_init=nn.with_partitioning(
                 initializers.normal(stddev=0.02), P("mp", None)
             ),
+            use_bias=False,
             dtype=self.dtype,
-        )
-
-        out = embed(x)
-
+        )(input_onehot)
+        
         if self.tp_comms:
             out = g_psum(out)
 
@@ -143,7 +148,15 @@ class Transformer(nn.Module):
             scale_init=nn.with_partitioning(jax.nn.initializers.ones, P(None)),
         )(out)
 
-        logits = embed.attend(out)
+        logits =  nn.Dense(
+            name="logits_untied",
+            features=self.vocab_size // self.num_shard,
+            kernel_init=nn.with_partitioning(
+                initializers.normal(stddev=0.02), P(None,"mp")
+            ),
+            use_bias=False,
+            dtype=self.dtype,
+        )(out)
 
         if self.tp_comms:
         
