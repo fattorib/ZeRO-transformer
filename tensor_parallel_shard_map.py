@@ -1,32 +1,38 @@
 import argparse
+import contextlib
 from functools import partial
 from time import time
+from typing import Any
 
 import flax.linen as nn
 import jax
+import jax.numpy as jnp
 import numpy as np
 import optax
+from jax.experimental.pjit import pjit
+from jax.experimental.shard_map import shard_map
+from jax.lax import with_sharding_constraint
 from jax.sharding import Mesh
+from jax.sharding import PartitionSpec as P
 from omegaconf import OmegaConf
 from tqdm import tqdm
-from jax.sharding import PartitionSpec as P
-from src.models.GPT import model_getter, Transformer
-import jax.numpy as jnp
-from typing import Any
-from jax.experimental.shard_map import shard_map
-from jax.experimental.pjit import pjit
-from jax.lax import with_sharding_constraint
-import contextlib
-from src.partitioning.partition import (
-    create_opt_spec
-)
-jax.config.update('jax_threefry_partitionable', True)
+
+from src.models.GPT import Transformer, model_getter
+from src.partitioning.partition import create_opt_spec
+
+jax.config.update("jax_threefry_partitionable", True)
+
+
+# checkpointing 
+from flax.training.checkpoints import save_checkpoint, restore_checkpoint
+from flax.training.train_state import TrainState
 
 def parse():
     parser = argparse.ArgumentParser(
         description="pjit/jit training emulator & benchmarker"
     )
     parser.add_argument("--emulation", default=False, action="store_true")
+    parser.add_argument("--resume", default=False, action="store_true")
     parser.add_argument("--iter", default=10, type=int)
     parser.add_argument("--dp", default=4, type=int)
     parser.add_argument("--mp", default=2, type=int)
@@ -146,19 +152,22 @@ if __name__ == "__main__":
     no_shard = P(None)
 
     model_full, config = model_getter(MODEL_SIZE, return_cfg=True)
-    
-    # set up sharded config and model too 
-    config['num_shard'] = mesh.shape['mp']
-    config['tp_comms'] = True if mesh.shape['mp'] > 1 else False
+
+    # set up sharded config and model too
+    config["num_shard"] = mesh.shape["mp"]
+    config["tp_comms"] = True if mesh.shape["mp"] > 1 else False
     model_shard = Transformer(**config)
-    
+
     batch_tok = jax.random.randint(rng, shape=(1, CTX_LEN), maxval=50257, minval=0)
-    param_abstract = jax.eval_shape(model_full.init, rng, batch_tok) # eval_shape doesn't like dropout!
-    
+    param_abstract = jax.eval_shape(
+        model_full.init, rng, batch_tok
+    )  # eval_shape doesn't like dropout!
+
     param_spec = nn.get_partition_spec(param_abstract)
-    
+
     mask = jax.tree_map(
-        lambda x: x.ndim != 1 and x.shape != (model_full.block_size, model_full.embedding_dim),
+        lambda x: x.ndim != 1
+        and x.shape != (model_full.block_size, model_full.embedding_dim),
         param_abstract,
     )
 
@@ -173,19 +182,19 @@ if __name__ == "__main__":
     )
 
     if args.mp > 1:
-        with mesh: 
+        with mesh:
             # do actual layer init wrapping with pjit
-            batch = jnp.ones((1, CTX_LEN), dtype = jnp.int32)
-            params = pjit(model_full.init,out_axis_resources=param_spec)(rng, batch)
+            batch = jnp.ones((1, CTX_LEN), dtype=jnp.int32)
+            params = pjit(model_full.init, out_axis_resources=param_spec)(rng, batch)
         grad_spec = param_spec
 
     else:
         param_spec = no_shard
         grad_spec = param_spec
-        with mesh: 
+        with mesh:
             # do actual layer init wrapping with pjit
-            batch = jnp.ones((1, CTX_LEN), dtype = jnp.int32)
-            params = pjit(model_full.init,out_axis_resources=param_spec)(rng, batch)
+            batch = jnp.ones((1, CTX_LEN), dtype=jnp.int32)
+            params = pjit(model_full.init, out_axis_resources=param_spec)(rng, batch)
 
     opt_state_shapes = jax.eval_shape(tx.init, params)
     opt_state_spec = create_opt_spec(param_spec, opt_state_shapes)
@@ -207,6 +216,28 @@ if __name__ == "__main__":
         CTX_LEN,
     )
 
+    if args.resume:
+        import flax 
+        # params = jax.device_get(params)
+        # opt_state = jax.device_get(params)
+        target = TrainState(
+            step = 0,
+            apply_fn=None, 
+            tx = None,
+            params = params,
+            opt_state=opt_state
+        )
+        resume_dir = "checkpoints/emu"
+        state_restored = restore_checkpoint(resume_dir, target=target,prefix = "state_")
+        
+        params = state_restored.params
+        opt_state = state_restored.opt_state
+
+        with mesh:
+            params = pjit(lambda x: x, out_axis_resources=param_spec)(params)
+            opt_state = pjit(lambda x: x, out_axis_resources=opt_state_spec)(opt_state)
+
+        
     train_step_tp = jax.jit(
         shard_map(
             partial(train_step, model=model_shard, accum_steps=GRAD_ACCUM_STEPS),
@@ -244,6 +275,21 @@ if __name__ == "__main__":
             grads, metrics = train_step_tp(params, batch)
             with mesh:
                 params, opt_state = update_opt_step_tp(params, grads, opt_state)
+        
+            if ((i+1)%5) == 0:
+                params = jax.device_get(params)
+                opt_state = jax.device_get(opt_state)
+                faux_state = TrainState(
+                        step=i, apply_fn=None, params=params, tx=None, opt_state=opt_state
+                    )
+                save_checkpoint(
+                    "checkpoints/emu", faux_state, i, keep=5, overwrite=True, prefix="state_"
+                )
+
+
+
+
+
 
     jnp.zeros((10, 10)).block_until_ready()
     total_time = time() - start
