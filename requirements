@@ -1,6 +1,6 @@
-flax
+flax==0.6.10
 wandb
-optax
+optax==0.1.5
 omegaconf
 webdataset
 tensorflow
