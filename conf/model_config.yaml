@@ -11,10 +11,10 @@ test_remat:
 test:
   embedding_dim: 64
   vocab_size: 256
-  num_head: 8
+  num_head: 16
   block_size: 32
   dropout: 0.0
-  N: 2
+  N: 4
   alibi_attn: True
 
 base:
@@ -50,6 +50,17 @@ base:
   num_head: 16
   block_size: 1024
   dropout: 0.1
-  N: 6
+  N: 12
   alibi_attn: True
   gradient_remat: False
+
+
+2_7b:
+  embedding_dim: 4096
+  vocab_size: 50304
+  num_head: 32
+  block_size: 1024
+  dropout: 0.0
+  N: 12
+  alibi_attn: True
+  gradient_remat: True
