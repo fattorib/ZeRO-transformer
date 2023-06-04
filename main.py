@@ -336,7 +336,7 @@ def main():
         wds.SimpleShardList(train_shards),
         split_by_jax_process,
         wds.tarfile_to_samples(handler=wds.warn_and_continue),
-        wds.shuffle(1e7, initial=1e7, rng=pyrandom.Random(23 + resume_step)),
+        wds.shuffle(1e5, initial=1e5, rng=pyrandom.Random(23 + resume_step)),
         wds.decode(handler=wds.warn_and_continue),
         wds.map(preprocess),
     ).repeat(nepochs=cfg.training.max_epochs)
@@ -345,7 +345,7 @@ def main():
         wds.SimpleShardList(validation_shards),
         split_by_jax_process,
         wds.tarfile_to_samples(handler=wds.warn_and_continue),
-        wds.shuffle(1e6, initial=1e6, rng=pyrandom.Random(23 + resume_step)),
+        wds.shuffle(1e5, initial=1e5, rng=pyrandom.Random(23 + resume_step)),
         wds.decode(handler=wds.warn_and_continue),
         wds.map(preprocess),
     )
