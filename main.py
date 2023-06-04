@@ -2,6 +2,7 @@ import argparse
 import logging
 import random as pyrandom
 from functools import partial
+from time import time
 from typing import Any, Callable, Tuple, Union
 
 import flax.linen as nn
@@ -14,20 +15,19 @@ import webdataset as wds
 from flax.training import checkpoints, train_state
 from jax.experimental.pjit import pjit
 from jax.experimental.shard_map import shard_map
-from jax.sharding import Mesh, PartitionSpec as P
+from jax.sharding import Mesh
+from jax.sharding import PartitionSpec as P
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from time import time 
 
 import wandb
-from src.models.GPT import model_getter, Transformer
+from src.models.GPT import Transformer, model_getter
 from src.partitioning.partition import create_opt_spec
-from training.train_functions import (eval_step, train_step,
-                                                   update_opt_state)
 from src.training.training_utils import compute_tokens_seen
 from src.utils.configs import flatten_dict
 from src.utils.dataloader import numpy_collate
+from training.train_functions import eval_step, train_step, update_opt_state
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -68,19 +68,16 @@ def save_checkpoint(params: Any, opt_state: Any, step: int, workdir: str) -> Non
         )
 
 
-
-def restore_checkpoint(params: Any, opt_state: Any, workdir: str) -> Tuple[Any, Any, int]:
+def restore_checkpoint(
+    params: Any, opt_state: Any, workdir: str
+) -> Tuple[Any, Any, int]:
     """
-    Restores the most recent parameter dict using existing params and opt_state as targets
-    to rebuild
+    Restores the most recent parameter dict using existing params and opt_state 
+    as targets to rebuild
     """
     target = train_state.TrainState(
-            step = 0,
-            apply_fn=None, 
-            tx = None,
-            params = params,
-            opt_state=opt_state
-        )
+        step=0, apply_fn=None, tx=None, params=params, opt_state=opt_state
+    )
 
     restored = checkpoints.restore_checkpoint(workdir, target=target, prefix="state_")
     params = restored.params
@@ -100,9 +97,7 @@ def create_train_state(
     """
 
     batch = jax.random.randint(rng, shape=(1, model.block_size), maxval=50257, minval=0)
-    param_abstract = jax.eval_shape(
-        model.init, rng, batch
-    )
+    param_abstract = jax.eval_shape(model.init, rng, batch)
 
     # This mask turns off weight decay for bias terms, LN terms and position embeddings
     mask = jax.tree_map(
@@ -132,7 +127,9 @@ def main():
     num_host = num_devices // num_local_devices
     platform = jax.local_devices()[0].platform
 
-    mesh = Mesh(np.array(jax.devices()).reshape(cfg.training.dp, cfg.training.mp), ("dp", "mp"))
+    mesh = Mesh(
+        np.array(jax.devices()).reshape(cfg.training.dp, cfg.training.mp), ("dp", "mp")
+    )
 
     # setting up GCP bucket/client info if training on TPU
     save_to_bucket = False
@@ -141,7 +138,6 @@ def main():
         if cfg.data.bucket_path is not None:
             # use GCP
             from google.cloud import storage
-            from google.cloud.exceptions import NotFound
 
             client = storage.Client()
             save_to_bucket = True
@@ -179,22 +175,24 @@ def main():
         weight_decay=cfg.training.weight_decay,
         model=model_full,
     )
-    
+
     # Setup partition specs
 
     param_spec = nn.get_partition_spec(param_abstract)
     grad_spec = param_spec
     batch_spec = P("dp", None)
-    no_shard = P(None)
+    P(None)
+
     
-    opt_state_shapes = jax.eval_shape(tx.init, params)
-    opt_state_spec = create_opt_spec(param_spec, opt_state_shapes)
 
     # Setup params and optimizer states
     with mesh:
         # do actual layer init wrapping with pjit
         batch = jnp.ones((1, model_full.block_size), dtype=jnp.int32)
         params = pjit(model_full.init, out_axis_resources=param_spec)(rng, batch)
+
+        opt_state_shapes = jax.eval_shape(tx.init, params)
+        opt_state_spec = create_opt_spec(param_spec, opt_state_shapes)
 
         opt_state = pjit(
             tx.init,
@@ -204,7 +202,11 @@ def main():
 
     train_step_tp = jax.jit(
         shard_map(
-            partial(train_step, model=model_shard, accum_steps=cfg.training.gradient_accumulation_steps),
+            partial(
+                train_step,
+                model=model_shard,
+                accum_steps=cfg.training.gradient_accumulation_steps,
+            ),
             in_specs=(param_spec, batch_spec),
             out_specs=(grad_spec, P(None)),
             mesh=mesh,
@@ -230,16 +232,20 @@ def main():
             donate_argnums=0,
         )
 
-
     if args.resume:
         del params
 
         if save_to_bucket:
-            
-            params, opt_state, step = restore_checkpoint(params, opt_state, workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/")
+
+            params, opt_state, step = restore_checkpoint(
+                params,
+                opt_state,
+                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/",
+            )
             resume_step = int(step)
-            
-            import gc 
+
+            import gc
+
             gc.collect()
 
         else:
@@ -250,13 +256,11 @@ def main():
         if jax.process_index() == 0:
             logger.debug(f"Resuming training from step {resume_step}")
 
-
     if jax.process_index() == 0:
         logger.debug(f"VM setup with {num_devices} devices.")
         logger.debug(f"Host setup with {num_local_devices} devices.")
         logger.debug(f"Using platform: {platform}.")
         logger.debug(f"Mesh Shape (dp,mp): {(mesh.shape['dp'], mesh.shape['mp'])}.")
-
 
     if not args.resume:
         if cfg.data.bucket_path is not None:
@@ -275,7 +279,7 @@ def main():
                 )
                 for blob in blobs:
                     blob.delete()
-    
+
     # TODO: Update
     local_batch_size = cfg.training.batch_size // (jax.local_device_count())
 
@@ -299,8 +303,8 @@ def main():
         flat_dict["runtime"] = platform
         flat_dict["Total Training Tokens"] = total_tokens / 1e9
         flat_dict["Total Devices"] = num_devices
-        flat_dict["mesh (mp)"] = mesh.shape['mp']
-        flat_dict["mesh (dp)"] = mesh.shape['dp']
+        flat_dict["mesh (mp)"] = mesh.shape["mp"]
+        flat_dict["mesh (dp)"] = mesh.shape["dp"]
         wandb.config.update(flat_dict)
 
     def preprocess(batch):
@@ -365,7 +369,6 @@ def main():
     else:
         seq_len = cfg.data.max_context
 
-    accum_steps = cfg.training.gradient_accumulation_steps
 
     rng = jax.random.fold_in(rng, resume_step)  # fold in resume step to create new rng
 
@@ -373,12 +376,12 @@ def main():
     new_steps = 0
 
     iterator_resume_step = int(resume_step % cfg.data.steps_per_epoch)
-    
+
     for i, batch in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
         if (resume_step + new_steps) > cfg.training.total_steps:
             if jax.process_index() == 0:
-                logger.debug(f"Training has completed.")
+                logger.debug("Training has completed.")
 
             return True
 
@@ -427,7 +430,6 @@ def main():
 
         new_steps += 1
 
-        # TODO: Update
         if (i) % (cfg.training.evaluation_frequency) == 0:
             for val_it, val_batch in enumerate(
                 tqdm(vl, disable=not jax.process_index() == 0)
@@ -448,7 +450,6 @@ def main():
                 k: np.mean([metrics[k] for metrics in validation_metrics])
                 for k in validation_metrics[0]
             }
-
 
             if jax.process_index() == 0:
 
