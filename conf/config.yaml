@@ -8,7 +8,7 @@ training:
   weight_decay: 1.0
   gradient_accumulation_steps: 128
   evaluation_frequency: 1000 
-  maximum_evaluation_steps: 250
+  maximum_evaluation_steps: 125
   train_context: 1024
   dp: 4
   mp: 8
