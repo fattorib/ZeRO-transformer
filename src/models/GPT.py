@@ -131,7 +131,9 @@ class Transformer(nn.Module):
                 self.tp_comms,
                 self.num_shard,
             )(out, train)
-            jax.debug.print("{x}", x = out)
+            
+            if self.tp_comms:
+                jax.debug.print("{x}", x = out)
 
         if self.tp_comms:
             out = f_psum(out)

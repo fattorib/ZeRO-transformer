@@ -189,14 +189,14 @@ class CausalAttention(nn.Module):
         # get raw attention scores
         attn_full = (query @ key) / jnp.sqrt(key.shape[-1])  # Shape is (B, nh, sq, sk)
 
-        if self.alibi_attn:
-            # NOTE: We are fixing the ALiBi mask since this is for training,
-            # during inference or is seq_len changes this will cause issues
-            if self.tp_comms:
-                mp_index = jax.lax.axis_index("mp")
-                attn_full = attn_full + self.alibi_mask[mp_index]
-            else:
-                attn_full = attn_full + self.alibi_mask
+        # if self.alibi_attn:
+        #     # NOTE: We are fixing the ALiBi mask since this is for training,
+        #     # during inference or is seq_len changes this will cause issues
+        #     if self.tp_comms:
+        #         mp_index = jax.lax.axis_index("mp")
+        #         attn_full = attn_full + self.alibi_mask[mp_index]
+        #     else:
+        #         attn_full = attn_full + self.alibi_mask
 
         masked_attn = jnp.where(
             self.mask, attn_full.astype(jnp.float32), jnp.finfo(jnp.float32).min
