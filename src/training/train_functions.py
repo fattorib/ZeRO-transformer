@@ -54,7 +54,6 @@ def train_step(
         minibatch = x_y
         loss, grads = grad_fn(params, minibatch)
         cumul_grads = jax.tree_map(jnp.add, cumul_grads, grads)
-        jax.debug.print("{x}", x = loss)
         return (cumul_loss + loss, cumul_grads), None
 
     grad_init = to_bf16(jax.tree_util.tree_map(jnp.zeros_like, params))
@@ -66,6 +65,7 @@ def train_step(
 
     with jax.named_scope("gradient_all_reduce"):
         grads = jax.lax.pmean(grads, axis_name="dp")
+        loss = jax.lax.pmean(loss, axis_name="dp")
 
     loss, grads = jax.tree_util.tree_map(lambda x: x / accum_steps, (loss, grads))
 

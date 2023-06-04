@@ -167,6 +167,7 @@ class Transformer(nn.Module):
 
                 gt_onehot = jax.nn.one_hot(labels - shard_start_index, dim_per_shard)
                 predicted_logits = jnp.sum(jnp.multiply(gt_onehot, logits), axis=-1)
+                jax.debug.print("{z}", z = predicted_logits)
                 predicted_logits = g_psum(predicted_logits)
 
                 exp_logits = jnp.exp(logits)
