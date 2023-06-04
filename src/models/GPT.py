@@ -112,6 +112,9 @@ class Transformer(nn.Module):
         out = embed(x)
 
         if self.tp_comms:
+            jax.debug.print("{x}", x = out)
+
+        if self.tp_comms:
             out = g_psum(out)
 
         if self.gradient_remat: 
@@ -131,9 +134,8 @@ class Transformer(nn.Module):
                 self.tp_comms,
                 self.num_shard,
             )(out, train)
+
             
-            if self.tp_comms:
-                jax.debug.print("{x}", x = out)
 
         if self.tp_comms:
             out = f_psum(out)

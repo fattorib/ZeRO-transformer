@@ -38,7 +38,6 @@ def train_step(
 
     # reshape to add a microbatch dimension
     batch = batch.reshape(accum_steps, -1, context)
-    params = to_bf16(params)
 
     def loss_fn(params, batch):
         _, loss = model.apply(
@@ -55,7 +54,7 @@ def train_step(
     def cumul_minibatch_step(carry, x_y):
         cumul_loss, cumul_grads = carry
         minibatch = x_y
-        loss, grads = grad_fn(params, minibatch)
+        loss, grads = grad_fn(to_bf16(params), minibatch)
         cumul_grads = jax.tree_map(jnp.add, cumul_grads, grads)
         return (cumul_loss + loss, cumul_grads), None
 
