@@ -160,9 +160,9 @@ def main():
     )
     
     # set up sharded config and model too
-    model_config["num_shard"] = cfg.training.mp
+    model_config["num_shard"] = int(cfg.training.mp)
     model_config["tp_comms"] = True if mesh.shape["mp"] > 1 else False
-    model_shard = Transformer(*model_config)
+    model_shard = Transformer(**model_config)
 
     learning_rate_fn = optax.warmup_cosine_decay_schedule(
         init_value=0,
