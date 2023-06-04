@@ -157,7 +157,7 @@ class Transformer(nn.Module):
                 # https://github.com/kingoflolz/mesh-transformer-jax/blob/master/mesh_transformer/layers.py#L569
                 labels = labels[..., 1:]
                 logits = logits[..., :-1, :].astype(jnp.float32)
-
+                jax.debug.print("{z} {y}", z=logits, y = logits.shape)
                 dim_per_shard = self.vocab_size // self.num_shard
                 shard_start_index = jax.lax.axis_index("mp") * dim_per_shard
                 global_max = jax.lax.pmax(
@@ -167,7 +167,7 @@ class Transformer(nn.Module):
 
                 gt_onehot = jax.nn.one_hot(labels - shard_start_index, dim_per_shard)
                 predicted_logits = jnp.sum(jnp.multiply(gt_onehot, logits), axis=-1)
-                jax.debug.print("{z}", z = predicted_logits)
+                # jax.debug.print("{i} {z}", z = predicted_logits, i = jax.lax.axis_index("mp")) # there are Nans in here...
                 predicted_logits = g_psum(predicted_logits)
 
                 exp_logits = jnp.exp(logits)
