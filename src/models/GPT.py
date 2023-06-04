@@ -132,6 +132,9 @@ class Transformer(nn.Module):
                 self.num_shard,
             )(out, train)
 
+        if self.tp_comms:
+            out = f_psum(out)
+
         out = nn.LayerNorm(
             dtype=self.dtype,
             use_bias=False,
@@ -141,9 +144,7 @@ class Transformer(nn.Module):
         logits = embed.attend(out)
 
         if self.tp_comms:
-            # inefficient all-gather for debugging
-            # logits = jax.lax.all_gather(logits, axis_name='mp')
-            # logits = jnp.concatenate(logits, axis = -1)
+        
             if labels is None:
                 logits = jax.lax.all_gather(logits, axis_name="mp")
                 logits = jnp.concatenate(logits, axis=-1)
