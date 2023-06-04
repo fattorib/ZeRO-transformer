@@ -10,11 +10,12 @@ training:
   evaluation_frequency: 1000 
   maximum_evaluation_steps: 250
   train_context: 1024
+  dp: 4
+  mp: 8
 
 model:
   size: "760m"
-  warm_init: False
-  warm_init_dir: "warm_initialization"
+
 
 
 data:
