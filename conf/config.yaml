@@ -14,8 +14,7 @@ training:
   mp: 8
 
 model:
-  size: "760m"
-
+  size: "417m"
 
 
 data:
@@ -26,5 +25,5 @@ data:
   bucket_path: "bfattoripile_euwest"
   index_path_train: "data/index/pileeu_train_code_mix.index"
   index_path_validation: "data/index/pileeu_validation.index"
-  wandb_project: "jax-transformer"
+  wandb_project: "jax-transformer-tp"
   steps_per_epoch: 30800 # approximation 
