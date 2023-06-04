@@ -99,7 +99,6 @@ class Transformer(nn.Module):
         train: bool = False,
     ) -> Union[jnp.array, Tuple[jnp.array, jnp.array]]:
 
-        #TODO: Debug
         if self.tp_comms:
             dim_per_shard = self.vocab_size // self.num_shard
             shard_start_index = jax.lax.axis_index('mp') * dim_per_shard
@@ -136,8 +135,6 @@ class Transformer(nn.Module):
                 self.tp_comms,
                 self.num_shard,
             )(out, train)
-
-            
 
         if self.tp_comms:
             out = f_psum(out)
