@@ -109,7 +109,7 @@ class Transformer(nn.Module):
             name="wte",
             features=self.embedding_dim,
             kernel_init=nn.with_partitioning(
-                initializers.normal(stddev=0.02), P("mp", None)
+                initializers.normal(stddev=jnp.sqrt(2/(5*self.embedding_dim))), P("mp", None)
             ),
             use_bias=False,
             dtype=self.dtype,
@@ -149,7 +149,7 @@ class Transformer(nn.Module):
             name="logits_untied",
             features=self.vocab_size // self.num_shard,
             kernel_init=nn.with_partitioning(
-                initializers.normal(stddev=0.02), P(None,"mp")
+                initializers.normal(stddev=jnp.sqrt(2 / (5*self.embedding_dim))), P(None, "mp")
             ),
             use_bias=False,
             dtype=self.dtype,

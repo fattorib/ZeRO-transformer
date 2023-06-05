@@ -62,7 +62,7 @@ class MLPBlock(nn.Module):
             features=(self.dimension_multiplier * self.embedding_dim) // self.num_shard,
             name="fc_in",
             kernel_init=nn.with_partitioning(
-                initializers.normal(stddev=0.02), P(None, "mp")
+                initializers.normal(stddev=jnp.sqrt(2 / (5*self.embedding_dim))), P(None, "mp")
             ),
             bias_init=initializers.zeros,
             dtype=self.dtype,
@@ -73,7 +73,7 @@ class MLPBlock(nn.Module):
             features=self.embedding_dim,
             name="fc_residual",
             kernel_init=nn.with_partitioning(
-                jax.nn.initializers.normal(stddev=(0.02 / jnp.sqrt(2 * self.N))),
+                jax.nn.initializers.normal(stddev=(2.0 / (self.N * jnp.sqrt(self.embedding_dim)))),
                 P("mp", None),
             ),
             bias_init=initializers.zeros,
@@ -133,7 +133,7 @@ class CausalAttention(nn.Module):
             name="key_proj",
             features=self.embedding_dim // self.num_shard,
             kernel_init=nn.with_partitioning(
-                initializers.normal(stddev=0.02), P(None, "mp")
+                initializers.normal(stddev=jnp.sqrt(2 / (5*self.embedding_dim))), P(None, "mp")
             ),
             bias_init=initializers.zeros,
             dtype=self.dtype,
@@ -144,7 +144,7 @@ class CausalAttention(nn.Module):
             name="value_proj",
             features=self.embedding_dim // self.num_shard,
             kernel_init=nn.with_partitioning(
-                initializers.normal(stddev=0.02), P(None, "mp")
+                initializers.normal(stddev=jnp.sqrt(2 / (5*self.embedding_dim))), P(None, "mp")
             ),
             dtype=self.dtype,
             use_bias=False,
@@ -154,7 +154,7 @@ class CausalAttention(nn.Module):
             name="query_proj",
             features=self.embedding_dim // self.num_shard,
             kernel_init=nn.with_partitioning(
-                initializers.normal(stddev=0.02), P(None, "mp")
+                initializers.normal(stddev=jnp.sqrt(2 / (5*self.embedding_dim))), P(None, "mp")
             ),
             dtype=self.dtype,
             use_bias=False,
@@ -204,7 +204,7 @@ class CausalAttention(nn.Module):
             name="residual_out",
             features=self.embedding_dim,
             kernel_init=nn.with_partitioning(
-                jax.nn.initializers.normal(stddev=(0.02 / jnp.sqrt(2 * self.N))),
+                jax.nn.initializers.normal(stddev=(2.0 / (self.N * jnp.sqrt(self.embedding_dim)))),
                 P("mp", None),
             ),
             dtype=self.dtype,
