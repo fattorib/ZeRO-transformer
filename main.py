@@ -485,7 +485,6 @@ def main():
                         absolute_step,
                         workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
                     )
-                    sleep(5) 
                     save_checkpoint_optimizer(
                         opt_state,
                         absolute_step,
