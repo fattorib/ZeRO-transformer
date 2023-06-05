@@ -19,13 +19,14 @@ test:
   gradient_remat: False
 
 base:
-  embedding_dim: 768
+  embedding_dim: 1024
   vocab_size: 50304
-  num_head: 12
+  num_head: 8
   block_size: 1024
   dropout: 0.1
-  N: 12
+  N: 6
   alibi_attn: True
+  gradient_remat: True
 
 1_3b:
   embedding_dim: 2048
