@@ -81,7 +81,6 @@ def eval_step(
     batch: jnp.array,
     model: Any,
 ):
-    params = to_bf16(params)
     _, loss = model.apply(
         {"params": params["params"]}, x=batch, labels=batch, train=False
     )
