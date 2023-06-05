@@ -494,8 +494,8 @@ def main():
                         workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/opt",
                     )
             
-            jax.experimental.multihost_utils.sync_global_devices()
-            
+            jax.experimental.multihost_utils.sync_global_devices("checkpoint_barr")
+
         else:
             if jax.process_index() == 0:
                 wandb.log(train_metrics_np)
