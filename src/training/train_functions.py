@@ -85,7 +85,7 @@ def eval_step(
         {"params": params["params"]}, x=batch, labels=batch, train=False
     )
 
-    loss = jax.lax.pmean(loss, axis_name="dp")
+    loss = jax.lax.pmean(jnp.mean(loss), axis_name="dp")
 
     metrics = {"validation/loss": loss, "validation/ppl": jnp.exp(loss)}
 
