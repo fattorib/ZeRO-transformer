@@ -26,7 +26,7 @@ base:
   dropout: 0.1
   N: 6
   alibi_attn: True
-  gradient_remat: True
+  gradient_remat: False
 
 1_3b:
   embedding_dim: 2048
