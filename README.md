@@ -1,5 +1,14 @@
 This branch is for Tensor-Parallelism using JAX's ```shard_map``` operator. It is a work in progress.
 
+Benchmarks on TPU v2-8:
+
+| Mesh Dims | Params (B) | TFLOPS / MFU (%)  | Notes                                      |
+|-----------|------------|-------------------|--------------------------------------------|
+| (1,8)     | 1.3        | 102.494 / 56.941  | Parallel Residual + Gradient Checkpointing |
+| (1,8)     | 2.6        | 108.187 / 60.1037 | Parallel Residual + Gradient Checkpointing |
+| (1,8)     | 3.4        | 108.071 / 60.0395 | Parallel Residual + Gradient Checkpointing |
+| (1,8)     | 4.2        | 117.014 / 65.0075 | Parallel Residual + Gradient Checkpointing |
+
 # Table of Contents
 
 1. [ZeRO Optimizer Sharding in Jax](#zero-optimizer-sharding-in-jax)
