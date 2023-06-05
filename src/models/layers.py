@@ -9,8 +9,6 @@ import jax.numpy as jnp
 from einops import rearrange
 from jax.sharding import PartitionSpec as P
 
-from src.models.replicated_utils import f_psum, g_psum
-
 
 def get_slopes(n: int) -> List:
     def get_slopes_power_of_2(n):

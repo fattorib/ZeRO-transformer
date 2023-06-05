@@ -10,11 +10,8 @@ from omegaconf import OmegaConf
 from tqdm import tqdm
 
 from src.models.GPT import model_getter
-from src.partitioning.xmap_train_functions import (
-    train_step,
-)
-
 from src.training.training_utils import initialized
+from training.train_functions import train_step
 
 
 def parse():

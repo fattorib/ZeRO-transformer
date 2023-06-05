@@ -23,9 +23,10 @@ from src.partitioning.partition import create_opt_spec
 jax.config.update("jax_threefry_partitionable", True)
 
 
-# checkpointing 
-from flax.training.checkpoints import save_checkpoint, restore_checkpoint
+# checkpointing
+from flax.training.checkpoints import restore_checkpoint, save_checkpoint
 from flax.training.train_state import TrainState
+
 
 def parse():
     parser = argparse.ArgumentParser(
@@ -118,14 +119,16 @@ if __name__ == "__main__":
 
     if args.emulation:
         print("Emulating 8 TPU cores")
-        GRAD_ACCUM_STEPS = 8
+        GRAD_ACCUM_STEPS = 128
         BATCH_SIZE = 256
         CTX_LEN = 32
         NUM_PASSES = args.iter
         MODEL_SIZE = "test"
 
         def to_bf16(t):
-            return t
+            return jax.tree_map(
+                lambda x: x.astype(jnp.float16) if x.dtype == jnp.float32 else x, t
+            )
 
         maybe_profiler = contextlib.nullcontext()
 
@@ -217,19 +220,16 @@ if __name__ == "__main__":
     )
 
     if args.resume:
-        import flax 
+        import flax
+
         # params = jax.device_get(params)
         # opt_state = jax.device_get(params)
         target = TrainState(
-            step = 0,
-            apply_fn=None, 
-            tx = None,
-            params = params,
-            opt_state=opt_state
+            step=0, apply_fn=None, tx=None, params=params, opt_state=opt_state
         )
         resume_dir = "checkpoints/emu"
-        state_restored = restore_checkpoint(resume_dir, target=target,prefix = "state_")
-        
+        state_restored = restore_checkpoint(resume_dir, target=target, prefix="state_")
+
         params = state_restored.params
         opt_state = state_restored.opt_state
 
@@ -237,7 +237,6 @@ if __name__ == "__main__":
             params = pjit(lambda x: x, out_axis_resources=param_spec)(params)
             opt_state = pjit(lambda x: x, out_axis_resources=opt_state_spec)(opt_state)
 
-        
     train_step_tp = jax.jit(
         shard_map(
             partial(train_step, model=model_shard, accum_steps=GRAD_ACCUM_STEPS),
@@ -271,25 +270,26 @@ if __name__ == "__main__":
         with maybe_profiler:
             dropout_rng, rng = jax.random.split(dropout_rng)
 
-            batch = jax.numpy.ones(shape=(BATCH_SIZE, CTX_LEN), dtype=jax.numpy.int32)
+            batch = jax.random.randint(shape=(BATCH_SIZE, CTX_LEN), key = dropout_rng, minval=0, maxval= model_full.vocab_size)
             grads, metrics = train_step_tp(params, batch)
             with mesh:
                 params, opt_state = update_opt_step_tp(params, grads, opt_state)
-        
-            if ((i+1)%5) == 0:
-                params = jax.device_get(params)
-                opt_state = jax.device_get(opt_state)
-                faux_state = TrainState(
-                        step=i, apply_fn=None, params=params, tx=None, opt_state=opt_state
-                    )
-                save_checkpoint(
-                    "checkpoints/emu", faux_state, i, keep=5, overwrite=True, prefix="state_"
-                )
-
-
-
-
-
+            
+            if ((i + 1) % 5) == 0:
+                print(metrics)
+                # params = jax.device_get(params)
+                # opt_state = jax.device_get(opt_state)
+                # faux_state = TrainState(
+                #     step=i, apply_fn=None, params=params, tx=None, opt_state=opt_state
+                # )
+                # save_checkpoint(
+                #     "checkpoints/emu",
+                #     faux_state,
+                #     i,
+                #     keep=5,
+                #     overwrite=True,
+                #     prefix="state_",
+                # )
 
     jnp.zeros((10, 10)).block_until_ready()
     total_time = time() - start

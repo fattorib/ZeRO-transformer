@@ -11,4 +11,5 @@ tqdm
 requests
 einops
 transformers
-typer 
+typer
+click==8.1.3

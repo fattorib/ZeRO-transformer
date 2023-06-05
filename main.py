@@ -2,7 +2,7 @@ import argparse
 import logging
 import random as pyrandom
 from functools import partial
-from time import time, sleep
+from time import time
 from typing import Any, Callable, Tuple, Union
 
 import flax.linen as nn
@@ -24,7 +24,6 @@ from tqdm import tqdm
 import wandb
 from src.models.GPT import Transformer, model_getter
 from src.partitioning.partition import create_opt_spec
-from src.training.training_utils import compute_tokens_seen
 from src.utils.configs import flatten_dict
 from src.utils.dataloader import numpy_collate
 from src.training.train_functions import eval_step, train_step, update_opt_state
@@ -185,6 +184,10 @@ def main():
     model_full, model_config = model_getter(
         cfg.model.size, config_path=args.model_cfg, return_cfg=True, dtype=jnp.float32
     )
+
+    def compute_tokens_seen(absolute_step, max_context):
+        return absolute_step * max_context
+    
     
     # set up sharded config and model too
     model_config["num_shard"] = int(cfg.training.mp)
