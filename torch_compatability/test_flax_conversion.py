@@ -74,3 +74,17 @@ def test_match_conversion_noremat(test_jax_model_noremat):
             else:
                 assert np.allclose(jax_pytree_val, torch_param_val)
             
+    # checks on top-level weights too
+
+    assert np.allclose(
+                    torch_model.state_dict()["norm.weight"], np.array(jax_pytree["params"]["LayerNorm_0"]["scale"]["value"])
+                )
+    
+    assert np.allclose( torch_model.state_dict()["lm_head.weight"], np.transpose(np.array(jax_pytree["params"]["logits_untied"]["kernel"]["value"])[
+            : torch_model.vocab_size,
+        ], (1, 0)))
+
+    assert np.allclose(
+                    torch_model.state_dict()["wte.weight"], np.array(jax_pytree["params"]["wte"]["kernel"]["value"])[: torch_model.vocab_size])
+
+

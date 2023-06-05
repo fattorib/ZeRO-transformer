@@ -319,6 +319,7 @@ class GPT2(nn.Module):
         mlp_dropout: float = 0.0,
         resid_dropout: float = 0.0,
         embedding_dropout: float = 0.0,
+        tied_embeddings: bool = False
     ):
         super().__init__()
         self.num_ctx = num_ctx
@@ -361,7 +362,8 @@ class GPT2(nn.Module):
         )
 
         # Tying embedding weights
-        self.lm_head.weight = self.wte.weight
+        if tied_embeddings:
+            self.lm_head.weight = self.wte.weight
 
         self.apply(_embedding_init)
 
