@@ -51,7 +51,7 @@ def parse():
     return args
 
 
-def save_checkpoint(params: Any, opt_state: Any, step: int, workdir: str) -> None:
+def save_checkpoint_params(params: Any, step: int, workdir: str) -> None:
     """
     Save a copy of params.
 
@@ -61,14 +61,30 @@ def save_checkpoint(params: Any, opt_state: Any, step: int, workdir: str) -> Non
         params = jax.device_get(params)
         opt_state = jax.device_get(opt_state)
         faux_state = train_state.TrainState(
-            step=step, apply_fn=None, params=params, tx=None, opt_state=opt_state
+            step=step, apply_fn=None, params=params, tx=None, opt_state=None
         )
         checkpoints.save_checkpoint(
-            workdir, faux_state, step, keep=5, overwrite=True, prefix="state_"
+            workdir, faux_state, step, keep=5, overwrite=True, prefix="params_"
+        )
+
+def save_checkpoint_optimizer(opt_state: Any, step: int, workdir: str) -> None:
+    """
+    Save a copy of opt_state.
+
+    TODO: Add async manager to do this in a background process
+    """
+    if jax.process_index() == 0:
+        params = jax.device_get(params)
+        opt_state = jax.device_get(opt_state)
+        faux_state = train_state.TrainState(
+            step=step, apply_fn=None, params=None, tx=None, opt_state=opt_state
+        )
+        checkpoints.save_checkpoint(
+            workdir, faux_state, step, keep=5, overwrite=True, prefix="opt_"
         )
 
 
-def restore_checkpoint(
+def restore_checkpoint_params(
     params: Any, opt_state: Any, workdir: str
 ) -> Tuple[Any, Any, int]:
     """
@@ -76,15 +92,28 @@ def restore_checkpoint(
     as targets to rebuild
     """
     target = train_state.TrainState(
-        step=0, apply_fn=None, tx=None, params=params, opt_state=opt_state
+        step=0, apply_fn=None, tx=None, params=params, opt_state=None
     )
 
-    restored = checkpoints.restore_checkpoint(workdir, target=target, prefix="state_")
+    restored = checkpoints.restore_checkpoint(workdir, target=target, prefix="params_")
     params = restored.params
+    step = restored.step
+    return params, step
+
+def restore_checkpoint_opt(opt_state: Any, workdir: str
+) -> Tuple[Any, Any, int]:
+    """
+    Restores the most recent parameter dict using existing params and opt_state 
+    as targets to rebuild
+    """
+    target = train_state.TrainState(
+        step=0, apply_fn=None, tx=None, params=None, opt_state=opt_state
+    )
+
+    restored = checkpoints.restore_checkpoint(workdir, target=target, prefix="opt_")
     opt_state = restored.opt_state
     step = restored.step
-    return params, opt_state, step
-
+    return opt_state, step
 
 def create_train_state(
     rng: jax.random.PRNGKey,
@@ -245,15 +274,20 @@ def main():
 
         if save_to_bucket:
 
-            params, opt_state, step = restore_checkpoint(
+            params, step = restore_checkpoint_params(
                 params,
                 opt_state,
                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/",
             )
             resume_step = int(step)
 
-            import gc
+            opt_state, steps = restore_checkpoint_opt(
+                opt_state,
+                opt_state,
+                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/",
+            ) 
 
+            import gc
             gc.collect()
 
         else:
@@ -448,8 +482,13 @@ def main():
                 wandb.log(train_metrics_np)
 
                 if save_to_bucket:
-                    save_checkpoint(
+                    save_checkpoint_params(
                         params,
+                        absolute_step,
+                        workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
+                    )
+
+                    save_checkpoint_optimizer(
                         opt_state,
                         absolute_step,
                         workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
