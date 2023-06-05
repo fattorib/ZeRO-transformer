@@ -2,7 +2,7 @@ import argparse
 import logging
 import random as pyrandom
 from functools import partial
-from time import time
+from time import time, sleep
 from typing import Any, Callable, Tuple, Union
 
 import flax.linen as nn
@@ -85,7 +85,7 @@ def save_checkpoint_optimizer(opt_state: Any, step: int, workdir: str) -> None:
 
 
 def restore_checkpoint_params(
-    params: Any, opt_state: Any, workdir: str
+    params: Any, Any, workdir: str
 ) -> Tuple[Any, Any, int]:
     """
     Restores the most recent parameter dict using existing params and opt_state 
@@ -277,14 +277,14 @@ def main():
             params, step = restore_checkpoint_params(
                 params,
                 opt_state,
-                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/",
+                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
             )
             resume_step = int(step)
 
             opt_state, steps = restore_checkpoint_opt(
                 opt_state,
                 opt_state,
-                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/",
+                workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/opt",
             ) 
 
             import gc
@@ -487,13 +487,15 @@ def main():
                         absolute_step,
                         workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
                     )
-
+                    sleep(5) 
                     save_checkpoint_optimizer(
                         opt_state,
                         absolute_step,
-                        workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
+                        workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/opt",
                     )
-
+            
+            jax.experimental.multihost_utils.sync_global_devices()
+            
         else:
             if jax.process_index() == 0:
                 wandb.log(train_metrics_np)
