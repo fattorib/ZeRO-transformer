@@ -59,7 +59,6 @@ def save_checkpoint_params(params: Any, step: int, workdir: str) -> None:
     """
     if jax.process_index() == 0:
         params = jax.device_get(params)
-        opt_state = jax.device_get(opt_state)
         faux_state = train_state.TrainState(
             step=step, apply_fn=None, params=params, tx=None, opt_state=None
         )
@@ -74,7 +73,6 @@ def save_checkpoint_optimizer(opt_state: Any, step: int, workdir: str) -> None:
     TODO: Add async manager to do this in a background process
     """
     if jax.process_index() == 0:
-        params = jax.device_get(params)
         opt_state = jax.device_get(opt_state)
         faux_state = train_state.TrainState(
             step=step, apply_fn=None, params=None, tx=None, opt_state=opt_state
