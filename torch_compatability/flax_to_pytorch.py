@@ -61,6 +61,7 @@ def match_transformer_block(pytree, state_dict, block_idx:int, use_bias: bool = 
         flattened_block = dict(
             flatten(pytree["params"][f"TransformerBlock_{block_idx}"])
         )
+        
     for key, value in flattened_block.items():
         pytorch_block_key = block_mappings[key]
         if value.ndim > 1:
@@ -90,8 +91,8 @@ def match_and_save(
     ```
     """
 
-    orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
-    pytree = orbax_checkpointer.restore(flax_save_path)
+    with open(flax_save_path, "rb") as f:
+        pytree = msgpack_restore(f.read())
 
     state_dict = model.state_dict()
 
@@ -107,15 +108,16 @@ def match_and_save(
         state_dict["norm.bias"] = torch.from_numpy(
             np.array(pytree["params"]["LayerNorm_0"]["bias"])
         )
+
     state_dict["wte.weight"] = torch.from_numpy(
-        np.array(pytree["params"]["wte"]["embedding"]["value"])[
+        np.array(pytree["params"]["wte"]["kernel"]["value"])[
             : model.vocab_size,
         ]
     )
     state_dict["lm_head.weight"] = torch.from_numpy(
-        np.array(pytree["params"]["wte"]["embedding"]["value"])[
+        np.transpose(np.array(pytree["params"]["logits_untied"]["kernel"]["value"])[
             : model.vocab_size,
-        ]
+        ], (1, 0))
     )
     model.load_state_dict(state_dict)
 

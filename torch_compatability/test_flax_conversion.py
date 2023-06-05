@@ -7,9 +7,10 @@ import os
 
 import jax
 import numpy as np
-import orbax.checkpoint
 import pytest
-from flax.training import orbax_utils
+from flax.training import train_state, checkpoints
+
+from flax.serialization import msgpack_serialize
 
 from src.models.GPT import model_getter as jax_model_getter
 from torch_compatability.flax_to_pytorch import (
@@ -21,23 +22,21 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 @pytest.fixture
 def test_jax_model_noremat():
-    # create a tiny 2L jax model and return its pytree
+    # create a tiny 2L jax model, saves its checkpoint and returns the path
     model = jax_model_getter("test")
     rng = jax.random.PRNGKey(0)
     init_batch = jax.random.randint(rng, shape=(1, 32), maxval=256, minval=0)
 
     params = model.init(rng, init_batch, None, False)
 
-    orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
-    save_args = orbax_utils.save_args_from_target(params)
-    options = orbax.checkpoint.CheckpointManagerOptions(max_to_keep=1, create=True)
-    checkpoint_manager = orbax.checkpoint.CheckpointManager(
-        "checkpoints/orbax", orbax_checkpointer, options
+    faux_state = train_state.TrainState(
+            step=0, apply_fn=None, params=params, tx=None, opt_state=None
+        )
+    checkpoints.save_checkpoint(
+        "checkpoints/test", faux_state, 0, keep=1, overwrite=True, prefix="params_"
     )
 
-    checkpoint_manager.save(0, params, save_kwargs={"save_args": save_args})
-
-    return "checkpoints/orbax/0/default"
+    return "checkpoints/test"
 
 
 def test_match_conversion_noremat(test_jax_model_noremat):
@@ -45,11 +44,16 @@ def test_match_conversion_noremat(test_jax_model_noremat):
     torch_model = torch_model_getter("test")
 
     jax_pytree_dir = test_jax_model_noremat
+    
+    # read flax checkpoint and optionally serialize to msgpack
+    restored = checkpoints.restore_checkpoint(jax_pytree_dir, target=None, prefix="params_")
+    param_bytes = msgpack_serialize(restored['params'])
+    jax_pytree = restored['params']
+    
+    with open("checkpoints/test/params.msgpack", "wb") as f:
+        f.write(param_bytes)
 
-    match_and_save(torch_model, jax_pytree_dir, "checkpoints/test.pth")
-
-    orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
-    jax_pytree = orbax_checkpointer.restore(jax_pytree_dir)
+    match_and_save(torch_model, "checkpoints/test/params.msgpack", "checkpoints/test.pth", False, False)
 
     torch_model = torch_model_getter("test", model_checkpoint="checkpoints/test.pth")
 
@@ -59,14 +63,14 @@ def test_match_conversion_noremat(test_jax_model_noremat):
         flattened_block = dict(
             flatten(jax_pytree["params"][f"TransformerBlock_{block_idx}"])
         )
-
         for key, value in block_mapping_dict.items():
             jax_pytree_val = np.array(flattened_block[key])
             torch_param_val = torch_model.state_dict()[value].detach().numpy()
-
+            
             if jax_pytree_val.ndim > 1:
                 assert np.allclose(
                     np.transpose(jax_pytree_val, (1, 0)), torch_param_val
                 )
             else:
                 assert np.allclose(jax_pytree_val, torch_param_val)
+            
