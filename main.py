@@ -292,8 +292,9 @@ def main():
 
         if save_to_bucket:
             params, step = restore_checkpoint_params(
-                param_spec,
                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
+                param_spec = param_spec,
+                
             )
             resume_step = int(step)
 
