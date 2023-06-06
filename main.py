@@ -288,12 +288,15 @@ def main():
                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/opt",
             ) 
 
+            params = jax.device_get(params)
+            opt_state = jax.device_get(opt_state)
+            
             import gc
             gc.collect()
             
             with mesh:
-                params = pjit(lambda x: x, out_axis_resources=param_spec)(params)
-                opt_state = pjit(lambda x: x, out_axis_resources=opt_state_spec)(opt_state)
+                params = pjit(lambda x: x, out_axis_resources=param_spec, donate_argnums=0)(params)
+                opt_state = pjit(lambda x: x, out_axis_resources=opt_state_spec, donate_argnums=0)(opt_state)
 
 
         else:
