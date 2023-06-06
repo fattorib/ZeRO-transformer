@@ -28,7 +28,7 @@ def main():
     args = parse()
     model = model_getter(model_size=args.model_name)
 
-    match_and_save(model, args.flax_path, args.torch_path, False, True)
+    match_and_save(model, args.flax_path, args.torch_path, False, False)
 
 
 if __name__ == "__main__":
