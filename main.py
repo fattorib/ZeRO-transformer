@@ -292,12 +292,12 @@ def main():
             del opt_state_target, params_target
             import gc
             gc.collect()
-            
-            with mesh:
-                # params = pjit(lambda x: x, out_axis_resources=param_spec)(params)
-                # opt_state = pjit(lambda x: x, out_axis_resources=opt_state_spec)(opt_state)
-                params = jax.device_put(params, param_spec)
-                opt_state = jax.device_put(opt_state, opt_state_spec)
+
+            named_sharding_params = jax.tree_map(lambda x: jax.sharding.NamedSharding(mesh, x), param_spec)
+            named_sharding_opt = jax.tree_map(lambda x: jax.sharding.NamedSharding(mesh, x), opt_state_spec)            
+
+            params = jax.device_put(params, named_sharding_params)
+            opt_state = jax.device_put(opt_state, named_sharding_opt)
 
 
         else:
