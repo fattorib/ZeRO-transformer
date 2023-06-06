@@ -292,6 +292,7 @@ def main():
     if args.resume:
 
         if save_to_bucket:
+
             params, step = restore_checkpoint_params(
                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
                 param_spec = param_spec,
@@ -307,8 +308,8 @@ def main():
             import gc
             gc.collect()
             with mesh:
-                params = pjit(lambda x:x, out_axis_resources=param_spec, donate_argnums=0)(params)
-                opt_state = pjit(lambda x:x, out_axis_resources=opt_state_spec, donate_argnums=0)(opt_state)
+                params = pjit(lambda x:x, in_axis_resources= param_spec, out_axis_resources=param_spec, donate_argnums=0)(params)
+                opt_state = pjit(lambda x:x, in_axis_resources= opt_state_spec, out_axis_resources=opt_state_spec, donate_argnums=0)(opt_state)
 
 
         else:
