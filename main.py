@@ -290,13 +290,13 @@ def main():
 
             params = jax.device_get(params)
             opt_state = jax.device_get(opt_state)
+
+            # import gc
+            # gc.collect()
             
-            import gc
-            gc.collect()
-            
-            with mesh:
-                params = pjit(lambda x: x, out_axis_resources=param_spec, donate_argnums=0)(params)
-                opt_state = pjit(lambda x: x, out_axis_resources=opt_state_spec, donate_argnums=0)(opt_state)
+            # with mesh:
+            #     params = pjit(lambda x: x, out_axis_resources=param_spec, donate_argnums=0)(params)
+            #     opt_state = pjit(lambda x: x, out_axis_resources=opt_state_spec, donate_argnums=0)(opt_state)
 
 
         else:
@@ -418,8 +418,8 @@ def main():
     # quick way to track global step count when resuming a run
     new_steps = 0
 
-    iterator_resume_step = int(resume_step % cfg.data.steps_per_epoch)
-
+    # iterator_resume_step = int(resume_step % cfg.data.steps_per_epoch)
+    iterator_resume_step = 0
     for i, batch in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
         if (resume_step + new_steps) > cfg.training.total_steps:
