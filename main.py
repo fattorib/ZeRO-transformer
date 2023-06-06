@@ -271,19 +271,16 @@ def main():
         )
 
     if args.resume:
-        del params
 
         if save_to_bucket:
 
             params, step = restore_checkpoint_params(
                 params,
-                opt_state,
                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
             )
             resume_step = int(step)
 
             opt_state, steps = restore_checkpoint_opt(
-                opt_state,
                 opt_state,
                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/opt",
             ) 
