@@ -199,7 +199,7 @@ if __name__ == "__main__":
             batch = jnp.ones((1, CTX_LEN), dtype=jnp.int32)
             params = pjit(model_full.init, out_axis_resources=param_spec)(rng, batch)
 
-    opt_state_shapes = jax.eval_shape(tx.init, params)
+    opt_state_shapes = jax.eval_shape(tx.init, param_abstract)
     opt_state_spec = create_opt_spec(param_spec, opt_state_shapes)
 
     with mesh:
@@ -221,21 +221,44 @@ if __name__ == "__main__":
 
     if args.resume:
         import flax
+        params = jax.device_get(params)
+        opt_state = jax.device_get(opt_state)
 
-        # params = jax.device_get(params)
-        # opt_state = jax.device_get(params)
-        target = TrainState(
-            step=0, apply_fn=None, tx=None, params=params, opt_state=opt_state
-        )
+
         resume_dir = "checkpoints/emu"
-        state_restored = restore_checkpoint(resume_dir, target=target, prefix="state_")
+        state_restored = restore_checkpoint(resume_dir, target=None, prefix="state_")
+        params = flax.core.freeze(state_restored["params"])
 
-        params = state_restored.params
-        opt_state = state_restored.opt_state
+        mu_pytree = jax.tree_map(
+            lambda x: jnp.array(x), state_restored["opt_state"]["1"]["0"]["mu"]
+        )
+        mu_pytree = jax.tree_map(lambda x, y: nn.Partitioned(value = jnp.array(y['value']), names = x, mesh = None),opt_state_spec[1][0].mu, flax.core.freeze(mu_pytree))                                                                                                                                           
+    
+        count_pytree = jax.tree_map(
+            lambda x: jnp.array(x), state_restored["opt_state"]["1"]["0"]["count"]
+        )
 
+        restoredlionstate = optax.ScaleByLionState(
+            count_pytree, flax.core.FrozenDict(mu_pytree)
+        )
+
+
+        opt_state = (
+            optax.EmptyState(),
+            (
+                restoredlionstate,
+                optax.MaskedState(inner_state=optax.EmptyState()),
+                optax.ScaleByScheduleState(count=jnp.array(state_restored["step"])),
+            ),
+        )
+        # print(opt_state)
+
+        with jax.default_device(jax.devices("cpu")[0]):
+            params = jax.tree_map(lambda x, y: nn.Partitioned(value = jnp.array(y['value']), names = x, mesh = None),param_spec, params)
+        
         with mesh:
-            params = pjit(lambda x: x, out_axis_resources=param_spec)(params)
-            opt_state = pjit(lambda x: x, out_axis_resources=opt_state_spec)(opt_state)
+            params = pjit(lambda x:x, in_axis_resources= (param_spec,), out_axis_resources=param_spec, donate_argnums=0)(params)
+            opt_state = pjit(lambda x:x, in_axis_resources= (opt_state_spec,), out_axis_resources=opt_state_spec, donate_argnums=0)(opt_state)
 
     train_step_tp = jax.jit(
         shard_map(
@@ -277,19 +300,19 @@ if __name__ == "__main__":
             
             if ((i + 1) % 5) == 0:
                 print(metrics)
-                # params = jax.device_get(params)
-                # opt_state = jax.device_get(opt_state)
-                # faux_state = TrainState(
-                #     step=i, apply_fn=None, params=params, tx=None, opt_state=opt_state
-                # )
-                # save_checkpoint(
-                #     "checkpoints/emu",
-                #     faux_state,
-                #     i,
-                #     keep=5,
-                #     overwrite=True,
-                #     prefix="state_",
-                # )
+                params = jax.device_get(params)
+                opt_state = jax.device_get(opt_state)
+                faux_state = TrainState(
+                    step=i, apply_fn=None, params=params, tx=None, opt_state=opt_state
+                )
+                save_checkpoint(
+                    "checkpoints/emu",
+                    faux_state,
+                    i,
+                    keep=5,
+                    overwrite=True,
+                    prefix="state_",
+                )
 
     jnp.zeros((10, 10)).block_until_ready()
     total_time = time() - start
