@@ -308,6 +308,10 @@ def main():
             import gc
             gc.collect()
 
+            params = pjit(lambda x:x, out_axis_resources=param_spec)(params)
+            opt_state = pjit(lambda x:x, out_axis_resources=opt_state_spec)(opt_state)
+
+
         else:
             raise NotImplementedError(
                 "Checkpointing not currently implemented for GPU."
