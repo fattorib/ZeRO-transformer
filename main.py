@@ -273,6 +273,9 @@ def main():
     if args.resume:
 
         if save_to_bucket:
+            
+            params = jax.device_get(params)
+            opt_state = jax.device_get(opt_state)
 
             params, step = restore_checkpoint_params(
                 params,
@@ -287,7 +290,7 @@ def main():
 
             import gc
             gc.collect()
-
+            
             with mesh:
                 params = pjit(lambda x: x, out_axis_resources=param_spec)(params)
                 opt_state = pjit(lambda x: x, out_axis_resources=opt_state_spec)(opt_state)
