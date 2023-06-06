@@ -294,8 +294,10 @@ def main():
             gc.collect()
             
             with mesh:
-                params = pjit(lambda x: x, out_axis_resources=param_spec)(params)
-                opt_state = pjit(lambda x: x, out_axis_resources=opt_state_spec)(opt_state)
+                # params = pjit(lambda x: x, out_axis_resources=param_spec)(params)
+                # opt_state = pjit(lambda x: x, out_axis_resources=opt_state_spec)(opt_state)
+                params = jax.device_put(params, param_spec)
+                opt_state = jax.device_put(opt_state, opt_state_spec)
 
 
         else:
