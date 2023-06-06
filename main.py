@@ -95,6 +95,7 @@ def restore_checkpoint_params(
     restored = checkpoints.restore_checkpoint(workdir, target=target, prefix="params_")
     params = restored.params
     step = restored.step
+    del restored
     return params, step
 
 def restore_checkpoint_opt(opt_state: Any, workdir: str
@@ -109,8 +110,8 @@ def restore_checkpoint_opt(opt_state: Any, workdir: str
 
     restored = checkpoints.restore_checkpoint(workdir, target=target, prefix="opt_")
     opt_state = restored.opt_state
-    step = restored.step
-    return opt_state, step
+    del restored
+    return opt_state
 
 def create_train_state(
     rng: jax.random.PRNGKey,
@@ -274,26 +275,27 @@ def main():
 
         if save_to_bucket:
             
-            params = jax.device_get(params)
-            opt_state = jax.device_get(opt_state)
+            params_target = jax.device_get(params)
+            opt_state_target = jax.device_get(opt_state)
 
             params, step = restore_checkpoint_params(
-                params,
+                params_target,
                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
             )
             resume_step = int(step)
 
-            opt_state, steps = restore_checkpoint_opt(
-                opt_state,
+            opt_state = restore_checkpoint_opt(
+                opt_state_target,
                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/opt",
             ) 
-
+            
+            del opt_state_target, params_target
             import gc
             gc.collect()
             
-            # with mesh:
-            #     params = pjit(lambda x: x, out_axis_resources=param_spec, donate_argnums=0)(params)
-            #     opt_state = pjit(lambda x: x, out_axis_resources=opt_state_spec, donate_argnums=0)(opt_state)
+            with mesh:
+                params = pjit(lambda x: x, out_axis_resources=param_spec)(params)
+                opt_state = pjit(lambda x: x, out_axis_resources=opt_state_spec)(opt_state)
 
 
         else:
@@ -305,23 +307,22 @@ def main():
             logger.debug(f"Resuming training from step {resume_step}")
 
     if not args.resume:
-        # if cfg.data.bucket_path is not None:
-        #     # clear bucket
-        #     client = storage.Client()
-        #     if jax.process_index() == 0:
-        #         bucket = storage.Bucket(client, f"{cfg.data.bucket_path}")
-        #         blobs = bucket.list_blobs(
-        #             prefix=f"{cfg.data.checkpoint_directory}/optimizer"
-        #         )
-        #         for blob in blobs:
-        #             blob.delete()
+        if cfg.data.bucket_path is not None:
+            # clear bucket
+            client = storage.Client()
+            if jax.process_index() == 0:
+                bucket = storage.Bucket(client, f"{cfg.data.bucket_path}")
+                blobs = bucket.list_blobs(
+                    prefix=f"{cfg.data.checkpoint_directory}/optimizer"
+                )
+                for blob in blobs:
+                    blob.delete()
 
-        #         blobs = bucket.list_blobs(
-        #             prefix=f"{cfg.data.checkpoint_directory}/params"
-        #         )
-        #         for blob in blobs:
-        #             blob.delete()
-        pass 
+                blobs = bucket.list_blobs(
+                    prefix=f"{cfg.data.checkpoint_directory}/params"
+                )
+                for blob in blobs:
+                    blob.delete()
 
     # TODO: Update
     local_batch_size = cfg.training.batch_size // (cfg.training.dp)
