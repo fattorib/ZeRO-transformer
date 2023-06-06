@@ -288,11 +288,8 @@ def main():
                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/opt",
             ) 
 
-            params = jax.device_get(params)
-            opt_state = jax.device_get(opt_state)
-
-            # import gc
-            # gc.collect()
+            import gc
+            gc.collect()
             
             # with mesh:
             #     params = pjit(lambda x: x, out_axis_resources=param_spec, donate_argnums=0)(params)
@@ -308,22 +305,23 @@ def main():
             logger.debug(f"Resuming training from step {resume_step}")
 
     if not args.resume:
-        if cfg.data.bucket_path is not None:
-            # clear bucket
-            client = storage.Client()
-            if jax.process_index() == 0:
-                bucket = storage.Bucket(client, f"{cfg.data.bucket_path}")
-                blobs = bucket.list_blobs(
-                    prefix=f"{cfg.data.checkpoint_directory}/optimizer"
-                )
-                for blob in blobs:
-                    blob.delete()
+        # if cfg.data.bucket_path is not None:
+        #     # clear bucket
+        #     client = storage.Client()
+        #     if jax.process_index() == 0:
+        #         bucket = storage.Bucket(client, f"{cfg.data.bucket_path}")
+        #         blobs = bucket.list_blobs(
+        #             prefix=f"{cfg.data.checkpoint_directory}/optimizer"
+        #         )
+        #         for blob in blobs:
+        #             blob.delete()
 
-                blobs = bucket.list_blobs(
-                    prefix=f"{cfg.data.checkpoint_directory}/params"
-                )
-                for blob in blobs:
-                    blob.delete()
+        #         blobs = bucket.list_blobs(
+        #             prefix=f"{cfg.data.checkpoint_directory}/params"
+        #         )
+        #         for blob in blobs:
+        #             blob.delete()
+        pass 
 
     # TODO: Update
     local_batch_size = cfg.training.batch_size // (cfg.training.dp)
