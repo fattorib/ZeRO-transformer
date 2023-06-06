@@ -293,13 +293,6 @@ def main():
             import gc
             gc.collect()
 
-            named_sharding_params = jax.tree_map(lambda x: jax.sharding.NamedSharding(mesh, x), param_spec)
-            named_sharding_opt = jax.tree_map(lambda x: jax.sharding.NamedSharding(mesh, x), opt_state_spec)            
-
-            params = jax.device_put(params, named_sharding_params)
-            opt_state = jax.device_put(opt_state, named_sharding_opt)
-
-
         else:
             raise NotImplementedError(
                 "Checkpointing not currently implemented for GPU."
