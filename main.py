@@ -431,8 +431,8 @@ def main():
     # quick way to track global step count when resuming a run
     new_steps = 0
 
-    # iterator_resume_step = int(resume_step % cfg.data.steps_per_epoch)
-    iterator_resume_step = 0
+    iterator_resume_step = int(resume_step % cfg.data.steps_per_epoch)
+
     for i, batch in enumerate(tqdm(tl, disable=not jax.process_index() == 0)):
 
         if (resume_step + new_steps) > cfg.training.total_steps:
