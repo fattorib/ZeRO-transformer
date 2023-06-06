@@ -82,7 +82,7 @@ def save_checkpoint_optimizer(opt_state: Any, step: int, workdir: str) -> None:
 
 
 def restore_checkpoint_params(
-    params: Any, Any, workdir: str
+    params: Any, workdir: str
 ) -> Tuple[Any, Any, int]:
     """
     Restores the most recent parameter dict using existing params and opt_state 
