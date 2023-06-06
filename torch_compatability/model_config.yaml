@@ -33,9 +33,17 @@ distill:
   num_ctx: 1024
   N: 24
 
-2_7b:
+2_4b:
   embedding_dim: 5120
   vocab_size: 50304
   num_head: 40
   num_ctx: 1024
-  N: 7
+  N: 6
+
+
+base:
+  embedding_dim: 1024
+  vocab_size: 50304
+  num_head: 8
+  num_ctx: 1024
+  N: 6
