@@ -82,35 +82,48 @@ def save_checkpoint_optimizer(opt_state: Any, step: int, workdir: str) -> None:
 
 
 def restore_checkpoint_params(
-    params: Any, workdir: str
+    workdir: str, param_spec: Any
 ) -> Tuple[Any, Any, int]:
     """
-    Restores the most recent parameter dict using existing params and opt_state 
-    as targets to rebuild
+    Restores the most recent parameter dict
     """
-    target = train_state.TrainState(
-        step=0, apply_fn=None, tx=None, params=params, opt_state=None
-    )
+    import flax 
+    restored = checkpoints.restore_checkpoint(workdir, target=None, prefix="params_")
+    params = flax.core.freeze(restored["params"])
 
-    restored = checkpoints.restore_checkpoint(workdir, target=target, prefix="params_")
-    params = restored.params
-    step = restored.step
-    del restored
-    return params, step
+    params = jax.tree_map(lambda x, y: nn.Partitioned(value = jnp.array(y['value']), names = x, mesh = None),param_spec, params)
 
-def restore_checkpoint_opt(opt_state: Any, workdir: str
+    return params, restored["step"]
+
+def restore_checkpoint_opt(opt_spec: Any, workdir: str
 ) -> Tuple[Any, Any, int]:
     """
-    Restores the most recent parameter dict using existing params and opt_state 
-    as targets to rebuild
+    Restores the most recent opt state dict.
     """
-    target = train_state.TrainState(
-        step=0, apply_fn=None, tx=None, params=None, opt_state=opt_state
+    import flax 
+    restored = checkpoints.restore_checkpoint(workdir, target=None, prefix="opt_")
+    mu_pytree = jax.tree_map(
+        lambda x: jnp.array(x), restored["opt_state"]["1"]["0"]["mu"]
+    )
+    mu_pytree = jax.tree_map(lambda x, y: nn.Partitioned(value = jnp.array(y['value']), names = x, mesh = None),opt_spec[1][0].mu, flax.core.freeze(mu_pytree))                                                                                                                                           
+
+    count_pytree = jax.tree_map(
+        lambda x: jnp.array(x), restored["opt_state"]["1"]["0"]["count"]
     )
 
-    restored = checkpoints.restore_checkpoint(workdir, target=target, prefix="opt_")
-    opt_state = restored.opt_state
-    del restored
+    restoredlionstate = optax.ScaleByLionState(
+        count_pytree, flax.core.FrozenDict(mu_pytree)
+    )
+
+
+    opt_state = (
+        optax.EmptyState(),
+        (
+            restoredlionstate,
+            optax.MaskedState(inner_state=optax.EmptyState()),
+            optax.ScaleByScheduleState(count=jnp.array(restored["step"])),
+        ),
+    )
     return opt_state
 
 def create_train_state(
@@ -221,20 +234,24 @@ def main():
     grad_spec = param_spec
     batch_spec = P("dp", None)
 
+    
     # Setup params and optimizer states
     with mesh:
         # do actual layer init wrapping with pjit
-        batch = jnp.ones((1, model_full.block_size), dtype=jnp.int32)
-        params = pjit(model_full.init, out_axis_resources=param_spec)(rng, batch)
+        if not args.resume:
+            batch = jnp.ones((1, model_full.block_size), dtype=jnp.int32)
+            params = pjit(model_full.init, out_axis_resources=param_spec)(rng, batch)
 
-        opt_state_shapes = jax.eval_shape(tx.init, params)
+        opt_state_shapes = jax.eval_shape(tx.init, param_abstract)
+
         opt_state_spec = create_opt_spec(param_spec, opt_state_shapes)
 
-        opt_state = pjit(
-            tx.init,
-            in_axis_resources=(param_spec,),
-            out_axis_resources=opt_state_spec,
-        )(params)
+        if not args.resume:
+            opt_state = pjit(
+                tx.init,
+                in_axis_resources=(param_spec,),
+                out_axis_resources=opt_state_spec,
+            )(params)
 
     if jax.process_index() == 0:
         logger.debug(f"Params and Optimizer state compiled and sharded")
@@ -274,22 +291,17 @@ def main():
     if args.resume:
 
         if save_to_bucket:
-            
-            params_target = jax.device_get(params)
-            opt_state_target = jax.device_get(opt_state)
-
             params, step = restore_checkpoint_params(
-                params_target,
+                param_spec,
                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/params",
             )
             resume_step = int(step)
 
             opt_state = restore_checkpoint_opt(
-                opt_state_target,
+                opt_state_spec,
                 workdir=f"gs://{cfg.data.bucket_path}/{cfg.data.checkpoint_directory}/opt",
             ) 
             
-            del opt_state_target, params_target
             import gc
             gc.collect()
 
