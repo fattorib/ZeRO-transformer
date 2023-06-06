@@ -107,7 +107,7 @@ def restore_checkpoint_opt(opt_spec: Any, workdir: str
         mu_pytree = jax.tree_map(
             lambda x: jnp.array(x), restored["opt_state"]["1"]["0"]["mu"]
         )
-    mu_pytree = jax.tree_map(lambda x, y: nn.Partitioned(value = jnp.array(y['value']), names = x, mesh = None),opt_spec[1][0].mu, flax.core.freeze(mu_pytree))                                                                                                                                           
+        mu_pytree = jax.tree_map(lambda x, y: nn.Partitioned(value = jnp.array(y['value']), names = x, mesh = None),opt_spec[1][0].mu, flax.core.freeze(mu_pytree))                                                                                                                                           
 
     count_pytree = jax.tree_map(
         lambda x: jnp.array(x), restored["opt_state"]["1"]["0"]["count"]
