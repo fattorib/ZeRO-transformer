@@ -109,7 +109,6 @@ class CausalAttention(nn.Module):
         dropout = partial(nn.Dropout, rate=self.dropout, deterministic=not train)
         T, C = x.shape[-2:]
 
-        # Shape is (B, nh, T, h_dim)
         key = (
             nn.Dense(
                 name="key_proj",
@@ -121,7 +120,6 @@ class CausalAttention(nn.Module):
             )(x)
         )
 
-        # Shape is (B, nh, T, h_dim)
         value = (
             nn.Dense(
                 name="value_proj",
@@ -133,7 +131,6 @@ class CausalAttention(nn.Module):
             )(x)
         )
 
-        # Shape is (B, nh, T, h_dim)
         query = (
             nn.Dense(
                 name="query_proj",
@@ -146,24 +143,22 @@ class CausalAttention(nn.Module):
         )
 
         key = rearrange(
-            key, "b t (nh hd) -> b t nh hd", nh=self.num_head, hd=C // self.num_head
+            key, "b t (nh hd) -> b t nh hd", nh=self.num_head, hd=self.embedding_dim // self.num_head
         )
         query = rearrange(
-            query, "b t (nh hd) -> b t nh hd", nh=self.num_head, hd=C // self.num_head
+            query, "b t (nh hd) -> b t nh hd", nh=self.num_head, hd=self.embedding_dim // self.num_head
         )
         value = rearrange(
-            value, "b t (nh hd) -> b t nh hd", nh=self.num_head, hd=C // self.num_head
+            value, "b t (nh hd) -> b t nh hd", nh=self.num_head, hd=self.embedding_dim // self.num_head
         )
 
         key = rearrange(key, "b t n c -> b n c t")
         value = rearrange(value, "b t n c -> b n t c")
         query = rearrange(query, "b t n c -> b n t c")
 
-        #TODO: Can do one less rearrange for key
-        # get raw attention scores
         attn_full = (query @ key) / jnp.sqrt(
             key.shape[-1]
-        )  # Shape is (B, nh, sq, sk)
+        ) 
 
         if self.alibi_attn:
             # NOTE: We are fixing the ALiBi mask since this is for training, during inference or is seq_len changes this will cause issues
@@ -180,7 +175,6 @@ class CausalAttention(nn.Module):
         attn_out = (attn_scores @ value)
         attn_out = rearrange(attn_out, "b n t h -> b t n h")
 
-        #TODO: This should be collapsed with rearrange too
         attn_out = rearrange(attn_out, "b t n h -> b t (n h)")
         
         out = nn.Dense(
